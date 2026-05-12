@@ -1,13 +1,22 @@
 """Unit tests for TrainerRoad models and converter."""
 
 from intervals_mcp_server.trainerroad.models import (
+    TR_ACTIVITY_TYPE_CYCLING,
+    TR_ACTIVITY_TYPE_REST,
+    TR_ACTIVITY_TYPE_RUN,
+    TR_ACTIVITY_TYPE_STRENGTH,
+    TR_ACTIVITY_TYPE_WALK,
     TRCalendarActivity,
     TRIntervalData,
     TRMemberInfo,
     TRWorkoutDetails,
 )
 from intervals_mcp_server.trainerroad.converter import (
+    build_strength_workout_doc,
     build_structure_text,
+    build_workout_doc,
+    race_event_payload,
+    strength_event_payload,
     workout_to_intervals_event,
     _format_duration,
     _strip_html,
@@ -222,6 +231,307 @@ class TestBuildStructureText:
 
     def test_empty_intervals(self):
         assert build_structure_text([]) == ""
+
+
+class TestTRCalendarActivityProperties:
+    def test_race_detection(self):
+        data = {
+            "Id": "race1",
+            "Name": "Gateway II",
+            "Date": "2025-08-29T00:00:00",
+            "RacePriority": "2",
+            "ActivityType": 1,
+        }
+        act = TRCalendarActivity.from_api(data)
+        assert act.is_race
+        assert act.race_priority == 2
+        assert not act.is_strength
+        assert not act.is_rest_day
+
+    def test_not_a_race(self):
+        data = {
+            "Id": "w1",
+            "Name": "Brasstown",
+            "Date": "2025-06-01T00:00:00",
+            "RacePriority": "0",
+            "ActivityType": 1,
+        }
+        act = TRCalendarActivity.from_api(data)
+        assert not act.is_race
+        assert act.race_priority == 0
+
+    def test_null_race_priority(self):
+        data = {
+            "Id": "w2",
+            "Name": "Recovery",
+            "Date": "2025-06-01T00:00:00",
+            "RacePriority": None,
+            "ActivityType": 0,
+        }
+        act = TRCalendarActivity.from_api(data)
+        assert not act.is_race
+        assert act.race_priority == 0
+
+    def test_strength_detection(self):
+        data = {
+            "Id": "s1",
+            "Name": "Strength - Upper",
+            "Date": "2025-06-01T00:00:00",
+            "ActivityType": 8,
+        }
+        act = TRCalendarActivity.from_api(data)
+        assert act.is_strength
+        assert not act.is_race
+
+    def test_rest_day_detection(self):
+        data = {
+            "Id": "r1",
+            "Name": "Rest Day",
+            "Date": "2025-06-01T00:00:00",
+            "ActivityType": 32767,
+        }
+        act = TRCalendarActivity.from_api(data)
+        assert act.is_rest_day
+        assert not act.is_strength
+        assert not act.is_race
+
+    def test_sport_mapping(self):
+        for at, expected in [
+            (TR_ACTIVITY_TYPE_CYCLING, "Ride"),
+            (TR_ACTIVITY_TYPE_RUN, "Run"),
+            (TR_ACTIVITY_TYPE_WALK, "Walk"),
+            (TR_ACTIVITY_TYPE_STRENGTH, "WeightTraining"),
+        ]:
+            data = {"Id": "x", "Name": "test", "Date": "2025-01-01", "ActivityType": at}
+            act = TRCalendarActivity.from_api(data)
+            assert act.intervals_icu_sport == expected
+
+    def test_notes_parsed(self):
+        data = {
+            "Id": "n1",
+            "Name": "test",
+            "Date": "2025-01-01",
+            "Notes": "Bring your A game",
+            "ActivityType": 1,
+        }
+        act = TRCalendarActivity.from_api(data)
+        assert act.notes == "Bring your A game"
+
+    def test_notes_null(self):
+        data = {"Id": "n2", "Name": "test", "Date": "2025-01-01", "ActivityType": 1}
+        act = TRCalendarActivity.from_api(data)
+        assert act.notes == ""
+
+
+class TestBuildWorkoutDoc:
+    def test_basic_steps(self):
+        intervals = [
+            TRIntervalData(start=0, end=3600, name="Workout", is_fake=False, test_interval=False, start_target_power_percent=50),
+            TRIntervalData(start=0, end=300, name="Warmup", is_fake=False, test_interval=False, start_target_power_percent=50),
+            TRIntervalData(start=300, end=600, name="Sweet Spot 1", is_fake=False, test_interval=False, start_target_power_percent=90),
+            TRIntervalData(start=600, end=900, name="Fake", is_fake=True, test_interval=False, start_target_power_percent=40),
+        ]
+        doc = build_workout_doc(intervals)
+        steps = doc["steps"]
+        assert len(steps) == 3
+
+        assert steps[0]["warmup"] is True
+        assert steps[0]["power"] == {"value": 50, "units": "%ftp"}
+        assert steps[0]["duration"] == 300
+
+        assert steps[1]["power"] == {"value": 90, "units": "%ftp"}
+        assert steps[1]["duration"] == 300
+        assert "warmup" not in steps[1]
+        assert "cooldown" not in steps[1]
+
+        assert steps[2]["cooldown"] is True
+        assert steps[2]["power"] == {"value": 40, "units": "%ftp"}
+
+    def test_fake_intervals_use_display_name(self):
+        intervals = [
+            TRIntervalData(start=0, end=120, name="Fake", is_fake=True, test_interval=False, start_target_power_percent=50),
+        ]
+        doc = build_workout_doc(intervals)
+        assert doc["steps"][0]["text"] == "Step"
+
+    def test_skips_workout_summary(self):
+        intervals = [
+            TRIntervalData(start=0, end=3600, name="Workout", is_fake=False, test_interval=False, start_target_power_percent=50),
+        ]
+        doc = build_workout_doc(intervals)
+        assert doc == {}
+
+    def test_description_included(self):
+        intervals = [
+            TRIntervalData(start=0, end=300, name="Step", is_fake=False, test_interval=False, start_target_power_percent=70),
+        ]
+        doc = build_workout_doc(intervals, description="<p>A good workout</p>")
+        assert doc["description"] == "A good workout"
+
+    def test_no_warmup_if_high_power(self):
+        intervals = [
+            TRIntervalData(start=0, end=300, name="Threshold", is_fake=False, test_interval=False, start_target_power_percent=95),
+            TRIntervalData(start=300, end=600, name="Recovery", is_fake=False, test_interval=False, start_target_power_percent=40),
+        ]
+        doc = build_workout_doc(intervals)
+        assert "warmup" not in doc["steps"][0]
+        assert doc["steps"][1].get("cooldown") is True
+
+    def test_no_cooldown_if_high_power_last(self):
+        intervals = [
+            TRIntervalData(start=0, end=300, name="Warmup", is_fake=True, test_interval=False, start_target_power_percent=50),
+            TRIntervalData(start=300, end=600, name="Sprint", is_fake=False, test_interval=False, start_target_power_percent=120),
+        ]
+        doc = build_workout_doc(intervals)
+        assert doc["steps"][0].get("warmup") is True
+        assert "cooldown" not in doc["steps"][1]
+
+
+class TestBuildStrengthWorkoutDoc:
+    def test_basic_strength(self):
+        act = TRCalendarActivity(
+            activity_id="s1", date="2025-06-01", workout_name="Strength - Lower",
+            tss=None, duration_secs=2700, is_completed=False,
+            activity_type=TR_ACTIVITY_TYPE_STRENGTH, race_priority=0, notes="",
+        )
+        doc = build_strength_workout_doc(act)
+        assert len(doc["steps"]) == 1
+        assert doc["steps"][0]["text"] == "Strength - Lower"
+
+    def test_with_notes(self):
+        act = TRCalendarActivity(
+            activity_id="s2", date="2025-06-01", workout_name="Strength - Upper",
+            tss=None, duration_secs=2700, is_completed=False,
+            activity_type=TR_ACTIVITY_TYPE_STRENGTH, race_priority=0,
+            notes="Bench press 3x8\nRows 3x10\nCurls 3x12",
+        )
+        doc = build_strength_workout_doc(act)
+        assert len(doc["steps"]) == 4
+        assert doc["steps"][0]["text"] == "Strength - Upper"
+        assert doc["steps"][1]["text"] == "Bench press 3x8"
+        assert doc["steps"][2]["text"] == "Rows 3x10"
+        assert doc["steps"][3]["text"] == "Curls 3x12"
+
+    def test_no_workout_name(self):
+        act = TRCalendarActivity(
+            activity_id="s3", date="2025-06-01", workout_name=None,
+            tss=None, duration_secs=2700, is_completed=False,
+            activity_type=TR_ACTIVITY_TYPE_STRENGTH, race_priority=0, notes="",
+        )
+        doc = build_strength_workout_doc(act)
+        assert doc["steps"][0]["text"] == "Strength"
+
+
+class TestStrengthEventPayload:
+    def test_basic(self):
+        act = TRCalendarActivity(
+            activity_id="s1", date="2025-06-01", workout_name="Strength - Lower",
+            tss=None, duration_secs=2700, is_completed=False,
+            activity_type=TR_ACTIVITY_TYPE_STRENGTH, race_priority=0, notes="",
+        )
+        payload = strength_event_payload(act)
+        assert payload["type"] == "WeightTraining"
+        assert payload["category"] == "WORKOUT"
+        assert payload["name"] == "Strength - Lower"
+        assert payload["moving_time"] == 2700
+        assert "workout_doc" in payload
+        assert payload["workout_doc"]["steps"][0]["text"] == "Strength - Lower"
+
+
+class TestRaceEventPayload:
+    def test_a_race(self):
+        act = TRCalendarActivity(
+            activity_id="r1", date="2025-08-29", workout_name="Gateway II",
+            tss=100, duration_secs=3600, is_completed=False,
+            activity_type=TR_ACTIVITY_TYPE_CYCLING, race_priority=1, notes="",
+        )
+        payload = race_event_payload(act)
+        assert payload["category"] == "RACE"
+        assert payload["race"] is True
+        assert payload["name"] == "Gateway II"
+        assert payload["type"] == "Ride"
+        assert payload["icu_training_load"] == 100
+        assert "Priority: A Race" in payload["description"]
+
+    def test_b_race(self):
+        act = TRCalendarActivity(
+            activity_id="r2", date="2025-08-30", workout_name="Gateway III",
+            tss=80, duration_secs=3600, is_completed=False,
+            activity_type=TR_ACTIVITY_TYPE_CYCLING, race_priority=2, notes="Warm up well",
+        )
+        payload = race_event_payload(act)
+        assert "Priority: B Race" in payload["description"]
+        assert "Warm up well" in payload["description"]
+
+    def test_c_race(self):
+        act = TRCalendarActivity(
+            activity_id="r3", date="2025-08-28", workout_name="Gateway",
+            tss=60, duration_secs=2400, is_completed=False,
+            activity_type=TR_ACTIVITY_TYPE_CYCLING, race_priority=3, notes="",
+        )
+        payload = race_event_payload(act)
+        assert "Priority: C Race" in payload["description"]
+
+
+class TestWorkoutToIntervalsEventWithDoc:
+    def test_includes_workout_doc(self):
+        workout = TRWorkoutDetails(
+            workout_id="456",
+            name="Geiger",
+            description="<p>Sweet spot work</p>",
+            is_outside=False,
+            tss=67,
+            duration_minutes=60,
+            intervals=[
+                TRIntervalData(start=0, end=3600, name="Workout", is_fake=False, test_interval=False, start_target_power_percent=50),
+                TRIntervalData(start=0, end=120, name="Fake", is_fake=True, test_interval=False, start_target_power_percent=50),
+                TRIntervalData(start=120, end=720, name="Sweet Spot 1", is_fake=False, test_interval=False, start_target_power_percent=90),
+                TRIntervalData(start=720, end=1020, name="Fake", is_fake=True, test_interval=False, start_target_power_percent=40),
+            ],
+        )
+        event = workout_to_intervals_event(workout, "2024-06-15")
+        assert "workout_doc" in event
+        doc = event["workout_doc"]
+        assert len(doc["steps"]) == 3
+        assert doc["steps"][0]["warmup"] is True
+        assert doc["steps"][1]["power"]["value"] == 90
+        assert doc["steps"][2]["cooldown"] is True
+        assert event["category"] == "WORKOUT"
+        assert "race" not in event
+
+    def test_race_flag_from_activity(self):
+        workout = TRWorkoutDetails(
+            workout_id="789",
+            name="Pre-race opener",
+            description="",
+            is_outside=False,
+            tss=30,
+            duration_minutes=30,
+            intervals=[
+                TRIntervalData(start=0, end=600, name="Warmup", is_fake=False, test_interval=False, start_target_power_percent=50),
+            ],
+        )
+        race_act = TRCalendarActivity(
+            activity_id="r1", date="2025-08-29", workout_name="Pre-race opener",
+            tss=30, duration_secs=1800, is_completed=False,
+            activity_type=TR_ACTIVITY_TYPE_CYCLING, race_priority=1, notes="",
+        )
+        event = workout_to_intervals_event(workout, "2025-08-29", activity=race_act)
+        assert event["category"] == "RACE"
+        assert event["race"] is True
+
+    def test_no_intervals_no_workout_doc(self):
+        workout = TRWorkoutDetails(
+            workout_id="empty",
+            name="No intervals",
+            description="",
+            is_outside=False,
+            tss=0,
+            duration_minutes=30,
+            intervals=[],
+        )
+        event = workout_to_intervals_event(workout, "2024-06-15")
+        assert "workout_doc" not in event
 
 
 class TestWorkoutToIntervalsEvent:

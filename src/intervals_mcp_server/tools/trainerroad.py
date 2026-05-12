@@ -23,11 +23,16 @@ from intervals_mcp_server.trainerroad.converter import (
     format_tr_calendar_compact,
     is_tr_synced_event,
     plain_event_payload,
+    race_event_payload,
+    strength_event_payload,
     workout_to_intervals_event,
     _format_duration,
     _strip_html,
 )
-from intervals_mcp_server.trainerroad.models import TRWorkoutDetails
+from intervals_mcp_server.trainerroad.models import (
+    TR_ACTIVITY_TYPE_REST,
+    TRWorkoutDetails,
+)
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 logger = logging.getLogger("intervals_icu_mcp_server.trainerroad")
@@ -141,6 +146,12 @@ def _needs_update(existing: dict[str, Any], new_payload: dict[str, Any]) -> bool
         return True
     if existing.get("icu_training_load") != new_payload.get("icu_training_load"):
         return True
+    if existing.get("category") != new_payload.get("category"):
+        return True
+    if bool(existing.get("race")) != bool(new_payload.get("race")):
+        return True
+    if existing.get("workout_doc") != new_payload.get("workout_doc"):
+        return True
     return False
 
 
@@ -192,7 +203,10 @@ async def sync_trainerroad_calendar(
     except httpx.HTTPStatusError as e:
         return f"Error fetching TR calendar: {e}"
 
-    planned = [a for a in activities if not a.is_completed and a.workout_name]
+    planned = [
+        a for a in activities
+        if not a.is_completed and a.workout_name and not a.is_rest_day
+    ]
 
     try:
         all_events = await _fetch_existing_events(athlete_id_to_use, start, end, api_key)
@@ -205,7 +219,9 @@ async def sync_trainerroad_calendar(
         )
 
     tr_events_by_date = _index_tr_events(all_events)
-    workout_details = await _resolve_workout_details(client, planned)
+
+    non_strength = [a for a in planned if not a.is_strength]
+    workout_details = await _resolve_workout_details(client, non_strength)
 
     created = 0
     updated = 0
@@ -220,10 +236,18 @@ async def sync_trainerroad_calendar(
         name = act.workout_name or ""
         wd = workout_details.get(act.activity_id)
 
-        if wd:
-            new_payload = workout_to_intervals_event(wd, act.date)
+        if act.is_race and not wd:
+            new_payload = race_event_payload(act)
+        elif act.is_race and wd:
+            new_payload = workout_to_intervals_event(wd, act.date, activity=act)
+        elif act.is_strength:
+            new_payload = strength_event_payload(act)
+        elif wd:
+            new_payload = workout_to_intervals_event(wd, act.date, activity=act)
         else:
-            new_payload = plain_event_payload(name, act.date, act.duration_secs or 0, act.tss or 0)
+            new_payload = plain_event_payload(
+                name, act.date, act.duration_secs or 0, act.tss or 0, activity=act,
+            )
 
         existing_on_date = tr_events_by_date.get(act.date, [])
         match = None
@@ -374,7 +398,10 @@ async def get_trainerroad_workouts(
 
     details_map: dict[str, TRWorkoutDetails] | None = None
     if include_details:
-        planned = [a for a in activities if not a.is_completed and a.workout_name]
+        planned = [
+            a for a in activities
+            if not a.is_completed and a.workout_name and not a.is_rest_day
+        ]
         details_map = await _resolve_workout_details(client, planned)
 
     return format_tr_calendar_compact(activities, details_map)

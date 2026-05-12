@@ -4,6 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+TR_ACTIVITY_TYPE_CYCLING = 1
+TR_ACTIVITY_TYPE_RUN = 2
+TR_ACTIVITY_TYPE_WALK = 6
+TR_ACTIVITY_TYPE_STRENGTH = 8
+TR_ACTIVITY_TYPE_REST = 32767
+
+TR_INTERVALS_SPORT_MAP: dict[int, str] = {
+    TR_ACTIVITY_TYPE_CYCLING: "Ride",
+    TR_ACTIVITY_TYPE_RUN: "Run",
+    TR_ACTIVITY_TYPE_WALK: "Walk",
+    TR_ACTIVITY_TYPE_STRENGTH: "WeightTraining",
+}
+
 
 @dataclass
 class TRMemberInfo:
@@ -120,6 +133,8 @@ class TRCalendarActivity:
     duration_secs: int | None
     is_completed: bool
     activity_type: int
+    race_priority: int
+    notes: str
 
     @classmethod
     def from_api(cls, data: dict) -> TRCalendarActivity:
@@ -139,6 +154,9 @@ class TRCalendarActivity:
         if "T" in date_str:
             date_str = date_str.split("T")[0]
 
+        raw_priority = data.get("RacePriority", "0") or "0"
+        race_priority = int(raw_priority) if str(raw_priority).isdigit() else 0
+
         return cls(
             activity_id=str(data.get("Id", "")),
             date=date_str,
@@ -147,4 +165,22 @@ class TRCalendarActivity:
             duration_secs=duration_secs,
             is_completed=is_completed,
             activity_type=data.get("ActivityType", 0),
+            race_priority=race_priority,
+            notes=data.get("Notes") or "",
         )
+
+    @property
+    def is_race(self) -> bool:
+        return self.race_priority > 0
+
+    @property
+    def is_strength(self) -> bool:
+        return self.activity_type == TR_ACTIVITY_TYPE_STRENGTH
+
+    @property
+    def is_rest_day(self) -> bool:
+        return self.activity_type == TR_ACTIVITY_TYPE_REST
+
+    @property
+    def intervals_icu_sport(self) -> str:
+        return TR_INTERVALS_SPORT_MAP.get(self.activity_type, "Ride")

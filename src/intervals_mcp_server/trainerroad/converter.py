@@ -1,8 +1,14 @@
 """Convert TrainerRoad workout data to Intervals.icu event format."""
 
+from __future__ import annotations
+
 import re
 
-from intervals_mcp_server.trainerroad.models import TRIntervalData, TRWorkoutDetails
+from intervals_mcp_server.trainerroad.models import (
+    TRCalendarActivity,
+    TRIntervalData,
+    TRWorkoutDetails,
+)
 
 TR_SYNC_MARKER = "[TR Sync]"
 
@@ -72,12 +78,89 @@ def _build_description(workout: TRWorkoutDetails) -> str:
     return "\n- - - -\n".join(parts)
 
 
+WARMUP_POWER_THRESHOLD = 65
+COOLDOWN_POWER_THRESHOLD = 65
+
+
+def _is_warmup_interval(interval: TRIntervalData, index: int, total: int) -> bool:
+    """Heuristic: first non-summary interval at low power is a warmup."""
+    if index != 0:
+        return False
+    return interval.start_target_power_percent <= WARMUP_POWER_THRESHOLD
+
+
+def _is_cooldown_interval(interval: TRIntervalData, index: int, total: int) -> bool:
+    """Heuristic: last interval at low power is a cooldown."""
+    if index != total - 1:
+        return False
+    return interval.start_target_power_percent <= COOLDOWN_POWER_THRESHOLD
+
+
+def build_workout_doc(intervals: list[TRIntervalData], description: str = "") -> dict:
+    """Build an intervals.icu workout_doc from TR interval data.
+
+    Returns a dict matching the intervals.icu WorkoutDoc schema with structured
+    power/duration steps. Warmup and cooldown are detected by position + power threshold.
+    """
+    work_intervals = [iv for iv in intervals if iv.name != "Workout"]
+    if not work_intervals:
+        return {}
+
+    steps: list[dict] = []
+    total = len(work_intervals)
+
+    for i, iv in enumerate(work_intervals):
+        step: dict = {
+            "duration": iv.duration_secs,
+            "power": {"value": iv.start_target_power_percent, "units": "%ftp"},
+            "text": iv.display_name,
+        }
+
+        if _is_warmup_interval(iv, i, total):
+            step["warmup"] = True
+        elif _is_cooldown_interval(iv, i, total):
+            step["cooldown"] = True
+
+        steps.append(step)
+
+    doc: dict = {"steps": steps}
+    clean_desc = _strip_html(description)
+    if clean_desc:
+        doc["description"] = clean_desc
+    return doc
+
+
+def build_strength_workout_doc(activity: TRCalendarActivity) -> dict:
+    """Build a text-based workout_doc for a strength session.
+
+    TR doesn't store structured exercise data for strength, so we create
+    text-only steps from the name and notes.
+    """
+    steps: list[dict] = []
+
+    name = activity.workout_name or "Strength"
+    steps.append({"text": name})
+
+    if activity.notes:
+        for line in activity.notes.strip().splitlines():
+            line = line.strip()
+            if line:
+                steps.append({"text": line})
+
+    return {"steps": steps}
+
+
 def workout_to_intervals_event(
     workout: TRWorkoutDetails,
     event_date: str,
+    activity: TRCalendarActivity | None = None,
 ) -> dict:
-    """Convert a TR workout into an Intervals.icu event creation payload."""
-    return {
+    """Convert a TR workout into an Intervals.icu event creation payload.
+
+    When interval data is available, builds a structured workout_doc with
+    power/duration steps for the intervals.icu calendar.
+    """
+    payload: dict = {
         "start_date_local": f"{event_date}T00:00:00",
         "name": workout.name,
         "type": workout.sport_type,
@@ -87,23 +170,77 @@ def workout_to_intervals_event(
         "description": _build_description(workout),
     }
 
+    if workout.intervals:
+        doc = build_workout_doc(workout.intervals, workout.description)
+        if doc:
+            payload["workout_doc"] = doc
+
+    if activity and activity.is_race:
+        payload["category"] = "RACE"
+        payload["race"] = True
+
+    return payload
+
+
+def strength_event_payload(activity: TRCalendarActivity) -> dict:
+    """Build an Intervals.icu event payload for a strength session."""
+    doc = build_strength_workout_doc(activity)
+    return {
+        "start_date_local": f"{activity.date}T00:00:00",
+        "name": activity.workout_name or "Strength",
+        "type": "WeightTraining",
+        "category": "WORKOUT",
+        "moving_time": activity.duration_secs or 0,
+        "description": TR_SYNC_MARKER,
+        "workout_doc": doc,
+    }
+
+
+def race_event_payload(activity: TRCalendarActivity) -> dict:
+    """Build an Intervals.icu event payload for a race."""
+    priority_label = {1: "A", 2: "B", 3: "C"}.get(activity.race_priority, "")
+    desc_parts = [TR_SYNC_MARKER]
+    if priority_label:
+        desc_parts.append(f"Priority: {priority_label} Race")
+    if activity.notes:
+        desc_parts.append(activity.notes.strip())
+
+    return {
+        "start_date_local": f"{activity.date}T00:00:00",
+        "name": activity.workout_name or "Race",
+        "type": activity.intervals_icu_sport,
+        "category": "RACE",
+        "race": True,
+        "moving_time": activity.duration_secs or 0,
+        "icu_training_load": activity.tss or 0,
+        "description": "\n".join(desc_parts),
+    }
+
 
 def plain_event_payload(
     name: str,
     event_date: str,
     duration_secs: int = 0,
     tss: float = 0,
+    activity: TRCalendarActivity | None = None,
 ) -> dict:
     """Build a minimal Intervals.icu event payload for workouts without interval data."""
-    return {
+    sport = activity.intervals_icu_sport if activity else "Ride"
+    payload: dict = {
         "start_date_local": f"{event_date}T00:00:00",
         "name": name,
-        "type": "Ride",
+        "type": sport,
         "category": "WORKOUT",
         "moving_time": duration_secs,
         "icu_training_load": tss,
         "description": TR_SYNC_MARKER,
     }
+
+    if activity and activity.is_race:
+        payload["category"] = "RACE"
+        payload["race"] = True
+
+    return payload
 
 
 def format_tr_calendar_compact(
