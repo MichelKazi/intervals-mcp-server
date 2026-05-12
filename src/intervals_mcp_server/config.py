@@ -27,6 +27,10 @@ class Config:
     athlete_id: str
     intervals_api_base_url: str
     user_agent: str
+    trainerroad_username: str
+    trainerroad_password: str
+    trainerroad_cookie: str
+    trainerroad_member_id: str
 
 
 _config_instance: Config | None = None  # pylint: disable=invalid-name
@@ -46,6 +50,10 @@ def load_config() -> Config:
     athlete_id = os.getenv("ATHLETE_ID", "")
     intervals_api_base_url = os.getenv("INTERVALS_API_BASE_URL", "https://intervals.icu/api/v1")
     user_agent = "intervalsicu-mcp-server/1.0"
+    trainerroad_username = os.getenv("TRAINERROAD_USERNAME", "")
+    trainerroad_password = os.getenv("TRAINERROAD_PASSWORD", "")
+    trainerroad_cookie = os.getenv("TRAINERROAD_COOKIE", "")
+    trainerroad_member_id = os.getenv("TRAINERROAD_MEMBER_ID", "")
 
     # Validate athlete_id if provided (empty string is allowed)
     if athlete_id:
@@ -56,6 +64,10 @@ def load_config() -> Config:
         athlete_id=athlete_id,
         intervals_api_base_url=intervals_api_base_url,
         user_agent=user_agent,
+        trainerroad_username=trainerroad_username,
+        trainerroad_password=trainerroad_password,
+        trainerroad_cookie=trainerroad_cookie,
+        trainerroad_member_id=trainerroad_member_id,
     )
 
 

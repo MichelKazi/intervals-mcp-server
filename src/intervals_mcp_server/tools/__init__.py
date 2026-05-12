@@ -53,6 +53,15 @@ from intervals_mcp_server.tools.athlete import (  # noqa: F401
     get_training_plan,
     update_athlete,
 )
+from intervals_mcp_server.tools.coaching_analytics import (  # noqa: F401
+    get_efficiency_trend,
+    get_planned_vs_actual,
+    get_power_profile_assessment,
+    get_readiness_assessment,
+    get_training_load_summary,
+    get_weekly_training_volume,
+    get_zone_distribution,
+)
 from intervals_mcp_server.tools.chats import (  # noqa: F401
     get_chat,
     get_chat_messages,
@@ -110,6 +119,11 @@ from intervals_mcp_server.tools.weather import (  # noqa: F401
     get_weather_config,
     get_weather_forecast,
     update_weather_config,
+)
+from intervals_mcp_server.tools.trainerroad import (  # noqa: F401
+    get_trainerroad_workout_details,
+    get_trainerroad_workouts,
+    sync_trainerroad_calendar,
 )
 from intervals_mcp_server.tools.wellness import get_wellness_data  # noqa: F401
 from intervals_mcp_server.tools.wellness_management import (  # noqa: F401
@@ -247,4 +261,16 @@ __all__ = [
     "get_chat",
     "get_chat_messages",
     "send_chat_message",
+    # Coaching analytics
+    "get_training_load_summary",
+    "get_weekly_training_volume",
+    "get_zone_distribution",
+    "get_readiness_assessment",
+    "get_planned_vs_actual",
+    "get_efficiency_trend",
+    "get_power_profile_assessment",
+    # TrainerRoad sync
+    "sync_trainerroad_calendar",
+    "get_trainerroad_workouts",
+    "get_trainerroad_workout_details",
 ]

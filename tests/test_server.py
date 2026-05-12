@@ -138,8 +138,8 @@ def test_get_event_by_id(monkeypatch):
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
     result = asyncio.run(get_event_by_id("e1", athlete_id="1"))
-    assert "Event Details:" in result
     assert "Test Event" in result
+    assert "2024-01-01" in result
 
 
 def test_get_wellness_data(monkeypatch):
@@ -284,11 +284,11 @@ def test_get_activity_streams(monkeypatch):
         "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
     )
     result = asyncio.run(get_activity_streams("i107537962"))
-    assert "Activity Streams" in result
+    assert "Streams for activity" in result
     assert "time" in result
     assert "watts" in result
     assert "heartrate" in result
-    assert "Data Points: 11" in result
+    assert "11 pts" in result
 
 
 def test_add_or_update_event(monkeypatch):

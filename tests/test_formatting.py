@@ -150,8 +150,9 @@ def test_format_event_summary():
         "race": True,
     }
     summary = format_event_summary(event)
-    assert "Date: 2024-01-01" in summary
-    assert "Type: Race" in summary
+    assert "2024-01-01" in summary
+    assert "Race" in summary
+    assert "Event1" in summary
 
 
 def test_format_event_details():
@@ -176,8 +177,9 @@ def test_format_event_details():
         "calendar": {"name": "Main"},
     }
     details = format_event_details(event)
-    assert "Event Details:" in details
-    assert "Workout Information:" in details
+    assert "Event1" in details
+    assert "Workout:" in details
+    assert "Ride" in details
 
 
 def test_format_intervals():

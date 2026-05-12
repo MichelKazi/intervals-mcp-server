@@ -25,97 +25,152 @@ class _KeyTracker(dict):
         return super().__getitem__(key)
 
     def __contains__(self, key: object) -> bool:
-        self.accessed.add(key)
+        if isinstance(key, str):
+            self.accessed.add(key)
         return super().__contains__(key)
 
 
-def format_activity_summary(activity: dict[str, Any]) -> str:
-    """Format an activity into a readable string."""
-    start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
-
-    if isinstance(start_time, str) and len(start_time) > 10:
-        # Format datetime if it's a full ISO string
+def _fmt_time(raw: str | None) -> str | None:
+    """Parse an ISO timestamp into a short readable string, or return None."""
+    if not raw or not isinstance(raw, str):
+        return None
+    if len(raw) > 10:
         try:
-            dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-            start_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
             pass
+    return raw
 
-    rpe = activity.get("perceived_exertion", None)
-    if rpe is None:
-        rpe = activity.get("icu_rpe", "N/A")
-    if isinstance(rpe, (int, float)):
-        rpe = f"{rpe}/10"
 
-    feel = activity.get("feel", "N/A")
-    if isinstance(feel, int):
-        feel = f"{feel}/5"
+def _has_value(val: Any) -> bool:
+    """Return True if a value is meaningful (not None, not 0, not empty)."""
+    if val is None:
+        return False
+    if isinstance(val, (int, float)) and val == 0:
+        return False
+    if isinstance(val, str) and not val.strip():
+        return False
+    return True
 
-    return f"""
-Activity: {activity.get("name", "Unnamed")}
-ID: {activity.get("id", "N/A")}
-Type: {activity.get("type", "Unknown")}
-Date: {start_time}
-Description: {activity.get("description", "N/A")}
-Distance: {activity.get("distance", 0)} meters
-Duration: {activity.get("duration", activity.get("elapsed_time", 0))} seconds
-Moving Time: {activity.get("moving_time", "N/A")} seconds
-Elevation Gain: {activity.get("elevationGain", activity.get("total_elevation_gain", 0))} meters
-Elevation Loss: {activity.get("total_elevation_loss", "N/A")} meters
 
-Power Data:
-Average Power: {activity.get("avgPower", activity.get("icu_average_watts", activity.get("average_watts", "N/A")))} watts
-Weighted Avg Power: {activity.get("icu_weighted_avg_watts", "N/A")} watts
-Training Load: {activity.get("trainingLoad", activity.get("icu_training_load", "N/A"))}
-FTP: {activity.get("icu_ftp", "N/A")} watts
-Kilojoules: {activity.get("icu_joules", "N/A")}
-Intensity: {activity.get("icu_intensity", "N/A")}
-Power:HR Ratio: {activity.get("icu_power_hr", "N/A")}
-Variability Index: {activity.get("icu_variability_index", "N/A")}
+def _first_of(data: dict[str, Any], *keys: str) -> Any:
+    """Return the first non-None value for the given keys."""
+    for k in keys:
+        val = data.get(k)
+        if val is not None:
+            return val
+    return None
 
-Heart Rate Data:
-Average Heart Rate: {activity.get("avgHr", activity.get("average_heartrate", "N/A"))} bpm
-Max Heart Rate: {activity.get("max_heartrate", "N/A")} bpm
-LTHR: {activity.get("lthr", "N/A")} bpm
-Resting HR: {activity.get("icu_resting_hr", "N/A")} bpm
-Decoupling: {activity.get("decoupling", "N/A")}
 
-Other Metrics:
-Cadence: {activity.get("average_cadence", "N/A")} rpm
-Calories burned: {activity.get("calories", "N/A")} kcal
-Average Speed: {activity.get("average_speed", "N/A")} m/s
-Max Speed: {activity.get("max_speed", "N/A")} m/s
-Average Stride: {activity.get("average_stride", "N/A")}
-L/R Balance: {activity.get("avg_lr_balance", "N/A")}
-Weight: {activity.get("icu_weight", "N/A")} kg
-RPE: {rpe}
-Session RPE: {activity.get("session_rpe", "N/A")}
-Feel: {feel}
+def _emit(lines: list[str], label: str, val: Any, unit: str = "") -> None:
+    """Append a formatted line only if the value is meaningful."""
+    if not _has_value(val):
+        return
+    suffix = f" {unit}" if unit else ""
+    lines.append(f"  {label}: {val}{suffix}")
 
-Environment:
-Trainer: {activity.get("trainer", "N/A")}
-Average Temp: {activity.get("average_temp", "N/A")}°C
-Min Temp: {activity.get("min_temp", "N/A")}°C
-Max Temp: {activity.get("max_temp", "N/A")}°C
-Avg Wind Speed: {activity.get("average_wind_speed", "N/A")} km/h
-Headwind %: {activity.get("headwind_percent", "N/A")}%
-Tailwind %: {activity.get("tailwind_percent", "N/A")}%
 
-Training Metrics:
-Fitness (CTL): {activity.get("icu_ctl", "N/A")}
-Fatigue (ATL): {activity.get("icu_atl", "N/A")}
-TRIMP: {activity.get("trimp", "N/A")}
-Polarization Index: {activity.get("polarization_index", "N/A")}
-Power Load: {activity.get("power_load", "N/A")}
-HR Load: {activity.get("hr_load", "N/A")}
-Pace Load: {activity.get("pace_load", "N/A")}
-Efficiency Factor: {activity.get("icu_efficiency_factor", "N/A")}
+def format_activity_summary(activity: dict[str, Any]) -> str:
+    """Format an activity into a readable string, omitting fields without data."""
+    name = activity.get("name", "Unnamed")
+    act_id = activity.get("id", "?")
+    act_type = activity.get("type", "Unknown")
+    start_time = _fmt_time(activity.get("startTime") or activity.get("start_date"))
 
-Device Info:
-Device: {activity.get("device_name", "N/A")}
-Power Meter: {activity.get("power_meter", "N/A")}
-File Type: {activity.get("file_type", "N/A")}
-"""
+    lines = [f"Activity: {name} [{act_type}] (ID: {act_id})"]
+    if start_time:
+        lines.append(f"  Date: {start_time}")
+    if _has_value(activity.get("description")):
+        lines.append(f"  Description: {activity['description']}")
+
+    # Core metrics
+    _emit(lines, "Distance", activity.get("distance"), "m")
+    duration = _first_of(activity, "duration", "elapsed_time")
+    _emit(lines, "Duration", duration, "s")
+    _emit(lines, "Moving Time", activity.get("moving_time"), "s")
+    elev_gain = _first_of(activity, "elevationGain", "total_elevation_gain")
+    _emit(lines, "Elevation Gain", elev_gain, "m")
+    _emit(lines, "Elevation Loss", activity.get("total_elevation_loss"), "m")
+
+    # Power
+    avg_power = _first_of(activity, "avgPower", "icu_average_watts", "average_watts")
+    power_lines: list[str] = []
+    _emit(power_lines, "Avg Power", avg_power, "W")
+    _emit(power_lines, "Weighted Avg", activity.get("icu_weighted_avg_watts"), "W")
+    _emit(power_lines, "Training Load", _first_of(activity, "trainingLoad", "icu_training_load"))
+    _emit(power_lines, "FTP", activity.get("icu_ftp"), "W")
+    _emit(power_lines, "kJ", activity.get("icu_joules"))
+    _emit(power_lines, "Intensity", activity.get("icu_intensity"))
+    _emit(power_lines, "Power:HR", activity.get("icu_power_hr"))
+    _emit(power_lines, "VI", activity.get("icu_variability_index"))
+    if power_lines:
+        lines.append("Power:")
+        lines.extend(power_lines)
+
+    # Heart rate
+    avg_hr = _first_of(activity, "avgHr", "average_heartrate")
+    hr_lines: list[str] = []
+    _emit(hr_lines, "Avg HR", avg_hr, "bpm")
+    _emit(hr_lines, "Max HR", activity.get("max_heartrate"), "bpm")
+    _emit(hr_lines, "LTHR", activity.get("lthr"), "bpm")
+    _emit(hr_lines, "Resting HR", activity.get("icu_resting_hr"), "bpm")
+    _emit(hr_lines, "Decoupling", activity.get("decoupling"))
+    if hr_lines:
+        lines.append("Heart Rate:")
+        lines.extend(hr_lines)
+
+    # Speed / cadence
+    other_lines: list[str] = []
+    _emit(other_lines, "Avg Speed", activity.get("average_speed"), "m/s")
+    _emit(other_lines, "Max Speed", activity.get("max_speed"), "m/s")
+    _emit(other_lines, "Cadence", activity.get("average_cadence"), "rpm")
+    _emit(other_lines, "Avg Stride", activity.get("average_stride"))
+    _emit(other_lines, "L/R Balance", activity.get("avg_lr_balance"))
+    _emit(other_lines, "Calories", activity.get("calories"), "kcal")
+    # RPE / feel
+    rpe = _first_of(activity, "perceived_exertion", "icu_rpe")
+    if _has_value(rpe):
+        other_lines.append(f"  RPE: {rpe}/10")
+    feel = activity.get("feel")
+    if _has_value(feel):
+        other_lines.append(f"  Feel: {feel}/5")
+    _emit(other_lines, "Session RPE", activity.get("session_rpe"))
+    _emit(other_lines, "Weight", activity.get("icu_weight"), "kg")
+    if other_lines:
+        lines.append("Metrics:")
+        lines.extend(other_lines)
+
+    # Environment
+    env_lines: list[str] = []
+    trainer = activity.get("trainer")
+    if trainer is True:
+        env_lines.append("  Indoor/Trainer: Yes")
+    _emit(env_lines, "Avg Temp", activity.get("average_temp"), "°C")
+    _emit(env_lines, "Avg Wind", activity.get("average_wind_speed"), "km/h")
+    if env_lines:
+        lines.append("Environment:")
+        lines.extend(env_lines)
+
+    # Training load
+    tl_lines: list[str] = []
+    _emit(tl_lines, "CTL", activity.get("icu_ctl"))
+    _emit(tl_lines, "ATL", activity.get("icu_atl"))
+    _emit(tl_lines, "TRIMP", activity.get("trimp"))
+    _emit(tl_lines, "Efficiency Factor", activity.get("icu_efficiency_factor"))
+    _emit(tl_lines, "Polarization Index", activity.get("polarization_index"))
+    if tl_lines:
+        lines.append("Training:")
+        lines.extend(tl_lines)
+
+    # Device
+    dev_lines: list[str] = []
+    _emit(dev_lines, "Device", activity.get("device_name"))
+    _emit(dev_lines, "Power Meter", activity.get("power_meter"))
+    if dev_lines:
+        lines.extend(dev_lines)
+
+    return "\n".join(lines) + "\n"
 
 
 def format_workout(workout: dict[str, Any]) -> str:
@@ -303,8 +358,10 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
     Returns:
         A formatted string representation of the wellness entry.
     """
+    tracker: _KeyTracker | None = None
     if include_all_fields:
-        entries = _KeyTracker(entries)
+        tracker = _KeyTracker(entries)
+        entries = tracker
         # Mark metadata/internal keys so they don't appear in "Other Fields"
         entries.get("date")
         entries.get("updated")
@@ -367,8 +424,8 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
     if "locked" in entries:
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
 
-    if include_all_fields:
-        other_lines = _format_other_fields(entries, entries.accessed)
+    if include_all_fields and tracker is not None:
+        other_lines = _format_other_fields(entries, tracker.accessed)
         if other_lines:
             lines.append("")
             lines.append("Other Fields:")
@@ -378,80 +435,62 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
 
 
 def format_event_summary(event: dict[str, Any]) -> str:
-    """Format a basic event summary into a readable string."""
-
-    # Update to check for "date" if "start_date_local" is not provided
-    event_date = event.get("start_date_local", event.get("date", "Unknown"))
+    """Format a basic event summary into a readable string, omitting empty fields."""
+    event_date = event.get("start_date_local") or event.get("date", "Unknown")
     event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
     event_name = event.get("name", "Unnamed")
-    event_id = event.get("id", "N/A")
-    event_desc = event.get("description", "No description")
+    event_id = event.get("id", "?")
 
-    return f"""Date: {event_date}
-ID: {event_id}
-Type: {event_type}
-Name: {event_name}
-Description: {event_desc}"""
+    lines = [f"{event_name} [{event_type}] (ID: {event_id}) — {event_date}"]
+    if _has_value(event.get("description")):
+        lines.append(f"  Description: {event['description']}")
+    return "\n".join(lines)
 
 
 def format_event_details(event: dict[str, Any]) -> str:
-    """Format detailed event information into a readable string."""
+    """Format detailed event information, omitting fields without data."""
+    name = event.get("name", "Unnamed")
+    eid = event.get("id", "?")
+    date = event.get("date", "Unknown")
 
-    event_details = f"""Event Details:
+    lines = [f"Event: {name} (ID: {eid}) — {date}"]
+    if _has_value(event.get("description")):
+        lines.append(f"  Description: {event['description']}")
 
-ID: {event.get("id", "N/A")}
-Date: {event.get("date", "Unknown")}
-Name: {event.get("name", "Unnamed")}
-Description: {event.get("description", "No description")}"""
+    workout = event.get("workout")
+    if workout and isinstance(workout, dict):
+        lines.append("  Workout:")
+        _emit(lines, "    Sport", workout.get("sport"))
+        _emit(lines, "    Duration", workout.get("duration"), "s")
+        _emit(lines, "    TSS", workout.get("tss"))
+        intervals = workout.get("intervals")
+        if isinstance(intervals, list) and intervals:
+            lines.append(f"    Intervals: {len(intervals)}")
 
-    # Check if it's a workout-based event
-    if "workout" in event and event["workout"]:
-        workout = event["workout"]
-        event_details += f"""
-
-Workout Information:
-Workout ID: {workout.get("id", "N/A")}
-Sport: {workout.get("sport", "Unknown")}
-Duration: {workout.get("duration", 0)} seconds
-TSS: {workout.get("tss", "N/A")}"""
-
-        # Include interval count if available
-        if "intervals" in workout and isinstance(workout["intervals"], list):
-            event_details += f"""
-Intervals: {len(workout["intervals"])}"""
-
-    # Check if it's a race
     if event.get("race"):
-        event_details += f"""
+        lines.append("  Race:")
+        _emit(lines, "    Priority", event.get("priority"))
+        _emit(lines, "    Result", event.get("result"))
 
-Race Information:
-Priority: {event.get("priority", "N/A")}
-Result: {event.get("result", "N/A")}"""
+    cal = event.get("calendar")
+    if isinstance(cal, dict) and _has_value(cal.get("name")):
+        lines.append(f"  Calendar: {cal['name']}")
 
-    # Include calendar information
-    if "calendar" in event:
-        cal = event["calendar"]
-        event_details += f"""
-
-Calendar: {cal.get("name", "N/A")}"""
-
-    return event_details
+    return "\n".join(lines)
 
 
 def format_activity_message(message: dict[str, Any]) -> str:
     """Format an activity message/note into a readable string."""
-    created = message.get("created", "Unknown")
-    if isinstance(created, str) and len(created) > 10:
-        try:
-            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-            created = dt.strftime("%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            pass
+    author = message.get("name", "Unknown")
+    created = _fmt_time(message.get("created")) or "Unknown"
+    content = message.get("content", "")
+    msg_type = message.get("type")
 
-    return f"""Author: {message.get("name", "Unknown")}
-Date: {created}
-Type: {message.get("type", "TEXT")}
-Content: {message.get("content", "")}"""
+    line = f"{author} ({created})"
+    if msg_type and msg_type != "TEXT":
+        line += f" [{msg_type}]"
+    line += f": {content}"
+    return line
 
 
 def format_custom_item_details(item: dict[str, Any]) -> str:
@@ -475,88 +514,99 @@ def format_custom_item_details(item: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _format_single_interval(i: int, interval: dict[str, Any]) -> str:
+    """Format a single interval, emitting only fields with data."""
+    label = interval.get("label", f"Interval {i}")
+    int_type = interval.get("type", "")
+    header = f"[{i}] {label}" + (f" ({int_type})" if int_type else "")
+    lines = [header]
+
+    _emit(lines, "Duration", interval.get("elapsed_time"), "s")
+    _emit(lines, "Moving Time", interval.get("moving_time"), "s")
+    _emit(lines, "Distance", interval.get("distance"), "m")
+
+    # Power
+    pw: list[str] = []
+    avg_w = interval.get("average_watts")
+    if _has_value(avg_w):
+        wkg = interval.get("average_watts_kg")
+        pw.append(f"  Avg: {avg_w}W" + (f" ({wkg} W/kg)" if _has_value(wkg) else ""))
+    max_w = interval.get("max_watts")
+    if _has_value(max_w):
+        pw.append(f"  Max: {max_w}W")
+    _emit(pw, "Weighted Avg", interval.get("weighted_average_watts"), "W")
+    _emit(pw, "Intensity", interval.get("intensity"))
+    _emit(pw, "Load", interval.get("training_load"))
+    _emit(pw, "kJ", interval.get("joules"))
+    zone = interval.get("zone")
+    if _has_value(zone):
+        zmin = interval.get("zone_min_watts")
+        zmax = interval.get("zone_max_watts")
+        pw.append(f"  Zone: {zone}" + (f" ({zmin}-{zmax}W)" if _has_value(zmin) else ""))
+    _emit(pw, "L/R Balance", interval.get("avg_lr_balance"))
+    if pw:
+        lines.append("  Power:")
+        lines.extend(f"  {line}" if not line.startswith("  ") else line for line in pw)
+
+    # HR
+    hr: list[str] = []
+    avg_hr_val = interval.get("average_heartrate")
+    if _has_value(avg_hr_val):
+        max_hr_val = interval.get("max_heartrate")
+        hr.append(f"  Avg: {avg_hr_val}" + (f", Max: {max_hr_val}" if _has_value(max_hr_val) else "") + " bpm")
+    _emit(hr, "Decoupling", interval.get("decoupling"))
+    _emit(hr, "DFA α1", interval.get("average_dfa_a1"))
+    if hr:
+        lines.append("  HR:")
+        lines.extend(f"  {line}" if not line.startswith("  ") else line for line in hr)
+
+    # Speed / cadence
+    spd: list[str] = []
+    avg_spd = interval.get("average_speed")
+    if _has_value(avg_spd):
+        spd.append(f"  Avg Speed: {avg_spd} m/s")
+    _emit(spd, "GAP", interval.get("gap"), "m/s")
+    avg_cad = interval.get("average_cadence")
+    if _has_value(avg_cad):
+        spd.append(f"  Cadence: {avg_cad} rpm")
+    _emit(spd, "Stride", interval.get("average_stride"))
+    if spd:
+        lines.extend(spd)
+
+    # Elevation / environment
+    _emit(lines, "Elev Gain", interval.get("total_elevation_gain"), "m")
+    _emit(lines, "Gradient", interval.get("average_gradient"), "%")
+    _emit(lines, "Temp", interval.get("average_temp"), "°C")
+
+    return "\n".join(lines)
+
+
 def format_intervals(intervals_data: dict[str, Any]) -> str:
-    """Format intervals data into a readable string with all available fields.
+    """Format intervals data, omitting fields without meaningful data."""
+    lines = ["Intervals Analysis:"]
+    _emit(lines, "ID", intervals_data.get("id"))
 
-    Args:
-        intervals_data: The intervals data from the Intervals.icu API
-
-    Returns:
-        A formatted string representation of the intervals data
-    """
-    # Format basic intervals information
-    result = f"""Intervals Analysis:
-
-ID: {intervals_data.get("id", "N/A")}
-Analyzed: {intervals_data.get("analyzed", "N/A")}
-
-"""
-
-    # Format individual intervals
     if "icu_intervals" in intervals_data and intervals_data["icu_intervals"]:
-        result += "Individual Intervals:\n\n"
-
+        lines.append("")
         for i, interval in enumerate(intervals_data["icu_intervals"], 1):
-            result += f"""[{i}] {interval.get("label", f"Interval {i}")} ({interval.get("type", "Unknown")})
-Duration: {interval.get("elapsed_time", 0)} seconds (moving: {interval.get("moving_time", 0)} seconds)
-Distance: {interval.get("distance", 0)} meters
-Start-End Indices: {interval.get("start_index", 0)}-{interval.get("end_index", 0)}
+            lines.append(_format_single_interval(i, interval))
+            lines.append("")
 
-Power Metrics:
-  Average Power: {interval.get("average_watts", 0)} watts ({interval.get("average_watts_kg", 0)} W/kg)
-  Max Power: {interval.get("max_watts", 0)} watts ({interval.get("max_watts_kg", 0)} W/kg)
-  Weighted Avg Power: {interval.get("weighted_average_watts", 0)} watts
-  Intensity: {interval.get("intensity", 0)}
-  Training Load: {interval.get("training_load", 0)}
-  Joules: {interval.get("joules", 0)}
-  Joules > FTP: {interval.get("joules_above_ftp", 0)}
-  Power Zone: {interval.get("zone", "N/A")} ({interval.get("zone_min_watts", 0)}-{interval.get("zone_max_watts", 0)} watts)
-  W' Balance: Start {interval.get("wbal_start", 0)}, End {interval.get("wbal_end", 0)}
-  L/R Balance: {interval.get("avg_lr_balance", 0)}
-  Variability: {interval.get("w5s_variability", 0)}
-  Torque: Avg {interval.get("average_torque", 0)}, Min {interval.get("min_torque", 0)}, Max {interval.get("max_torque", 0)}
-
-Heart Rate & Metabolic:
-  Heart Rate: Avg {interval.get("average_heartrate", 0)}, Min {interval.get("min_heartrate", 0)}, Max {interval.get("max_heartrate", 0)} bpm
-  Decoupling: {interval.get("decoupling", 0)}
-  DFA α1: {interval.get("average_dfa_a1", 0)}
-  Respiration: {interval.get("average_respiration", 0)} breaths/min
-  EPOC: {interval.get("average_epoc", 0)}
-  SmO2: {interval.get("average_smo2", 0)}% / {interval.get("average_smo2_2", 0)}%
-  THb: {interval.get("average_thb", 0)} / {interval.get("average_thb_2", 0)}
-
-Speed & Cadence:
-  Speed: Avg {interval.get("average_speed", 0)}, Min {interval.get("min_speed", 0)}, Max {interval.get("max_speed", 0)} m/s
-  GAP: {interval.get("gap", 0)} m/s
-  Cadence: Avg {interval.get("average_cadence", 0)}, Min {interval.get("min_cadence", 0)}, Max {interval.get("max_cadence", 0)} rpm
-  Stride: {interval.get("average_stride", 0)}
-
-Elevation & Environment:
-  Elevation Gain: {interval.get("total_elevation_gain", 0)} meters
-  Altitude: Min {interval.get("min_altitude", 0)}, Max {interval.get("max_altitude", 0)} meters
-  Gradient: {interval.get("average_gradient", 0)}%
-  Temperature: {interval.get("average_temp", 0)}°C (Weather: {interval.get("average_weather_temp", 0)}°C, Feels like: {interval.get("average_feels_like", 0)}°C)
-  Wind: Speed {interval.get("average_wind_speed", 0)} km/h, Gust {interval.get("average_wind_gust", 0)} km/h, Direction {interval.get("prevailing_wind_deg", 0)}°
-  Headwind: {interval.get("headwind_percent", 0)}%, Tailwind: {interval.get("tailwind_percent", 0)}%
-
-"""
-
-    # Format interval groups
     if "icu_groups" in intervals_data and intervals_data["icu_groups"]:
-        result += "Interval Groups:\n\n"
+        lines.append("Groups:")
+        for group in intervals_data["icu_groups"]:
+            if not isinstance(group, dict):
+                continue
+            gid = group.get("id", "?")
+            count = group.get("count", "?")
+            parts = [f"Group {gid} ({count} intervals)"]
+            _emit(parts, "Duration", group.get("elapsed_time"), "s")
+            _emit(parts, "Distance", group.get("distance"), "m")
+            _emit(parts, "Avg Power", group.get("average_watts"), "W")
+            _emit(parts, "Avg HR", group.get("average_heartrate"), "bpm")
+            _emit(parts, "Avg Speed", group.get("average_speed"), "m/s")
+            _emit(parts, "Cadence", group.get("average_cadence"), "rpm")
+            lines.append("\n".join(parts))
+            lines.append("")
 
-        for i, group in enumerate(intervals_data["icu_groups"], 1):
-            result += f"""Group: {group.get("id", f"Group {i}")} (Contains {group.get("count", 0)} intervals)
-Duration: {group.get("elapsed_time", 0)} seconds (moving: {group.get("moving_time", 0)} seconds)
-Distance: {group.get("distance", 0)} meters
-Start-End Indices: {group.get("start_index", 0)}-N/A
-
-Power: Avg {group.get("average_watts", 0)} watts ({group.get("average_watts_kg", 0)} W/kg), Max {group.get("max_watts", 0)} watts
-W. Avg Power: {group.get("weighted_average_watts", 0)} watts, Intensity: {group.get("intensity", 0)}
-Heart Rate: Avg {group.get("average_heartrate", 0)}, Max {group.get("max_heartrate", 0)} bpm
-Speed: Avg {group.get("average_speed", 0)}, Max {group.get("max_speed", 0)} m/s
-Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)} rpm
-
-"""
-
-    return result
+    return "\n".join(lines)

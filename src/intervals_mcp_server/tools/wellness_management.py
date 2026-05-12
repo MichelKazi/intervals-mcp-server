@@ -5,7 +5,6 @@ This module contains tools for creating and updating wellness entries.
 The read-only get_wellness_data tool is in the wellness module.
 """
 
-import json
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request

@@ -16,28 +16,63 @@ from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_da
 config = get_config()
 
 
+def _compact_json(data: Any) -> str:
+    """Render API data compactly: strip nulls, use single-line JSON."""
+    if isinstance(data, dict):
+        cleaned = {k: v for k, v in data.items() if v is not None}
+        return json.dumps(cleaned, separators=(", ", ": "))
+    if isinstance(data, list) and len(data) > 30:
+        return json.dumps(data[:30], separators=(", ", ": ")) + f"\n... ({len(data)} total)"
+    return json.dumps(data, separators=(", ", ": "))
+
+
+def _format_duration(secs: int | float) -> str:
+    """Format seconds into a human-readable duration."""
+    s = int(secs)
+    if s < 60:
+        return f"{s}s"
+    if s < 3600:
+        return f"{s // 60}m{s % 60:02d}s" if s % 60 else f"{s // 60}m"
+    h = s // 3600
+    m = (s % 3600) // 60
+    return f"{h}h{m:02d}m" if m else f"{h}h"
+
+
+# Key durations to show for curves (seconds) — provides a useful summary
+_KEY_DURATIONS = {1, 5, 10, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600, 5400, 7200}
+
+
 def _format_curve_data(data: Any, curve_type: str, activity_id: str) -> str:
-    """Format curve data (power, pace, HR) into a readable string."""
+    """Format curve data compactly, showing key durations instead of all points."""
     if not data:
         return f"No {curve_type} curve data found for activity {activity_id}."
 
-    if isinstance(data, dict):
-        return f"{curve_type.title()} Curve for activity {activity_id}:\n\n{json.dumps(data, indent=2)}"
-
-    if isinstance(data, list):
-        output = f"{curve_type.title()} Curve for activity {activity_id}:\n\n"
-        for entry in data[:50]:
-            if isinstance(entry, dict):
-                secs = entry.get("secs", entry.get("distance", "?"))
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        output = f"{curve_type.title()} Curve for activity {activity_id} ({len(data)} points):\n"
+        for entry in data:
+            secs = entry.get("secs", entry.get("distance"))
+            if secs is not None and int(secs) in _KEY_DURATIONS:
                 value = entry.get("value", entry.get("watts", entry.get("bpm", entry.get("secs_km", "?"))))
-                output += f"  {secs}: {value}\n"
-            else:
-                output += f"  {entry}\n"
-        if len(data) > 50:
-            output += f"\n  ... and {len(data) - 50} more data points\n"
+                output += f"  {_format_duration(secs)}: {value}\n"
         return output
 
-    return f"{curve_type.title()} Curve for activity {activity_id}:\n\n{data}"
+    if isinstance(data, list) and data:
+        # Array-of-numbers format (index = seconds) — sample key durations
+        output = f"{curve_type.title()} Curve for activity {activity_id} ({len(data)} points):\n"
+        for s in sorted(_KEY_DURATIONS):
+            if s < len(data) and data[s] is not None:
+                output += f"  {_format_duration(s)}: {data[s]}\n"
+        return output
+
+    if isinstance(data, dict):
+        # Compact dict output — skip null values
+        lines = [f"{curve_type.title()} Curve for activity {activity_id}:"]
+        for k, v in data.items():
+            if v is not None:
+                lines.append(f"  {k}: {v}")
+        return "\n".join(lines)
+
+    return f"{curve_type.title()} Curve for activity {activity_id}: {data}"
 
 
 @mcp.tool()
@@ -63,7 +98,7 @@ async def get_best_efforts(
     if not result:
         return f"No best effort data found for activity {activity_id}."
 
-    return f"Best Efforts for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"Best Efforts for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -156,7 +191,7 @@ async def get_activity_power_histogram(
     if not result:
         return f"No power histogram data found for activity {activity_id}."
 
-    return f"Power Histogram for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"Power Histogram for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -180,7 +215,7 @@ async def get_activity_pace_histogram(
     if not result:
         return f"No pace histogram data found for activity {activity_id}."
 
-    return f"Pace Histogram for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"Pace Histogram for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -204,7 +239,7 @@ async def get_activity_gap_histogram(
     if not result:
         return f"No GAP histogram data found for activity {activity_id}."
 
-    return f"GAP Histogram for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"GAP Histogram for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -228,7 +263,7 @@ async def get_activity_hr_histogram(
     if not result:
         return f"No HR histogram data found for activity {activity_id}."
 
-    return f"HR Histogram for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"HR Histogram for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -254,7 +289,7 @@ async def get_activity_power_vs_hr(
     if not result:
         return f"No power vs HR data found for activity {activity_id}."
 
-    return f"Power vs HR for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"Power vs HR for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -280,7 +315,7 @@ async def get_activity_map(
     if not result:
         return f"No map data found for activity {activity_id}."
 
-    return f"Map Data for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"Map Data for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -316,7 +351,7 @@ async def get_activity_segments(
                 output += f"  - {name}: {distance}m, {elevation}m gain\n"
         return output
 
-    return f"Segments for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"Segments for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -347,7 +382,7 @@ async def get_activity_weather(
                 lines.append(f"  {key}: {val}")
         return "\n".join(lines)
 
-    return f"Weather for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"Weather for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -371,7 +406,7 @@ async def get_activity_interval_stats(
     if not result:
         return f"No interval stats found for activity {activity_id}."
 
-    return f"Interval Stats for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"Interval Stats for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -395,7 +430,7 @@ async def get_activity_hr_load_model(
     if not result:
         return f"No HR load model data found for activity {activity_id}."
 
-    return f"HR Load Model for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"HR Load Model for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -419,7 +454,7 @@ async def get_activity_time_at_hr(
     if not result:
         return f"No time at HR data found for activity {activity_id}."
 
-    return f"Time at HR for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"Time at HR for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -443,7 +478,7 @@ async def get_activity_power_spike_model(
     if not result:
         return f"No power spike model data found for activity {activity_id}."
 
-    return f"Power Spike Model for activity {activity_id}:\n\n{json.dumps(result, indent=2)}"
+    return f"Power Spike Model for activity {activity_id}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -482,7 +517,7 @@ async def get_athlete_power_curves(
     if not result:
         return f"No power curve data found for athlete {athlete_id_to_use}."
 
-    return f"Power Curves for athlete {athlete_id_to_use} ({start_date} to {end_date}):\n\n{json.dumps(result, indent=2)}"
+    return f"Power Curves for athlete {athlete_id_to_use} ({start_date} to {end_date}):\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -521,7 +556,7 @@ async def get_athlete_pace_curves(
     if not result:
         return f"No pace curve data found for athlete {athlete_id_to_use}."
 
-    return f"Pace Curves for athlete {athlete_id_to_use} ({start_date} to {end_date}):\n\n{json.dumps(result, indent=2)}"
+    return f"Pace Curves for athlete {athlete_id_to_use} ({start_date} to {end_date}):\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -560,7 +595,7 @@ async def get_athlete_hr_curves(
     if not result:
         return f"No HR curve data found for athlete {athlete_id_to_use}."
 
-    return f"HR Curves for athlete {athlete_id_to_use} ({start_date} to {end_date}):\n\n{json.dumps(result, indent=2)}"
+    return f"HR Curves for athlete {athlete_id_to_use} ({start_date} to {end_date}):\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -590,7 +625,7 @@ async def get_athlete_mmp_model(
     if not result:
         return f"No MMP model data found for athlete {athlete_id_to_use}."
 
-    return f"MMP Model for athlete {athlete_id_to_use}:\n\n{json.dumps(result, indent=2)}"
+    return f"MMP Model for athlete {athlete_id_to_use}:\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -629,4 +664,4 @@ async def get_athlete_power_hr_curve(
     if not result:
         return f"No power vs HR curve data found for athlete {athlete_id_to_use}."
 
-    return f"Power vs HR Curve for athlete {athlete_id_to_use} ({start_date} to {end_date}):\n\n{json.dumps(result, indent=2)}"
+    return f"Power vs HR Curve for athlete {athlete_id_to_use} ({start_date} to {end_date}):\n\n{_compact_json(result)}"

@@ -286,8 +286,8 @@ async def get_activity_streams(
     if not streams:
         return f"No stream data found for activity {activity_id}."
 
-    # Format the streams data
-    streams_summary = f"Activity Streams for {activity_id}:\n\n"
+    # Format the streams data compactly
+    lines = [f"Streams for activity {activity_id}:"]
 
     for stream in streams:
         if not isinstance(stream, dict):
@@ -296,25 +296,16 @@ async def get_activity_streams(
         stream_type = stream.get("type", "unknown")
         stream_name = stream.get("name", stream_type)
         data = stream.get("data", [])
-        value_type = stream.get("valueType", "")
+        n = len(data)
 
-        streams_summary += f"Stream: {stream_name} ({stream_type})\n"
-        streams_summary += f"  Value Type: {value_type}\n"
-        streams_summary += f"  Data Points: {len(data)}\n"
+        if n == 0:
+            lines.append(f"  {stream_name}: (empty)")
+        elif n <= 6:
+            lines.append(f"  {stream_name} ({n} pts): {data}")
+        else:
+            lines.append(f"  {stream_name} ({n} pts): {data[:3]} ... {data[-3:]}")
 
-        # Show first few and last few data points for preview
-        if data:
-            if len(data) <= 10:
-                streams_summary += f"  Values: {data}\n"
-            else:
-                preview_start = data[:5]
-                preview_end = data[-5:]
-                streams_summary += f"  First 5 values: {preview_start}\n"
-                streams_summary += f"  Last 5 values: {preview_end}\n"
-
-        streams_summary += "\n"
-
-    return streams_summary
+    return "\n".join(lines)
 
 
 @mcp.tool()
