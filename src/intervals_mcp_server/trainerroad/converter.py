@@ -4,6 +4,8 @@ import re
 
 from intervals_mcp_server.trainerroad.models import TRIntervalData, TRWorkoutDetails
 
+TR_SYNC_MARKER = "[TR Sync]"
+
 
 def _format_duration(secs: int) -> str:
     """Format seconds into a compact duration string (e.g. '5m', '3m30s', '1h5m')."""
@@ -24,6 +26,12 @@ def _format_duration(secs: int) -> str:
 def _strip_html(text: str) -> str:
     """Remove HTML tags from a string."""
     return re.sub(r"<[^>]+>", "", text).strip()
+
+
+def is_tr_synced_event(event: dict) -> bool:
+    """Check if an Intervals.icu event was created by the TR sync."""
+    desc = event.get("description") or ""
+    return desc.startswith(TR_SYNC_MARKER)
 
 
 def build_structure_text(intervals: list[TRIntervalData]) -> str:
@@ -50,27 +58,25 @@ def build_structure_text(intervals: list[TRIntervalData]) -> str:
     return "\n".join(lines)
 
 
+def _build_description(workout: TRWorkoutDetails) -> str:
+    """Build the event description with TR Sync marker."""
+    parts = [TR_SYNC_MARKER]
+    clean_desc = _strip_html(workout.description)
+    if clean_desc:
+        parts.append(clean_desc)
+
+    structure = build_structure_text(workout.intervals)
+    if structure:
+        parts.append(structure)
+
+    return "\n- - - -\n".join(parts)
+
+
 def workout_to_intervals_event(
     workout: TRWorkoutDetails,
     event_date: str,
 ) -> dict:
-    """Convert a TR workout into an Intervals.icu event creation payload.
-
-    Args:
-        workout: The full TR workout details.
-        event_date: The date for the event in YYYY-MM-DD format.
-    """
-    description_parts = []
-    clean_desc = _strip_html(workout.description)
-    if clean_desc:
-        description_parts.append(clean_desc)
-
-    structure = build_structure_text(workout.intervals)
-    if structure:
-        description_parts.append(structure)
-
-    description = "\n- - - -\n".join(description_parts)
-
+    """Convert a TR workout into an Intervals.icu event creation payload."""
     return {
         "start_date_local": f"{event_date}T00:00:00",
         "name": workout.name,
@@ -78,7 +84,25 @@ def workout_to_intervals_event(
         "category": "WORKOUT",
         "moving_time": workout.duration_secs,
         "icu_training_load": workout.tss,
-        "description": description,
+        "description": _build_description(workout),
+    }
+
+
+def plain_event_payload(
+    name: str,
+    event_date: str,
+    duration_secs: int = 0,
+    tss: float = 0,
+) -> dict:
+    """Build a minimal Intervals.icu event payload for workouts without interval data."""
+    return {
+        "start_date_local": f"{event_date}T00:00:00",
+        "name": name,
+        "type": "Ride",
+        "category": "WORKOUT",
+        "moving_time": duration_secs,
+        "icu_training_load": tss,
+        "description": TR_SYNC_MARKER,
     }
 
 

@@ -3,10 +3,14 @@
 Provides tools to fetch planned workouts from TrainerRoad and sync them
 to the Intervals.icu calendar. Auth uses username/password (preferred)
 or a manual cookie.
+
+Sync is idempotent: creates new events, updates changed ones, and deletes
+stale TR-tagged events that no longer appear in the TR plan.
 """
 
 import logging
 from datetime import datetime, timedelta
+from typing import Any
 
 import httpx
 
@@ -17,6 +21,8 @@ from intervals_mcp_server.trainerroad.client import TRAuthError, TRClient
 from intervals_mcp_server.trainerroad.converter import (
     build_structure_text,
     format_tr_calendar_compact,
+    is_tr_synced_event,
+    plain_event_payload,
     workout_to_intervals_event,
     _format_duration,
     _strip_html,
@@ -62,40 +68,46 @@ def _default_end_date() -> str:
     return (datetime.now() + timedelta(days=180)).strftime("%Y-%m-%d")
 
 
+def _event_date(event: dict) -> str:
+    """Extract YYYY-MM-DD from an Intervals.icu event."""
+    date = event.get("start_date_local", "")
+    if "T" in date:
+        date = date.split("T")[0]
+    return date
+
+
 async def _fetch_existing_events(
     athlete_id: str,
     start_date: str,
     end_date: str,
     api_key: str | None,
-) -> dict[str, set[str]]:
-    """Fetch existing Intervals.icu events and return {date: {name_lower}} for dedup."""
+) -> list[dict[str, Any]]:
+    """Fetch all Intervals.icu events in the date range."""
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id}/events",
         api_key=api_key,
         params={"oldest": start_date, "newest": end_date},
     )
-    existing: dict[str, set[str]] = {}
     if isinstance(result, list):
-        for event in result:
-            if not isinstance(event, dict):
-                continue
-            date = event.get("start_date_local", "")
-            if "T" in date:
-                date = date.split("T")[0]
-            name = (event.get("name") or "").lower()
-            existing.setdefault(date, set()).add(name)
-    return existing
+        return [e for e in result if isinstance(e, dict)]
+    return []
+
+
+def _index_tr_events(events: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Index TR-synced events by date. Only includes events with the [TR Sync] marker."""
+    by_date: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        if is_tr_synced_event(event):
+            date = _event_date(event)
+            by_date.setdefault(date, []).append(event)
+    return by_date
 
 
 async def _resolve_workout_details(
     client: TRClient,
     activities: list,
 ) -> dict[str, TRWorkoutDetails]:
-    """For each planned cycling activity, find the workout details by searching TR's library.
-
-    Calendar entries don't include a workout ID directly — the workout name is used
-    to search TR's library, then we fetch the full details for the match.
-    """
+    """For each planned activity, find workout details by searching TR's library."""
     details: dict[str, TRWorkoutDetails] = {}
     seen_names: dict[str, TRWorkoutDetails | None] = {}
 
@@ -119,6 +131,19 @@ async def _resolve_workout_details(
     return details
 
 
+def _needs_update(existing: dict[str, Any], new_payload: dict[str, Any]) -> bool:
+    """Check if an existing event differs from the new payload."""
+    if (existing.get("name") or "") != (new_payload.get("name") or ""):
+        return True
+    if (existing.get("description") or "") != (new_payload.get("description") or ""):
+        return True
+    if existing.get("moving_time") != new_payload.get("moving_time"):
+        return True
+    if existing.get("icu_training_load") != new_payload.get("icu_training_load"):
+        return True
+    return False
+
+
 @mcp.tool()
 async def sync_trainerroad_calendar(
     start_date: str | None = None,
@@ -129,9 +154,13 @@ async def sync_trainerroad_calendar(
 ) -> str:
     """Sync planned workouts from TrainerRoad to the Intervals.icu calendar.
 
-    Fetches upcoming workouts from the TR calendar, looks up each workout's
-    interval structure, and creates them as events on your Intervals.icu calendar.
-    Skips workouts that already exist on the same date with the same name.
+    This is a full mirror sync that keeps your Intervals.icu calendar in sync
+    with your TrainerRoad plan:
+    - Creates new events for planned workouts not yet on the calendar
+    - Updates existing TR-synced events if the workout changed (name, structure, TSS)
+    - Deletes TR-synced events that no longer appear in the TR plan
+
+    Only touches events tagged with [TR Sync] — your manually-created events are safe.
     Uses TRAINERROAD_USERNAME/PASSWORD for auth (auto-login, no manual cookie needed).
 
     Args:
@@ -139,7 +168,7 @@ async def sync_trainerroad_calendar(
         end_date: End date in YYYY-MM-DD (defaults to 6 months out to capture full plans)
         athlete_id: Intervals.icu athlete ID (optional, uses env var)
         api_key: Intervals.icu API key (optional, uses env var)
-        dry_run: If True, show what would be synced without creating events
+        dry_run: If True, show what would happen without making changes
     """
     client = _get_tr_client()
     if not client:
@@ -164,66 +193,148 @@ async def sync_trainerroad_calendar(
         return f"Error fetching TR calendar: {e}"
 
     planned = [a for a in activities if not a.is_completed and a.workout_name]
-    if not planned:
-        return f"No planned workouts found on TrainerRoad ({start} to {end})."
 
-    existing = await _fetch_existing_events(athlete_id_to_use, start, end, api_key)
+    try:
+        all_events = await _fetch_existing_events(athlete_id_to_use, start, end, api_key)
+    except Exception as e:
+        logger.error("Failed to fetch Intervals.icu events: %s", e)
+        compact = format_tr_calendar_compact(activities)
+        return (
+            f"⚠ Could not reach Intervals.icu ({e}). Showing TR workouts read-only:\n\n"
+            + compact
+        )
+
+    tr_events_by_date = _index_tr_events(all_events)
     workout_details = await _resolve_workout_details(client, planned)
 
-    synced = 0
-    skipped = 0
+    created = 0
+    updated = 0
+    deleted = 0
+    unchanged = 0
     failed = 0
     lines = [f"TrainerRoad Sync ({member.username}): {start} to {end}"]
 
-    for act in planned:
-        date_names = existing.get(act.date, set())
-        name = act.workout_name or ""
-        if name.lower() in date_names:
-            skipped += 1
-            lines.append(f"  = {act.date} {name} (already exists)")
-            continue
+    claimed_event_ids: set[str] = set()
 
+    for act in planned:
+        name = act.workout_name or ""
         wd = workout_details.get(act.activity_id)
 
+        if wd:
+            new_payload = workout_to_intervals_event(wd, act.date)
+        else:
+            new_payload = plain_event_payload(name, act.date, act.duration_secs or 0, act.tss or 0)
+
+        existing_on_date = tr_events_by_date.get(act.date, [])
+        match = None
+        for ev in existing_on_date:
+            ev_id = ev.get("id", "")
+            if ev_id in claimed_event_ids:
+                continue
+            if (ev.get("name") or "").lower() == name.lower():
+                match = ev
+                break
+        if match is None and existing_on_date:
+            for ev in existing_on_date:
+                if ev.get("id", "") not in claimed_event_ids:
+                    match = ev
+                    break
+
+        if match:
+            match_id = match.get("id", "")
+            claimed_event_ids.add(match_id)
+
+            if not _needs_update(match, new_payload):
+                unchanged += 1
+                lines.append(f"  = {act.date} {name} (unchanged)")
+                continue
+
+            if dry_run:
+                updated += 1
+                lines.append(f"  ~ {act.date} {name} (would update)")
+                continue
+
+            try:
+                result = await make_intervals_request(
+                    url=f"/athlete/{athlete_id_to_use}/events/{match_id}",
+                    api_key=api_key,
+                    method="PUT",
+                    data=new_payload,
+                )
+                if isinstance(result, dict) and "error" in result:
+                    failed += 1
+                    lines.append(f"  x {act.date} {name} (update failed: {result.get('message', '')})")
+                else:
+                    updated += 1
+                    lines.append(f"  ~ {act.date} {name} (updated)")
+            except Exception as e:
+                failed += 1
+                lines.append(f"  x {act.date} {name} (update error: {e})")
+        else:
+            if dry_run:
+                if wd:
+                    structure = build_structure_text(wd.intervals)
+                    step_count = structure.count("\n") + 1 if structure else 0
+                    lines.append(f"  + {act.date} {wd.name} (TSS:{wd.tss:.0f}, {step_count} steps)")
+                else:
+                    dur = _format_duration(act.duration_secs or 0)
+                    lines.append(f"  + {act.date} {name} ({dur}, no interval data)")
+                created += 1
+                continue
+
+            try:
+                result = await make_intervals_request(
+                    url=f"/athlete/{athlete_id_to_use}/events",
+                    api_key=api_key,
+                    method="POST",
+                    data=new_payload,
+                )
+                if isinstance(result, dict) and "error" in result:
+                    failed += 1
+                    lines.append(f"  x {act.date} {name} (create failed: {result.get('message', '')})")
+                else:
+                    created += 1
+                    lines.append(f"  + {act.date} {name}")
+            except Exception as e:
+                failed += 1
+                lines.append(f"  x {act.date} {name} (create error: {e})")
+
+    stale_events = []
+    for date_events in tr_events_by_date.values():
+        for ev in date_events:
+            if ev.get("id", "") not in claimed_event_ids:
+                stale_events.append(ev)
+
+    for ev in stale_events:
+        ev_id = ev.get("id", "")
+        ev_name = ev.get("name", "?")
+        ev_date = _event_date(ev)
+
         if dry_run:
-            if wd:
-                structure = build_structure_text(wd.intervals)
-                step_count = structure.count("\n") + 1 if structure else 0
-                lines.append(f"  > {act.date} {wd.name} (TSS:{wd.tss:.0f}, {step_count} steps)")
-            else:
-                dur = _format_duration(act.duration_secs or 0)
-                lines.append(f"  > {act.date} {name} ({dur}, no interval data)")
-            synced += 1
+            deleted += 1
+            lines.append(f"  - {ev_date} {ev_name} (would delete, no longer in TR plan)")
             continue
 
-        if wd:
-            event_payload = workout_to_intervals_event(wd, act.date)
-        else:
-            event_payload = {
-                "start_date_local": f"{act.date}T00:00:00",
-                "name": name,
-                "type": "Ride",
-                "category": "WORKOUT",
-                "moving_time": act.duration_secs or 0,
-                "icu_training_load": act.tss or 0,
-            }
-
-        result = await make_intervals_request(
-            url=f"/athlete/{athlete_id_to_use}/events",
-            api_key=api_key,
-            method="POST",
-            data=event_payload,
-        )
-
-        if isinstance(result, dict) and "error" in result:
+        try:
+            result = await make_intervals_request(
+                url=f"/athlete/{athlete_id_to_use}/events/{ev_id}",
+                api_key=api_key,
+                method="DELETE",
+            )
+            if isinstance(result, dict) and "error" in result:
+                failed += 1
+                lines.append(f"  x {ev_date} {ev_name} (delete failed: {result.get('message', '')})")
+            else:
+                deleted += 1
+                lines.append(f"  - {ev_date} {ev_name} (removed from plan)")
+        except Exception as e:
             failed += 1
-            lines.append(f"  x {act.date} {name} ({result.get('message', 'unknown error')})")
-        else:
-            synced += 1
-            lines.append(f"  + {act.date} {name}")
+            lines.append(f"  x {ev_date} {ev_name} (delete error: {e})")
 
-    action = "Would sync" if dry_run else "Synced"
-    lines.append(f"\n{action}: {synced} | Skipped: {skipped} | Failed: {failed}")
+    verb = "Would" if dry_run else "Done"
+    lines.append(f"\n{verb}: +{created} ~{updated} -{deleted} ={unchanged} x{failed}")
+    if failed and not dry_run:
+        lines.append("⚠ Some Intervals.icu operations failed — see 'x' lines above.")
     return "\n".join(lines)
 
 
