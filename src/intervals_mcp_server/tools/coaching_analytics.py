@@ -655,16 +655,15 @@ async def get_power_profile_assessment(
     season_start = (now - timedelta(days=90)).strftime("%Y-%m-%d")
     end_date = now.strftime("%Y-%m-%d")
 
-    # Fetch power curves for both periods
     recent_result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/power-curves",
         api_key=api_key,
-        params={"oldest": recent_start, "newest": end_date},
+        params={"oldest": recent_start, "newest": end_date, "type": "Ride"},
     )
     season_result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/power-curves",
         api_key=api_key,
-        params={"oldest": season_start, "newest": end_date},
+        params={"oldest": season_start, "newest": end_date, "type": "Ride"},
     )
 
     if isinstance(recent_result, dict) and "error" in recent_result:

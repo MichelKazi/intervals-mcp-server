@@ -242,7 +242,7 @@ async def get_activities_around(
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/activities-around",
         api_key=api_key,
-        params={"id": activity_id},
+        params={"activity_id": activity_id},
     )
 
     if isinstance(result, dict) and "error" in result:

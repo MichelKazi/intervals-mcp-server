@@ -79,26 +79,41 @@ def _format_curve_data(data: Any, curve_type: str, activity_id: str) -> str:
 async def get_best_efforts(
     activity_id: str,
     api_key: str | None = None,
+    stream: str = "watts",
+    durations: str = "5,60,300,1200,3600",
 ) -> str:
     """Get best efforts for a specific activity from Intervals.icu.
 
-    Returns peak power/pace/HR efforts at various durations (e.g. 5s, 1min, 5min, 20min).
+    Returns peak power/pace/HR efforts at various durations.
 
     Args:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        stream: Stream type to query (default "watts"; also "heartrate", "speed", "cadence")
+        durations: Comma-separated durations in seconds to query (default "5,60,300,1200,3600")
     """
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}/best-efforts", api_key=api_key
-    )
+    all_efforts: list[dict] = []
+    for dur_str in durations.split(","):
+        dur = dur_str.strip()
+        if not dur:
+            continue
+        result = await make_intervals_request(
+            url=f"/activity/{activity_id}/best-efforts",
+            api_key=api_key,
+            params={"stream": stream, "duration": dur},
+        )
+        if isinstance(result, dict) and "error" not in result:
+            result["query_duration"] = int(dur)
+            all_efforts.append(result)
+        elif isinstance(result, dict) and "efforts" in result:
+            for e in result["efforts"]:
+                e["query_duration"] = int(dur)
+            all_efforts.append(result)
 
-    if isinstance(result, dict) and "error" in result:
-        return f"Error fetching best efforts: {result.get('message')}"
-
-    if not result:
+    if not all_efforts:
         return f"No best effort data found for activity {activity_id}."
 
-    return f"Best Efforts for activity {activity_id}:\n\n{_compact_json(result)}"
+    return f"Best Efforts ({stream}) for activity {activity_id}:\n\n{_compact_json(all_efforts)}"
 
 
 @mcp.tool()
@@ -389,15 +404,30 @@ async def get_activity_weather(
 async def get_activity_interval_stats(
     activity_id: str,
     api_key: str | None = None,
+    start_index: int = 0,
+    end_index: int | None = None,
 ) -> str:
-    """Get interval-like stats for a specific activity from Intervals.icu.
+    """Get interval-like stats for a time range within an activity from Intervals.icu.
 
     Args:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        start_index: Stream index to start from (default 0)
+        end_index: Stream index to end at (default: last index in the activity)
     """
+    if end_index is None:
+        details = await make_intervals_request(
+            url=f"/activity/{activity_id}", api_key=api_key
+        )
+        if isinstance(details, dict) and "moving_time" in details:
+            end_index = int(details["moving_time"])
+        else:
+            end_index = 3600
+
     result = await make_intervals_request(
-        url=f"/activity/{activity_id}/interval-stats", api_key=api_key
+        url=f"/activity/{activity_id}/interval-stats",
+        api_key=api_key,
+        params={"start_index": str(start_index), "end_index": str(end_index)},
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -406,7 +436,7 @@ async def get_activity_interval_stats(
     if not result:
         return f"No interval stats found for activity {activity_id}."
 
-    return f"Interval Stats for activity {activity_id}:\n\n{_compact_json(result)}"
+    return f"Interval Stats for activity {activity_id} ({start_index}-{end_index}):\n\n{_compact_json(result)}"
 
 
 @mcp.tool()
@@ -487,6 +517,7 @@ async def get_athlete_power_curves(
     api_key: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    activity_type: str = "Ride",
 ) -> str:
     """Get best power curve data across activities for an athlete from Intervals.icu.
 
@@ -497,13 +528,14 @@ async def get_athlete_power_curves(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to 30 days ago)
         end_date: End date in YYYY-MM-DD format (optional, defaults to today)
+        activity_type: Activity type filter (default "Ride"; also "Run", "Swim", etc.)
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
     start_date, end_date = resolve_date_params(start_date, end_date)
-    params = {"oldest": start_date, "newest": end_date}
+    params = {"oldest": start_date, "newest": end_date, "type": activity_type}
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/power-curves",
@@ -602,6 +634,7 @@ async def get_athlete_hr_curves(
 async def get_athlete_mmp_model(
     athlete_id: str | None = None,
     api_key: str | None = None,
+    activity_type: str = "Ride",
 ) -> str:
     """Get the Mean Maximal Power (MMP) model for an athlete from Intervals.icu.
 
@@ -610,13 +643,16 @@ async def get_athlete_mmp_model(
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        activity_type: Activity type filter (default "Ride"; also "Run", "Swim", etc.)
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/mmp-model", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/mmp-model",
+        api_key=api_key,
+        params={"type": activity_type},
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -634,6 +670,7 @@ async def get_athlete_power_hr_curve(
     api_key: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    activity_type: str = "Ride",
 ) -> str:
     """Get power vs HR curve data across activities for an athlete from Intervals.icu.
 
@@ -644,13 +681,14 @@ async def get_athlete_power_hr_curve(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to 30 days ago)
         end_date: End date in YYYY-MM-DD format (optional, defaults to today)
+        activity_type: Activity type filter (default "Ride"; also "Run", "Swim", etc.)
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
     start_date, end_date = resolve_date_params(start_date, end_date)
-    params = {"oldest": start_date, "newest": end_date}
+    params = {"start": start_date, "end": end_date, "type": activity_type}
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/power-hr-curve",
