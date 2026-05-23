@@ -18,6 +18,11 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 config = get_config()
 
 
+def _is_strava_restricted(activity: dict[str, Any]) -> bool:
+    """Check if an activity is a Strava-restricted stub."""
+    return activity.get("source") == "STRAVA" and "_note" in activity
+
+
 def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
     """Extract a list of activity dictionaries from the API result."""
     activities: list[dict[str, Any]] = []
@@ -35,6 +40,20 @@ def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
             activities = [result]
 
     return activities
+
+
+def _partition_activities(
+    activities: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split activities into accessible and Strava-restricted lists."""
+    accessible = []
+    restricted = []
+    for activity in activities:
+        if _is_strava_restricted(activity):
+            restricted.append(activity)
+        else:
+            accessible.append(activity)
+    return accessible, restricted
 
 
 def _filter_named_activities(activities: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -76,13 +95,34 @@ async def _fetch_more_activities(
     return []
 
 
+def _format_strava_restricted_notice(restricted: list[dict[str, Any]]) -> str:
+    """Format a notice about Strava-restricted activities."""
+    if not restricted:
+        return ""
+    lines = [
+        f"\nNote: {len(restricted)} activit{'y' if len(restricted) == 1 else 'ies'} "
+        "from Strava cannot be accessed via the API due to Strava's data sharing policy. "
+        "To access full activity data, connect your recording device (Garmin, Wahoo, etc.) "
+        "directly to Intervals.icu instead of routing through Strava.\n"
+        "Restricted activities:\n"
+    ]
+    for activity in restricted:
+        lines.append(f"  - {activity.get('start_date_local', 'Unknown date')} (ID: {activity.get('id', 'N/A')})")
+    return "\n".join(lines)
+
+
 def _format_activities_response(
     activities: list[dict[str, Any]],
     athlete_id: str,
     include_unnamed: bool,
+    restricted: list[dict[str, Any]] | None = None,
 ) -> str:
     """Format the activities response based on the results."""
+    restricted = restricted or []
+
     if not activities:
+        if restricted:
+            return _format_strava_restricted_notice(restricted)
         if include_unnamed:
             return (
                 f"No valid activities found for athlete {athlete_id} in the specified date range."
@@ -96,6 +136,9 @@ def _format_activities_response(
             activities_summary += format_activity_summary(activity) + "\n"
         else:
             activities_summary += f"Invalid activity format: {activity}\n\n"
+
+    if restricted:
+        activities_summary += _format_strava_restricted_notice(restricted)
 
     return activities_summary
 
@@ -144,10 +187,13 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
         return f"No activities found for athlete {athlete_id_to_use} in the specified date range."
 
     # Parse activities from result
-    activities = _parse_activities_from_result(result)
+    all_activities = _parse_activities_from_result(result)
 
-    if not activities:
+    if not all_activities:
         return f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."
+
+    # Separate Strava-restricted stubs from accessible activities
+    activities, restricted = _partition_activities(all_activities)
 
     # Filter and fetch more if needed
     if not include_unnamed:
@@ -163,7 +209,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     # Limit to requested count
     activities = activities[:limit]
 
-    return _format_activities_response(activities, athlete_id_to_use, include_unnamed)
+    return _format_activities_response(activities, athlete_id_to_use, include_unnamed, restricted)
 
 
 @mcp.tool()
@@ -371,3 +417,52 @@ async def add_activity_message(
     if msg_id is not None:
         return f"Successfully added message (ID: {msg_id}) to activity {activity_id}."
     return f"Message appears to have been added to activity {activity_id}, but no ID was returned. Please verify manually."
+
+
+COACH_TICK_VALUES = {
+    "amazing": 1,
+    "good": 2,
+    "seen": 3,
+    "poor": 4,
+    "wtf": 5,
+}
+
+COACH_TICK_LABELS = {v: k.upper() for k, v in COACH_TICK_VALUES.items()}
+
+
+@mcp.tool()
+async def set_coach_tick(
+    activity_id: str,
+    rating: str,
+    api_key: str | None = None,
+) -> str:
+    """Set the coach's performance rating (tick) on an activity.
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        rating: Performance rating - one of: amazing, good, seen, poor, wtf (case-insensitive)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    rating_lower = rating.lower().strip()
+    tick_value = COACH_TICK_VALUES.get(rating_lower)
+    if tick_value is None:
+        valid = ", ".join(COACH_TICK_VALUES.keys())
+        return f"Error: Invalid rating '{rating}'. Must be one of: {valid}"
+
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}",
+        api_key=api_key,
+        method="PUT",
+        data={"coach_tick": tick_value},
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error setting coach tick: {error_message}"
+
+    if isinstance(result, dict):
+        saved = result.get("coach_tick")
+        label = COACH_TICK_LABELS.get(saved, "unknown")
+        return f"Set coach tick to {label} on activity {activity_id}."
+
+    return f"Coach tick appears to have been set on activity {activity_id}, but response was unexpected. Please verify manually."

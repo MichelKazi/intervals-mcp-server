@@ -49,6 +49,7 @@ from intervals_mcp_server.tools.activities import (  # pylint: disable=wrong-imp
     get_activity_intervals,
     get_activity_messages,
     get_activity_streams,
+    set_coach_tick,
 )
 from intervals_mcp_server.tools.activity_analytics import (  # pylint: disable=wrong-import-position  # noqa: E402
     get_activity_gap_histogram,
@@ -185,6 +186,7 @@ __all__ = [
     "get_activity_intervals",
     "get_activity_messages",
     "get_activity_streams",
+    "set_coach_tick",
     # Activity analytics
     "get_best_efforts",
     "get_activity_power_curve",
