@@ -82,6 +82,10 @@ from intervals_mcp_server.tools.activity_management import (  # pylint: disable=
     search_activities_full,
     update_activity,
 )
+from intervals_mcp_server.tools.activity_review import (  # pylint: disable=wrong-import-position  # noqa: E402
+    get_latest_activity,
+    review_activity,
+)
 from intervals_mcp_server.tools.athlete import (  # pylint: disable=wrong-import-position  # noqa: E402
     get_athlete,
     get_athlete_profile,
@@ -216,6 +220,9 @@ __all__ = [
     "search_activities_full",
     "create_manual_activity",
     "get_activities_around",
+    # Activity review
+    "get_latest_activity",
+    "review_activity",
     # Athlete
     "get_athlete",
     "update_athlete",
