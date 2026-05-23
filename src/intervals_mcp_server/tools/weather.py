@@ -1,7 +1,5 @@
 """
-Weather MCP tools for Intervals.icu.
-
-This module contains tools for managing weather configuration and forecasts.
+Weather MCP tool for Intervals.icu.
 """
 
 import json
@@ -16,99 +14,60 @@ config = get_config()
 
 
 @mcp.tool()
-async def get_weather_config(
+async def manage_weather(
+    action: str,
     athlete_id: str | None = None,
     api_key: str | None = None,
+    data: dict[str, Any] | None = None,
 ) -> str:
-    """Get weather configuration for an athlete from Intervals.icu.
+    """Manage weather configuration and get forecasts on Intervals.icu.
 
     Args:
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        action: One of: config, update_config, forecast
+        athlete_id: The Intervals.icu athlete ID (optional)
+        api_key: The Intervals.icu API key (optional)
+        data: For update_config: weather config fields to update
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/weather-config", api_key=api_key
-    )
+    action = action.lower().strip()
 
-    if isinstance(result, dict) and "error" in result:
-        return f"Error fetching weather config: {result.get('message')}"
+    if action == "config":
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/weather-config", api_key=api_key
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if not result:
+            return "No weather configuration found."
+        return f"Weather Configuration:\n\n{json.dumps(result, indent=2)}"
 
-    if not result:
-        return f"No weather configuration found for athlete {athlete_id_to_use}."
+    elif action == "update_config":
+        if not data:
+            return "Error: 'data' required for update_config"
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/weather-config", api_key=api_key, method="PUT", data=data
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        return f"Updated weather config:\n\n{json.dumps(result, indent=2)}" if result else "Weather configuration updated."
 
-    return f"Weather Configuration:\n\n{json.dumps(result, indent=2)}"
+    elif action == "forecast":
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/weather-forecast", api_key=api_key
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if not result:
+            return "No weather forecast available."
+        if isinstance(result, dict):
+            lines = ["Weather Forecast:", ""]
+            for key, val in result.items():
+                if val is not None:
+                    lines.append(f"  {key}: {json.dumps(val) if isinstance(val, (dict, list)) else val}")
+            return "\n".join(lines)
+        return json.dumps(result, indent=2)
 
-
-@mcp.tool()
-async def update_weather_config(
-    updates: dict[str, Any],
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-) -> str:
-    """Update weather configuration for an athlete on Intervals.icu.
-
-    Args:
-        updates: Dictionary of weather config fields to update
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-    """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
-    if error_msg:
-        return error_msg
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/weather-config",
-        api_key=api_key,
-        method="PUT",
-        data=updates,
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        return f"Error updating weather config: {result.get('message')}"
-
-    if not result:
-        return "Weather configuration updated."
-
-    return f"Successfully updated weather config:\n\n{json.dumps(result, indent=2)}"
-
-
-@mcp.tool()
-async def get_weather_forecast(
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-) -> str:
-    """Get weather forecast for an athlete's location from Intervals.icu.
-
-    Args:
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-    """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
-    if error_msg:
-        return error_msg
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/weather-forecast", api_key=api_key
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        return f"Error fetching weather forecast: {result.get('message')}"
-
-    if not result:
-        return f"No weather forecast available for athlete {athlete_id_to_use}."
-
-    if isinstance(result, dict):
-        lines = ["Weather Forecast:", ""]
-        for key, val in result.items():
-            if val is not None:
-                if isinstance(val, (dict, list)):
-                    lines.append(f"{key}: {json.dumps(val)}")
-                else:
-                    lines.append(f"{key}: {val}")
-        return "\n".join(lines)
-
-    return f"Weather Forecast:\n\n{json.dumps(result, indent=2)}"
+    return f"Invalid action '{action}'. Must be one of: config, update_config, forecast"

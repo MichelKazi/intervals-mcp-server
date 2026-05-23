@@ -1,7 +1,7 @@
 """
 Activity-related MCP tools for Intervals.icu.
 
-This module contains tools for retrieving and managing athlete activities.
+Core tools for retrieving activities, details, intervals, streams, and messages.
 """
 
 from datetime import datetime, timedelta
@@ -12,40 +12,39 @@ from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_activity_message, format_activity_summary, format_intervals
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
-# Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
 
+COACH_TICK_VALUES = {"amazing": 1, "good": 2, "seen": 3, "poor": 4, "wtf": 5}
+COACH_TICK_LABELS = {v: k.upper() for k, v in COACH_TICK_VALUES.items()}
+
 
 def _is_strava_restricted(activity: dict[str, Any]) -> bool:
-    """Check if an activity is a Strava-restricted stub."""
     return activity.get("source") == "STRAVA" and "_note" in activity
 
 
 def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
-    """Extract a list of activity dictionaries from the API result."""
     activities: list[dict[str, Any]] = []
-
     if isinstance(result, list):
         activities = [item for item in result if isinstance(item, dict)]
     elif isinstance(result, dict):
-        # Result is a single activity or a container
         for _key, value in result.items():
             if isinstance(value, list):
                 activities = [item for item in value if isinstance(item, dict)]
                 break
-        # If no list was found but the dict has typical activity fields, treat it as a single activity
         if not activities and any(key in result for key in ["name", "startTime", "distance"]):
             activities = [result]
-
     return activities
+
+
+def _filter_named_activities(activities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [a for a in activities if a.get("name") and a.get("name") != "Unnamed"]
 
 
 def _partition_activities(
     activities: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Split activities into accessible and Strava-restricted lists."""
     accessible = []
     restricted = []
     for activity in activities:
@@ -56,95 +55,25 @@ def _partition_activities(
     return accessible, restricted
 
 
-def _filter_named_activities(activities: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Filter out unnamed activities from the list."""
-    return [
-        activity
-        for activity in activities
-        if activity.get("name") and activity.get("name") != "Unnamed"
-    ]
-
-
 async def _fetch_more_activities(
-    athlete_id: str,
-    start_date: str,
-    api_key: str | None,
-    api_limit: int,
+    athlete_id: str, start_date: str, api_key: str | None, api_limit: int
 ) -> list[dict[str, Any]]:
-    """Fetch additional activities from an earlier date range."""
     oldest_date = datetime.fromisoformat(start_date)
-    older_start_date = (oldest_date - timedelta(days=60)).strftime("%Y-%m-%d")
-    older_end_date = (oldest_date - timedelta(days=1)).strftime("%Y-%m-%d")
-
-    if older_start_date >= older_end_date:
+    older_start = (oldest_date - timedelta(days=60)).strftime("%Y-%m-%d")
+    older_end = (oldest_date - timedelta(days=1)).strftime("%Y-%m-%d")
+    if older_start >= older_end:
         return []
-
-    more_params = {
-        "oldest": older_start_date,
-        "newest": older_end_date,
-        "limit": api_limit,
-    }
     more_result = await make_intervals_request(
-        url=f"/athlete/{athlete_id}/activities",
-        api_key=api_key,
-        params=more_params,
+        url=f"/athlete/{athlete_id}/activities", api_key=api_key,
+        params={"oldest": older_start, "newest": older_end, "limit": api_limit},
     )
-
     if isinstance(more_result, list):
         return _filter_named_activities(more_result)
     return []
 
 
-def _format_strava_restricted_notice(restricted: list[dict[str, Any]]) -> str:
-    """Format a notice about Strava-restricted activities."""
-    if not restricted:
-        return ""
-    lines = [
-        f"\nNote: {len(restricted)} activit{'y' if len(restricted) == 1 else 'ies'} "
-        "from Strava cannot be accessed via the API due to Strava's data sharing policy. "
-        "To access full activity data, connect your recording device (Garmin, Wahoo, etc.) "
-        "directly to Intervals.icu instead of routing through Strava.\n"
-        "Restricted activities:\n"
-    ]
-    for activity in restricted:
-        lines.append(f"  - {activity.get('start_date_local', 'Unknown date')} (ID: {activity.get('id', 'N/A')})")
-    return "\n".join(lines)
-
-
-def _format_activities_response(
-    activities: list[dict[str, Any]],
-    athlete_id: str,
-    include_unnamed: bool,
-    restricted: list[dict[str, Any]] | None = None,
-) -> str:
-    """Format the activities response based on the results."""
-    restricted = restricted or []
-
-    if not activities:
-        if restricted:
-            return _format_strava_restricted_notice(restricted)
-        if include_unnamed:
-            return (
-                f"No valid activities found for athlete {athlete_id} in the specified date range."
-            )
-        return f"No named activities found for athlete {athlete_id} in the specified date range. Try with include_unnamed=True to see all activities."
-
-    # Format the output
-    activities_summary = "Activities:\n\n"
-    for activity in activities:
-        if isinstance(activity, dict):
-            activities_summary += format_activity_summary(activity) + "\n"
-        else:
-            activities_summary += f"Invalid activity format: {activity}\n\n"
-
-    if restricted:
-        activities_summary += _format_strava_restricted_notice(restricted)
-
-    return activities_summary
-
-
 @mcp.tool()
-async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-statements,too-many-branches,too-many-positional-arguments
+async def get_activities(
     athlete_id: str | None = None,
     api_key: str | None = None,
     start_date: str | None = None,
@@ -152,136 +81,113 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     limit: int = 10,
     include_unnamed: bool = False,
 ) -> str:
-    """Get a list of activities for an athlete from Intervals.icu
+    """Get a list of activities for an athlete from Intervals.icu.
 
     Args:
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-        start_date: Start date in YYYY-MM-DD format (optional, defaults to 30 days ago)
-        end_date: End date in YYYY-MM-DD format (optional, defaults to today)
-        limit: Maximum number of activities to return (optional, defaults to 10)
-        include_unnamed: Whether to include unnamed activities (optional, defaults to False)
+        athlete_id: The Intervals.icu athlete ID (optional)
+        api_key: The Intervals.icu API key (optional)
+        start_date: Start date YYYY-MM-DD (optional, defaults to 30 days ago)
+        end_date: End date YYYY-MM-DD (optional, defaults to today)
+        limit: Maximum number of activities (optional, defaults to 10)
+        include_unnamed: Include unnamed activities (optional, defaults to False)
     """
-    # Resolve athlete ID and date parameters
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
     start_date, end_date = resolve_date_params(start_date, end_date)
-
-    # Fetch more activities if we need to filter out unnamed ones
     api_limit = limit * 3 if not include_unnamed else limit
 
-    # Call the Intervals.icu API
-    params = {"oldest": start_date, "newest": end_date, "limit": api_limit}
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/activities", api_key=api_key, params=params
+        url=f"/athlete/{athlete_id_to_use}/activities", api_key=api_key,
+        params={"oldest": start_date, "newest": end_date, "limit": api_limit},
     )
 
-    # Check for error
     if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching activities: {error_message}"
-
+        return f"Error: {result.get('message')}"
     if not result:
-        return f"No activities found for athlete {athlete_id_to_use} in the specified date range."
+        return f"No activities found for athlete {athlete_id_to_use}."
 
-    # Parse activities from result
     all_activities = _parse_activities_from_result(result)
-
     if not all_activities:
-        return f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."
+        return f"No valid activities found for athlete {athlete_id_to_use}."
 
-    # Separate Strava-restricted stubs from accessible activities
     activities, restricted = _partition_activities(all_activities)
 
-    # Filter and fetch more if needed
     if not include_unnamed:
         activities = _filter_named_activities(activities)
-
-        # If we don't have enough named activities, try to fetch more
         if len(activities) < limit:
-            more_activities = await _fetch_more_activities(
-                athlete_id_to_use, start_date, api_key, api_limit
-            )
-            activities.extend(more_activities)
+            more = await _fetch_more_activities(athlete_id_to_use, start_date, api_key, api_limit)
+            activities.extend(more)
 
-    # Limit to requested count
     activities = activities[:limit]
 
-    return _format_activities_response(activities, athlete_id_to_use, include_unnamed, restricted)
+    if not activities:
+        if restricted:
+            return (
+                f"No accessible activities found. {len(restricted)} activities are from Strava "
+                "and cannot be accessed via the API due to Strava's data sharing policy."
+            )
+        return f"No named activities found. Try with include_unnamed=True."
+
+    output = "Activities:\n\n"
+    for a in activities:
+        output += format_activity_summary(a) + "\n"
+
+    if restricted:
+        output += (
+            f"\nNote: {len(restricted)} Strava activities cannot be accessed via API "
+            "(connect your device directly to Intervals.icu instead)."
+        )
+
+    return output
 
 
 @mcp.tool()
 async def get_activity_details(activity_id: str, api_key: str | None = None) -> str:
-    """Get detailed information for a specific activity from Intervals.icu
+    """Get detailed information for a specific activity from Intervals.icu.
 
     Args:
         activity_id: The Intervals.icu activity ID
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        api_key: The Intervals.icu API key (optional)
     """
-    # Call the Intervals.icu API
     result = await make_intervals_request(url=f"/activity/{activity_id}", api_key=api_key)
-
     if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching activity details: {error_message}"
-
-    # Format the response
+        return f"Error: {result.get('message')}"
     if not result:
         return f"No details found for activity {activity_id}."
 
-    # If result is a list, use the first item if available
     activity_data = result[0] if isinstance(result, list) and result else result
     if not isinstance(activity_data, dict):
-        return f"Invalid activity format for activity {activity_id}."
+        return f"Invalid activity format for {activity_id}."
 
-    # Return a more detailed view of the activity
     detailed_view = format_activity_summary(activity_data)
-
-    # Add additional details if available
     if "zones" in activity_data:
         zones = activity_data["zones"]
         detailed_view += "\nPower Zones:\n"
         for zone in zones.get("power", []):
             detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-
         detailed_view += "\nHeart Rate Zones:\n"
         for zone in zones.get("hr", []):
             detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-
     return detailed_view
 
 
 @mcp.tool()
 async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> str:
-    """Get interval data for a specific activity from Intervals.icu
-
-    This endpoint returns detailed metrics for each interval in an activity, including power, heart rate,
-    cadence, speed, and environmental data. It also includes grouped intervals if applicable.
+    """Get interval data for a specific activity from Intervals.icu.
 
     Args:
         activity_id: The Intervals.icu activity ID
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        api_key: The Intervals.icu API key (optional)
     """
-    # Call the Intervals.icu API
     result = await make_intervals_request(url=f"/activity/{activity_id}/intervals", api_key=api_key)
-
     if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching intervals: {error_message}"
-
-    # Format the response
+        return f"Error: {result.get('message')}"
     if not result:
         return f"No interval data found for activity {activity_id}."
-
-    # If the result is empty or doesn't contain expected fields
-    if not isinstance(result, dict) or not any(
-        key in result for key in ["icu_intervals", "icu_groups"]
-    ):
+    if not isinstance(result, dict) or not any(key in result for key in ["icu_intervals", "icu_groups"]):
         return f"No interval data or unrecognized format for activity {activity_id}."
-
-    # Format the intervals data
     return format_intervals(result)
 
 
@@ -291,178 +197,87 @@ async def get_activity_streams(
     api_key: str | None = None,
     stream_types: str | None = None,
 ) -> str:
-    """Get stream data for a specific activity from Intervals.icu
-
-    This endpoint returns time-series data for an activity, including metrics like power, heart rate,
-    cadence, altitude, distance, temperature, and velocity data.
+    """Get stream (time-series) data for a specific activity from Intervals.icu.
 
     Args:
         activity_id: The Intervals.icu activity ID
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-        stream_types: Comma-separated list of stream types to retrieve (optional, defaults to all available types)
-                     Available types: time, watts, heartrate, cadence, altitude, distance,
-                     core_temperature, skin_temperature, velocity_smooth
+        api_key: The Intervals.icu API key (optional)
+        stream_types: Comma-separated types (optional, defaults to: time,watts,heartrate,cadence,altitude,distance,velocity_smooth)
     """
-    # Build query parameters
-    params = {}
-    if stream_types:
-        params["types"] = stream_types
-    else:
-        # Default to common stream types if none specified
-        params["types"] = "time,watts,heartrate,cadence,altitude,distance,velocity_smooth"
+    params = {"types": stream_types or "time,watts,heartrate,cadence,altitude,distance,velocity_smooth"}
 
-    # Call the Intervals.icu API
     result = await make_intervals_request(
-        url=f"/activity/{activity_id}/streams",
-        api_key=api_key,
-        params=params,
+        url=f"/activity/{activity_id}/streams", api_key=api_key, params=params
     )
-
     if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching activity streams: {error_message}"
-
-    # Format the response
+        return f"Error: {result.get('message')}"
     if not result:
         return f"No stream data found for activity {activity_id}."
 
-    # Ensure result is a list
     streams = result if isinstance(result, list) else []
-
     if not streams:
         return f"No stream data found for activity {activity_id}."
 
-    # Format the streams data compactly
     lines = [f"Streams for activity {activity_id}:"]
-
     for stream in streams:
         if not isinstance(stream, dict):
             continue
-
-        stream_type = stream.get("type", "unknown")
-        stream_name = stream.get("name", stream_type)
+        stype = stream.get("type", "unknown")
         data = stream.get("data", [])
         n = len(data)
-
         if n == 0:
-            lines.append(f"  {stream_name}: (empty)")
+            lines.append(f"  {stype}: (empty)")
         elif n <= 6:
-            lines.append(f"  {stream_name} ({n} pts): {data}")
+            lines.append(f"  {stype} ({n} pts): {data}")
         else:
-            lines.append(f"  {stream_name} ({n} pts): {data[:3]} ... {data[-3:]}")
-
+            lines.append(f"  {stype} ({n} pts): {data[:3]} ... {data[-3:]}")
     return "\n".join(lines)
 
 
 @mcp.tool()
-async def get_activity_messages(activity_id: str, api_key: str | None = None) -> str:
-    """Get messages (notes/comments) for a specific activity from Intervals.icu
-
-    Args:
-        activity_id: The Intervals.icu activity ID
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-    """
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}/messages",
-        api_key=api_key,
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching activity messages: {error_message}"
-
-    if not result:
-        return f"No messages found for activity {activity_id}."
-
-    messages = result if isinstance(result, list) else []
-    if not messages:
-        return f"No messages found for activity {activity_id}."
-
-    output = f"Messages for activity {activity_id}:\n\n"
-    for msg in messages:
-        if isinstance(msg, dict):
-            output += format_activity_message(msg) + "\n\n"
-
-    return output
-
-
-@mcp.tool()
-async def add_activity_message(
+async def manage_activity_messages(
     activity_id: str,
-    content: str,
+    action: str = "list",
+    content: str | None = None,
     api_key: str | None = None,
 ) -> str:
-    """Add a message (note/comment) to an activity on Intervals.icu
+    """Get or add messages (notes/comments) on an activity.
 
     Args:
         activity_id: The Intervals.icu activity ID
-        content: The message text to add
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        action: One of: list, add (default: list)
+        content: Message text (required for add)
+        api_key: The Intervals.icu API key (optional)
     """
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}/messages",
-        api_key=api_key,
-        method="POST",
-        data={"content": content},
-    )
+    action = action.lower().strip()
 
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error adding message to activity: {error_message}"
+    if action == "list":
+        result = await make_intervals_request(
+            url=f"/activity/{activity_id}/messages", api_key=api_key
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if not result:
+            return f"No messages for activity {activity_id}."
+        messages = result if isinstance(result, list) else []
+        if not messages:
+            return f"No messages for activity {activity_id}."
+        output = f"Messages for activity {activity_id}:\n\n"
+        for msg in messages:
+            if isinstance(msg, dict):
+                output += format_activity_message(msg) + "\n\n"
+        return output
 
-    if not result or not isinstance(result, dict):
-        return "Error: Unexpected response when adding message."
+    elif action == "add":
+        if not content:
+            return "Error: 'content' required for add"
+        result = await make_intervals_request(
+            url=f"/activity/{activity_id}/messages", api_key=api_key, method="POST", data={"content": content}
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if isinstance(result, dict) and result.get("id"):
+            return f"Added message (ID: {result['id']}) to activity {activity_id}."
+        return f"Message added to activity {activity_id}."
 
-    msg_id = result.get("id")
-    if msg_id is not None:
-        return f"Successfully added message (ID: {msg_id}) to activity {activity_id}."
-    return f"Message appears to have been added to activity {activity_id}, but no ID was returned. Please verify manually."
-
-
-COACH_TICK_VALUES = {
-    "amazing": 1,
-    "good": 2,
-    "seen": 3,
-    "poor": 4,
-    "wtf": 5,
-}
-
-COACH_TICK_LABELS = {v: k.upper() for k, v in COACH_TICK_VALUES.items()}
-
-
-@mcp.tool()
-async def set_coach_tick(
-    activity_id: str,
-    rating: str,
-    api_key: str | None = None,
-) -> str:
-    """Set the coach's performance rating (tick) on an activity.
-
-    Args:
-        activity_id: The Intervals.icu activity ID
-        rating: Performance rating - one of: amazing, good, seen, poor, wtf (case-insensitive)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-    """
-    rating_lower = rating.lower().strip()
-    tick_value = COACH_TICK_VALUES.get(rating_lower)
-    if tick_value is None:
-        valid = ", ".join(COACH_TICK_VALUES.keys())
-        return f"Error: Invalid rating '{rating}'. Must be one of: {valid}"
-
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}",
-        api_key=api_key,
-        method="PUT",
-        data={"coach_tick": tick_value},
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error setting coach tick: {error_message}"
-
-    if isinstance(result, dict):
-        saved = result.get("coach_tick")
-        label = COACH_TICK_LABELS.get(saved, "unknown")
-        return f"Set coach tick to {label} on activity {activity_id}."
-
-    return f"Coach tick appears to have been set on activity {activity_id}, but response was unexpected. Please verify manually."
+    return f"Invalid action '{action}'. Must be one of: list, add"

@@ -1,7 +1,5 @@
 """
-Custom items MCP tools for Intervals.icu.
-
-This module contains tools for managing athlete custom items (charts, fields, zones, etc.).
+Custom items MCP tool for Intervals.icu.
 """
 
 import json
@@ -9,224 +7,108 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import format_custom_item_details
-from intervals_mcp_server.utils.validation import resolve_athlete_id
-
-# Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
+from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 config = get_config()
 
 
+def _format_custom_item(item: dict[str, Any]) -> str:
+    lines = [f"ID: {item.get('id', 'N/A')}"]
+    if item.get("name"):
+        lines.append(f"Name: {item['name']}")
+    if item.get("type"):
+        lines.append(f"Type: {item['type']}")
+    if item.get("category"):
+        lines.append(f"Category: {item['category']}")
+    if item.get("value") is not None:
+        lines.append(f"Value: {item['value']}")
+    if item.get("start_date_local"):
+        lines.append(f"Date: {item['start_date_local']}")
+    return "\n".join(lines)
+
+
 @mcp.tool()
-async def get_custom_items(
+async def manage_custom_items(
+    action: str,
     athlete_id: str | None = None,
     api_key: str | None = None,
+    item_id: str | None = None,
+    data: dict[str, Any] | None = None,
 ) -> str:
-    """Get custom items (charts, custom fields, zones, etc.) for an athlete from Intervals.icu
+    """Manage custom items (user-defined tracking fields) on Intervals.icu.
 
     Args:
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        action: One of: list, get, create, update, delete
+        athlete_id: The Intervals.icu athlete ID (optional)
+        api_key: The Intervals.icu API key (optional)
+        item_id: Required for get, update, delete
+        data: For create/update: item fields dict
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item", api_key=api_key
-    )
+    action = action.lower().strip()
 
-    if isinstance(result, dict) and "error" in result:
-        return f"Error fetching custom items: {result.get('message')}"
+    if action == "list":
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/custom-items", api_key=api_key
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if not result:
+            return "No custom items found."
+        if isinstance(result, list):
+            return "Custom Items:\n\n" + "\n\n".join(_format_custom_item(i) for i in result if isinstance(i, dict))
+        return json.dumps(result, indent=2)
 
-    if not result:
-        return f"No custom items found for athlete {athlete_id_to_use}."
+    elif action == "get":
+        if not item_id:
+            return "Error: 'item_id' required for get"
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/custom-items/{item_id}", api_key=api_key
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if isinstance(result, dict):
+            return f"Custom Item:\n\n{json.dumps(result, indent=2)}"
+        return "Not found."
 
-    output = "Custom Items:\n\n"
-    for item in result:
-        if isinstance(item, dict):
-            output += f"- ID: {item.get('id')}\n"
-            output += f"  Name: {item.get('name', 'N/A')}\n"
-            output += f"  Type: {item.get('type', 'N/A')}\n"
-            if item.get("description"):
-                output += f"  Description: {item['description']}\n"
-            output += "\n"
-    return output
+    elif action == "create":
+        if not data:
+            return "Error: 'data' required for create"
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/custom-items", api_key=api_key, method="POST", data=data
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if isinstance(result, dict):
+            return f"Created custom item (ID: {result.get('id')}).\n\n{_format_custom_item(result)}"
+        return "Unexpected response."
 
+    elif action == "update":
+        if not item_id:
+            return "Error: 'item_id' required for update"
+        if not data:
+            return "Error: 'data' required for update"
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/custom-items/{item_id}", api_key=api_key, method="PUT", data=data
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if isinstance(result, dict):
+            return f"Updated custom item {item_id}.\n\n{_format_custom_item(result)}"
+        return "Unexpected response."
 
-@mcp.tool()
-async def get_custom_item_by_id(
-    item_id: int,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-) -> str:
-    """Get detailed information for a specific custom item from Intervals.icu
+    elif action == "delete":
+        if not item_id:
+            return "Error: 'item_id' required for delete"
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/custom-items/{item_id}", api_key=api_key, method="DELETE"
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        return f"Deleted custom item {item_id}."
 
-    Args:
-        item_id: The custom item ID
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-    """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
-    if error_msg:
-        return error_msg
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}", api_key=api_key
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        return f"Error fetching custom item: {result.get('message')}"
-
-    if not result or not isinstance(result, dict):
-        return f"No custom item found with ID {item_id}."
-
-    return format_custom_item_details(result)
-
-
-@mcp.tool()
-async def create_custom_item(
-    name: str,
-    item_type: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    description: str | None = None,
-    content: dict[str, Any] | None = None,
-    visibility: str | None = None,
-) -> str:
-    """Create a new custom item for an athlete on Intervals.icu
-
-    Args:
-        name: Name of the custom item
-        item_type: Type of custom item (e.g. FITNESS_CHART, TRACE_CHART, INPUT_FIELD, ACTIVITY_FIELD, INTERVAL_FIELD, ACTIVITY_STREAM, ACTIVITY_CHART, ACTIVITY_HISTOGRAM, ACTIVITY_HEATMAP, ACTIVITY_MAP, ACTIVITY_PANEL, ZONES)
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-        description: Description of the custom item (optional)
-        content: Configuration content for the custom item as a dict (optional). Important enum values:
-            - "type" field for INPUT_FIELD/ACTIVITY_FIELD: must be "numeric", "text", or "select" (NOT "number")
-            - "aggregate" field: must be "MIN", "SUM", "MAX", or "AVERAGE" (NOT "AVG")
-        visibility: Visibility setting: PRIVATE, FOLLOWERS, or PUBLIC (optional)
-    """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
-    if error_msg:
-        return error_msg
-
-    data: dict[str, Any] = {"name": name, "type": item_type}
-    if description is not None:
-        data["description"] = description
-    if content is not None:
-        if isinstance(content, str):
-            try:
-                content = json.loads(content)
-            except json.JSONDecodeError:
-                return "Error: content must be valid JSON when passed as a string."
-        data["content"] = content
-    if visibility is not None:
-        data["visibility"] = visibility
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item",
-        api_key=api_key,
-        data=data,
-        method="POST",
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        return f"Error creating custom item: {result.get('message')}"
-
-    if not result or not isinstance(result, dict):
-        return "Error: Unexpected response when creating custom item."
-
-    return f"Successfully created custom item:\n\n{format_custom_item_details(result)}"
-
-
-@mcp.tool()
-async def update_custom_item(
-    item_id: int,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    name: str | None = None,
-    item_type: str | None = None,
-    description: str | None = None,
-    content: dict[str, Any] | None = None,
-    visibility: str | None = None,
-) -> str:
-    """Update an existing custom item for an athlete on Intervals.icu
-
-    Args:
-        item_id: The custom item ID to update
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-        name: New name for the custom item (optional)
-        item_type: New type for the custom item (optional)
-        description: New description for the custom item (optional)
-        content: New configuration content for the custom item as a dict (optional). Important enum values:
-            - "type" field for INPUT_FIELD/ACTIVITY_FIELD: must be "numeric", "text", or "select" (NOT "number")
-            - "aggregate" field: must be "MIN", "SUM", "MAX", or "AVERAGE" (NOT "AVG")
-        visibility: New visibility setting: PRIVATE, FOLLOWERS, or PUBLIC (optional)
-    """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
-    if error_msg:
-        return error_msg
-
-    data: dict[str, Any] = {}
-    if name is not None:
-        data["name"] = name
-    if item_type is not None:
-        data["type"] = item_type
-    if description is not None:
-        data["description"] = description
-    if content is not None:
-        if isinstance(content, str):
-            try:
-                content = json.loads(content)
-            except json.JSONDecodeError:
-                return "Error: content must be valid JSON when passed as a string."
-        data["content"] = content
-    if visibility is not None:
-        data["visibility"] = visibility
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}",
-        api_key=api_key,
-        data=data,
-        method="PUT",
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        return f"Error updating custom item: {result.get('message')}"
-
-    if not result or not isinstance(result, dict):
-        return "Error: Unexpected response when updating custom item."
-
-    return f"Successfully updated custom item:\n\n{format_custom_item_details(result)}"
-
-
-@mcp.tool()
-async def delete_custom_item(
-    item_id: int,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-) -> str:
-    """Delete a custom item for an athlete from Intervals.icu
-
-    Args:
-        item_id: The custom item ID to delete
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-    """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
-    if error_msg:
-        return error_msg
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}",
-        api_key=api_key,
-        method="DELETE",
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        return f"Error deleting custom item: {result.get('message')}"
-
-    return f"Successfully deleted custom item {item_id}."
+    return f"Invalid action '{action}'. Must be one of: list, get, create, update, delete"

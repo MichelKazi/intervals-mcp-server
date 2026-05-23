@@ -1,7 +1,5 @@
 """
-Folder/plan management MCP tools for Intervals.icu.
-
-This module contains tools for managing workout folders and training plans.
+Folder/plan management MCP tool for Intervals.icu.
 """
 
 import json
@@ -16,10 +14,7 @@ config = get_config()
 
 
 def _format_folder(folder: dict[str, Any]) -> str:
-    """Format a folder into a readable string."""
-    lines = []
-    lines.append(f"ID: {folder.get('id', 'N/A')}")
-    lines.append(f"Name: {folder.get('name', 'Unnamed')}")
+    lines = [f"ID: {folder.get('id', 'N/A')}", f"Name: {folder.get('name', 'Unnamed')}"]
     if folder.get("type"):
         lines.append(f"Type: {folder['type']}")
     if folder.get("description"):
@@ -32,150 +27,74 @@ def _format_folder(folder: dict[str, Any]) -> str:
 
 
 @mcp.tool()
-async def get_folders(
+async def manage_folders(
+    action: str,
     athlete_id: str | None = None,
     api_key: str | None = None,
+    folder_id: int | None = None,
+    data: dict[str, Any] | None = None,
 ) -> str:
-    """Get workout folders and training plans from Intervals.icu.
+    """Manage workout folders and training plans on Intervals.icu.
 
     Args:
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        action: One of: list, create, update, delete
+        athlete_id: The Intervals.icu athlete ID (optional)
+        api_key: The Intervals.icu API key (optional)
+        folder_id: Required for update and delete
+        data: For create: {"name": "...", "type": "FOLDER"|"PLAN", ...}. For update: fields to change.
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/folders", api_key=api_key
-    )
+    action = action.lower().strip()
 
-    if isinstance(result, dict) and "error" in result:
-        return f"Error fetching folders: {result.get('message')}"
+    if action == "list":
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/folders", api_key=api_key
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if not result:
+            return "No folders found."
+        if isinstance(result, list):
+            return "Folders & Plans:\n\n" + "\n\n".join(_format_folder(f) for f in result if isinstance(f, dict))
+        return json.dumps(result, indent=2)
 
-    if not result:
-        return f"No folders found for athlete {athlete_id_to_use}."
+    elif action == "create":
+        if not data:
+            return "Error: 'data' required for create (must include 'name')"
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/folders", api_key=api_key, method="POST", data=data
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if isinstance(result, dict):
+            return f"Created folder (ID: {result.get('id')}).\n\n{_format_folder(result)}"
+        return "Unexpected response."
 
-    if isinstance(result, list):
-        output = "Folders & Plans:\n\n"
-        for folder in result:
-            if isinstance(folder, dict):
-                output += _format_folder(folder) + "\n\n"
-        return output
+    elif action == "update":
+        if not folder_id:
+            return "Error: 'folder_id' required for update"
+        if not data:
+            return "Error: 'data' required for update"
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/folders/{folder_id}", api_key=api_key, method="PUT", data=data
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        if isinstance(result, dict):
+            return f"Updated folder {folder_id}.\n\n{_format_folder(result)}"
+        return "Unexpected response."
 
-    return f"Folders & Plans:\n\n{json.dumps(result, indent=2)}"
+    elif action == "delete":
+        if not folder_id:
+            return "Error: 'folder_id' required for delete"
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id_to_use}/folders/{folder_id}", api_key=api_key, method="DELETE"
+        )
+        if isinstance(result, dict) and "error" in result:
+            return f"Error: {result.get('message')}"
+        return f"Deleted folder {folder_id}."
 
-
-@mcp.tool()
-async def create_folder(
-    name: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    folder_type: str | None = None,
-    description: str | None = None,
-    start_date: str | None = None,
-    weeks: int | None = None,
-) -> str:
-    """Create a new workout folder or training plan on Intervals.icu.
-
-    Args:
-        name: Folder/plan name
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-        folder_type: Folder type - "FOLDER" or "PLAN" (optional)
-        description: Description (optional)
-        start_date: Plan start date in YYYY-MM-DD format (optional, for plans)
-        weeks: Number of weeks (optional, for plans)
-    """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
-    if error_msg:
-        return error_msg
-
-    data: dict[str, Any] = {"name": name}
-    if folder_type is not None:
-        data["type"] = folder_type
-    if description is not None:
-        data["description"] = description
-    if start_date is not None:
-        data["startDate"] = start_date
-    if weeks is not None:
-        data["weeks"] = weeks
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/folders",
-        api_key=api_key,
-        method="POST",
-        data=data,
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        return f"Error creating folder: {result.get('message')}"
-
-    if not result or not isinstance(result, dict):
-        return "Error: Unexpected response when creating folder."
-
-    return f"Successfully created folder (ID: {result.get('id')}).\n\n{_format_folder(result)}"
-
-
-@mcp.tool()
-async def update_folder(
-    folder_id: int,
-    updates: dict[str, Any],
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-) -> str:
-    """Update a workout folder or training plan on Intervals.icu.
-
-    Args:
-        folder_id: The folder ID to update
-        updates: Dictionary of fields to update (e.g. {"name": "New Name", "description": "Updated"})
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-    """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
-    if error_msg:
-        return error_msg
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/folders/{folder_id}",
-        api_key=api_key,
-        method="PUT",
-        data=updates,
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        return f"Error updating folder: {result.get('message')}"
-
-    if not result or not isinstance(result, dict):
-        return "Error: Unexpected response when updating folder."
-
-    return f"Successfully updated folder {folder_id}.\n\n{_format_folder(result)}"
-
-
-@mcp.tool()
-async def delete_folder(
-    folder_id: int,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-) -> str:
-    """Delete a workout folder or training plan from Intervals.icu.
-
-    Args:
-        folder_id: The folder ID to delete
-        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-    """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
-    if error_msg:
-        return error_msg
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/folders/{folder_id}",
-        api_key=api_key,
-        method="DELETE",
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        return f"Error deleting folder: {result.get('message')}"
-
-    return f"Successfully deleted folder {folder_id}."
+    return f"Invalid action '{action}'. Must be one of: list, create, update, delete"
