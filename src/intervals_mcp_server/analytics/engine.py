@@ -416,6 +416,129 @@ class TrainingAnalytics:
         }
 
 
+    @staticmethod
+    def aerobic_development(df: pl.DataFrame) -> dict[str, Any]:
+        """Analyze cardiac drift patterns to assess aerobic base development.
+
+        Examines decoupling across rides at different durations and intensities
+        to identify:
+        - Duration threshold where drift becomes problematic (>5%)
+        - Whether that threshold is improving over time
+        - Rides with concerning drift given their intensity
+        - Pacing consistency (power variability) vs drift relationship
+        """
+        # Filter to rides/runs with decoupling data and endurance-ish intensity (IF < 0.85)
+        aero = df.filter(
+            pl.col("decoupling").is_not_null()
+            & pl.col("moving_time").is_not_null()
+            & (pl.col("moving_time") > 1800)  # at least 30 min
+        ).with_columns(
+            (pl.col("moving_time") / 3600).alias("hours"),
+        ).sort("date")
+
+        if len(aero) < 5:
+            return {"status": "insufficient data", "activities_with_drift": len(aero)}
+
+        # Duration buckets for drift analysis
+        buckets = [
+            ("30-60min", 0.5, 1.0),
+            ("1-1.5h", 1.0, 1.5),
+            ("1.5-2h", 1.5, 2.0),
+            ("2-3h", 2.0, 3.0),
+            ("3h+", 3.0, 99.0),
+        ]
+
+        duration_drift: list[dict[str, Any]] = []
+        for label, low, high in buckets:
+            bucket = aero.filter(
+                (pl.col("hours") >= low) & (pl.col("hours") < high)
+            )
+            if len(bucket) < 2:
+                continue
+            avg_dc = bucket["decoupling"].mean()
+            median_dc = bucket["decoupling"].median()
+            n = len(bucket)
+            problematic = bucket.filter(pl.col("decoupling") > 5.0)
+            duration_drift.append({
+                "bucket": label,
+                "avg_drift": round(avg_dc, 1) if avg_dc is not None else None,
+                "median_drift": round(median_dc, 1) if median_dc is not None else None,
+                "count": n,
+                "problematic_count": len(problematic),
+                "problematic_pct": round(len(problematic) / n * 100) if n > 0 else 0,
+            })
+
+        # Find drift threshold: first bucket where median drift > 5%
+        drift_threshold = None
+        for dd in duration_drift:
+            if dd["median_drift"] is not None and dd["median_drift"] > 5.0:
+                drift_threshold = dd["bucket"]
+                break
+
+        # Trend: is drift improving over time? Compare first half vs second half
+        mid = len(aero) // 2
+        trend = None
+        if mid >= 5:
+            first_half_drift = aero[:mid]["decoupling"].mean()
+            second_half_drift = aero[mid:]["decoupling"].mean()
+            if first_half_drift and second_half_drift and first_half_drift > 0:
+                improvement = round((first_half_drift - second_half_drift) / first_half_drift * 100, 1)
+                trend = {
+                    "first_half_avg": round(first_half_drift, 1),
+                    "second_half_avg": round(second_half_drift, 1),
+                    "improvement_pct": improvement,
+                    "direction": "improving" if improvement > 5 else "declining" if improvement < -5 else "stable",
+                }
+
+        # Concerning rides: high drift at low intensity (IF < 0.75 but drift > 5%)
+        # These suggest the aerobic base needs work
+        concerning = aero.filter(
+            (pl.col("decoupling") > 5.0)
+            & (pl.col("if_").is_not_null())
+            & (pl.col("if_") < 0.75)
+        ).sort("decoupling", descending=True).head(5)
+
+        concerning_rides = []
+        for row in concerning.iter_rows(named=True):
+            concerning_rides.append({
+                "date": str(row["date"]),
+                "name": row["name"],
+                "duration_h": round(row["hours"], 1),
+                "drift": round(row["decoupling"], 1),
+                "intensity": round(row["if_"], 2) if row.get("if_") else None,
+            })
+
+        # Pacing consistency: correlation between variability index and drift
+        # VI proxy: NP/avg_power ratio (closer to 1.0 = steadier)
+        pacing_insight = None
+        with_pacing = aero.filter(
+            pl.col("np").is_not_null() & pl.col("avg_power").is_not_null() & (pl.col("avg_power") > 0)
+        ).with_columns(
+            (pl.col("np") / pl.col("avg_power")).alias("vi")
+        )
+        if len(with_pacing) >= 8:
+            corr = with_pacing.select(pl.corr("vi", "decoupling")).item()
+            if corr is not None and abs(corr) > 0.2:
+                pacing_insight = {
+                    "vi_drift_correlation": round(corr, 3),
+                    "interpretation": (
+                        "Steadier pacing → less drift" if corr > 0.3
+                        else "Pacing variability has minimal effect on your drift" if abs(corr) < 0.3
+                        else "Your drift is somewhat independent of pacing"
+                    ),
+                }
+
+        return {
+            "status": "ok",
+            "activities_analyzed": len(aero),
+            "duration_drift": duration_drift,
+            "drift_threshold": drift_threshold,
+            "trend": trend,
+            "concerning_rides": concerning_rides,
+            "pacing_insight": pacing_insight,
+        }
+
+
 def _mine_good_bad_patterns(joined: pl.DataFrame, wellness_cols: list[str]) -> list[dict[str, Any]]:
     """Split into top/bottom quartile performance days and compare prior wellness."""
     load_series = joined["load"].drop_nulls()

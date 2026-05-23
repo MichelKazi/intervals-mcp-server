@@ -10,6 +10,7 @@ os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
 
 from intervals_mcp_server.analytics.engine import TrainingAnalytics
+from intervals_mcp_server.tools.aerobic_development import get_aerobic_development
 from intervals_mcp_server.tools.fatigue_risk import get_fatigue_risk
 from intervals_mcp_server.tools.power_progression import get_power_progression
 from intervals_mcp_server.tools.recovery_patterns import get_recovery_patterns
@@ -388,3 +389,132 @@ def test_missing_activity_fields():
     # Load trend should work fine
     trend = analytics.load_trend(df, weeks=4)
     assert trend["current_load"] > 0
+
+
+def _make_aerobic_activities(n=25):
+    """Generate activities with decoupling data for aerobic development tests."""
+    from datetime import datetime, timedelta
+
+    acts = []
+    start = datetime(2024, 2, 1)
+    for i in range(n):
+        d = start + timedelta(days=i * 3)
+        # Vary duration between 1h and 4h
+        duration_secs = 3600 + (i % 5) * 1800
+        # Drift increases with duration, improves over time
+        base_drift = 2.0 + (duration_secs / 3600) * 1.5
+        time_improvement = i * 0.08  # drift improves over time
+        drift = max(0.5, base_drift - time_improvement + (i % 3) * 0.5)
+
+        acts.append({
+            "id": f"a{i}",
+            "start_date_local": d.strftime("%Y-%m-%dT08:00:00"),
+            "type": "Ride",
+            "name": f"Ride {i}",
+            "moving_time": duration_secs,
+            "distance": 30000 + duration_secs * 8,
+            "icu_training_load": 50 + duration_secs // 60,
+            "icu_average_watts": 190 + (i % 5) * 5,
+            "average_heartrate": 135 + (i % 4),
+            "icu_weighted_avg_watts": 200 + (i % 5) * 5,
+            "icu_intensity": 0.65 + (i % 4) * 0.03,
+            "decoupling": drift,
+        })
+    return acts
+
+
+def test_aerobic_development():
+    """Test aerobic development analysis with sufficient data."""
+    acts = _make_aerobic_activities(25)
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    dev = analytics.aerobic_development(df)
+
+    assert dev["status"] == "ok"
+    assert dev["activities_analyzed"] >= 20
+    assert len(dev["duration_drift"]) > 0
+    assert dev["trend"] is not None
+    assert dev["trend"]["direction"] in ("improving", "declining", "stable")
+
+
+def test_aerobic_development_insufficient_data():
+    """Test graceful handling with too few activities."""
+    acts = [
+        {"id": "a1", "start_date_local": "2024-03-01T08:00:00", "type": "Ride", "name": "Ride 1",
+         "moving_time": 3600, "icu_training_load": 80, "decoupling": 3.5},
+    ]
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    dev = analytics.aerobic_development(df)
+    assert dev["status"] == "insufficient data"
+
+
+def test_aerobic_development_no_decoupling():
+    """Test graceful handling when no activities have decoupling data."""
+    from datetime import datetime, timedelta
+
+    acts = []
+    start = datetime(2024, 3, 1)
+    for i in range(10):
+        d = start + timedelta(days=i * 2)
+        acts.append({
+            "id": f"a{i}",
+            "start_date_local": d.strftime("%Y-%m-%dT08:00:00"),
+            "type": "Ride",
+            "name": f"Ride {i}",
+            "moving_time": 3600,
+            "icu_training_load": 80,
+            "icu_average_watts": 200,
+            "average_heartrate": 140,
+            # no decoupling field
+        })
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    dev = analytics.aerobic_development(df)
+    assert dev["status"] == "insufficient data"
+
+
+def test_aerobic_development_tool(monkeypatch):
+    """Integration test for the aerobic development tool."""
+    acts = _make_aerobic_activities(25)
+
+    async def fake_request(*_args, **_kwargs):
+        return acts
+
+    monkeypatch.setattr("intervals_mcp_server.tools.aerobic_development.make_intervals_request", fake_request)
+
+    result = asyncio.run(get_aerobic_development(athlete_id="i1", weeks=12))
+    assert "Aerobic Development Analysis" in result
+    assert "Drift by Duration:" in result
+    assert "Drift Trend" in result
+
+
+def test_aerobic_development_concerning_rides():
+    """Test that concerning rides (high drift at low IF) are flagged."""
+    from datetime import datetime, timedelta
+
+    acts = []
+    start = datetime(2024, 3, 1)
+    for i in range(15):
+        d = start + timedelta(days=i * 2)
+        acts.append({
+            "id": f"a{i}",
+            "start_date_local": d.strftime("%Y-%m-%dT08:00:00"),
+            "type": "Ride",
+            "name": f"Ride {i}",
+            "moving_time": 5400,
+            "icu_training_load": 70,
+            "icu_average_watts": 180,
+            "average_heartrate": 140,
+            "icu_weighted_avg_watts": 190,
+            "icu_intensity": 0.68,  # low intensity
+            "decoupling": 7.5 if i < 3 else 3.0,  # first 3 have bad drift
+        })
+
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    dev = analytics.aerobic_development(df)
+
+    assert dev["status"] == "ok"
+    assert len(dev["concerning_rides"]) > 0
+    assert dev["concerning_rides"][0]["drift"] > 5.0
