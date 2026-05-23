@@ -16,9 +16,9 @@ async def get_fatigue_risk(
     athlete_id: str | None = None,
     api_key: str | None = None,
 ) -> str:
-    """Acute:chronic workload ratio (ACWR) analysis for injury risk assessment.
+    """Use when concerned about overtraining, injury risk, or rapid load increase.
 
-    Computes the ratio of 7-day rolling load to 28-day rolling load (divided by 4).
+    Computes acute:chronic workload ratio (7-day / 28-day rolling load).
     Risk bands: <0.8 undertrained, 0.8-1.3 sweet spot, 1.3-1.5 caution, >1.5 danger.
     Detects load spikes (single-day jumps > 0.3 ACWR) in the last 7 days.
 

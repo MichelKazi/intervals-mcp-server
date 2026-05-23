@@ -18,11 +18,11 @@ async def get_power_progression(
     api_key: str | None = None,
     sport: str = "Ride",
 ) -> str:
-    """Power curve progression: compare last 28 days to 90-day baseline.
+    """Use for form assessment, race readiness, or "where's my power at?" questions.
 
-    Shows peak power at key durations (5s, 30s, 1min, 5min, 20min, 60min),
-    how close you are to your own best, and classifies your rider profile
-    (sprinter, puncheur, time trialist, all-rounder).
+    Compares peak power at key durations (5s, 30s, 1min, 5min, 20min, 60min)
+    from last 28 days to 90-day baseline. Shows % of best, W/kg, and classifies
+    rider profile (sprinter, puncheur, time trialist, all-rounder).
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)

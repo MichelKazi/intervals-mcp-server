@@ -90,11 +90,11 @@ async def get_training_load_summary(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> str:
-    """Get a computed training load summary (CTL/ATL/TSB trend) for an athlete.
+    """CTL/ATL/TSB trend with weekly snapshots. Prefer get_training_insights for a fuller picture.
 
     Returns fitness, fatigue, and form values over the date range, plus weekly
-    training stress totals. Useful for understanding if an athlete is building,
-    peaking, or recovering.
+    training stress totals. Use this only when you need JUST the load summary
+    without efficiency, wellness, or standout data.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
@@ -166,10 +166,11 @@ async def get_weekly_training_volume(
     api_key: str | None = None,
     weeks: int = 6,
 ) -> str:
-    """Get weekly training volume breakdown (hours, distance, TSS by sport type).
+    """Weekly volume by sport (hours, distance, TSS). Prefer get_training_insights for load + efficiency combined.
 
-    Shows week-over-week progression useful for monitoring progressive overload
-    and recovery weeks. Compares each week to the previous for trend analysis.
+    Shows week-over-week progression for monitoring progressive overload
+    and recovery weeks. Use this only when you need sport-by-sport breakdown
+    that get_training_insights doesn't provide.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
@@ -234,10 +235,11 @@ async def get_zone_distribution(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> str:
-    """Get aggregated time-in-zone distribution across activities in a date range.
+    """Time-in-zone distribution with polarization assessment. Included in get_week_in_review.
 
-    Summarizes how much time was spent in each power and HR zone across all
-    activities. Useful for assessing polarization and training intensity distribution.
+    Summarizes time spent in each power and HR zone across all activities.
+    Use this for a dedicated zone deep-dive; get_week_in_review includes a
+    compact zone summary already.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
@@ -324,11 +326,10 @@ async def get_readiness_assessment(
     athlete_id: str | None = None,
     api_key: str | None = None,
 ) -> str:
-    """Get a readiness-to-train assessment based on recent wellness and training data.
+    """"Should I go hard today?" — readiness score from TSB, HRV, sleep, subjective scores.
 
-    Combines TSB (form), sleep, HRV, resting HR, and subjective scores from the
-    last 7 days to produce a readiness summary. Useful for deciding training
-    intensity for today.
+    Combines form, sleep, HRV, resting HR, and subjective scores from the last 7 days.
+    For a fuller morning briefing (wellness + yesterday + plan), use get_daily_summary instead.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
@@ -539,11 +540,11 @@ async def get_efficiency_trend(
     api_key: str | None = None,
     weeks: int = 8,
 ) -> str:
-    """Get power-to-HR efficiency trend over recent weeks.
+    """Power:HR efficiency over recent weeks. Included in get_training_insights; use for standalone deep-dive.
 
-    Tracks the ratio of average power to average heart rate across activities,
-    which indicates aerobic fitness improvements. A rising trend means the
-    athlete is producing more power for the same cardiac cost.
+    Tracks average power / average heart rate ratio, EF, and decoupling weekly.
+    A rising trend means more power for the same cardiac cost. For broader
+    aerobic assessment including drift analysis, use get_aerobic_development.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
@@ -637,10 +638,11 @@ async def get_power_profile_assessment(
     athlete_id: str | None = None,
     api_key: str | None = None,
 ) -> str:
-    """Get a power profile assessment comparing recent power bests to season bests.
+    """Power curve comparison (28d vs 90d). Prefer get_power_progression for richer analysis with W/kg and profile.
 
-    Analyzes peak power at key durations (5s, 1min, 5min, 20min, 60min) from
-    the last 28 days vs the last 90 days to identify strengths and areas needing work.
+    Analyzes peak power at key durations (5s, 1min, 5min, 20min, 60min).
+    Use this for a quick comparison; get_power_progression adds rider profile
+    classification, visual bars, and weight-adjusted values.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)

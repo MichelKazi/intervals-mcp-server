@@ -28,16 +28,14 @@ async def get_aerobic_development(
     api_key: str | None = None,
     weeks: int = 12,
 ) -> str:
-    """Analyze cardiac drift patterns to assess aerobic base development.
+    """Use for aerobic base assessment, cardiac drift questions, or endurance progress tracking.
 
-    Shows how heart rate decouples from power/pace at different durations,
-    identifies your "drift threshold" (where HR drift becomes problematic),
-    tracks whether it's improving over time, flags rides with concerning
-    drift at low intensity, and correlates pacing consistency with drift.
+    Analyzes HR decoupling from power/pace at different durations to identify your
+    "drift threshold," tracks whether it's improving over time, flags concerning
+    easy-ride drift, and correlates pacing consistency with HR runaway.
 
-    Key insight: if drift is improving at longer durations, your aerobic base
-    is developing well. If you're drifting >5% on easy Z2 rides, base fitness
-    needs more work.
+    Key insight: improving drift at longer durations = aerobic base developing.
+    Drifting >5% on Z2 rides = base needs more work.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)

@@ -159,12 +159,11 @@ async def get_training_insights(
     api_key: str | None = None,
     period: str = "6w",
 ) -> str:
-    """Comprehensive training insights computed server-side with statistical analysis.
+    """START HERE for any general training question. Comprehensive server-side analytics in one call.
 
     Returns load progression with monotony/strain, aerobic efficiency trend,
     wellness z-scores vs 28-day baseline, standout efforts (statistical outliers),
-    and sport distribution. All number-crunching happens server-side to minimize
-    token usage.
+    and sport distribution. Replaces calling get_activities + get_wellness + manual math.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)

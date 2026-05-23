@@ -27,6 +27,9 @@ logger = logging.getLogger("intervals_icu_mcp_server")
 
 config = get_config()
 
+# Import resources (registers via @mcp.resource() decorator)
+import intervals_mcp_server.resources  # noqa: E402, F401
+
 # Import tool modules to register them (tools register themselves via @mcp.tool() decorators)
 from intervals_mcp_server.tools.activities import (  # noqa: E402
     get_activities,

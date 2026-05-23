@@ -152,10 +152,10 @@ async def get_latest_activity(
     activity_type: str | None = None,
     include_intervals: bool = True,
 ) -> str:
-    """Get the most recent activity with full details and interval summary in one call.
+    """Get the most recent activity with full details and intervals — use instead of get_activities + get_activity_details.
 
-    This is a convenience tool that combines get_activities + get_activity_details +
-    get_activity_intervals into a single operation, saving multiple round-trips.
+    Combines list + details + intervals into a single call. Use when the user asks
+    about their last ride/run/swim.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
@@ -355,10 +355,10 @@ async def get_daily_summary(
     athlete_id: str | None = None,
     api_key: str | None = None,
 ) -> str:
-    """Morning briefing: today's wellness, yesterday's activities, today's planned workouts, and current training load.
+    """START HERE for daily check-ins. Morning briefing: today's wellness, yesterday's activities, today's plan.
 
-    Combines wellness, activities, events, and fitness data into a single call for
-    a daily coaching check-in. Useful as the first call in a coaching conversation.
+    Combines wellness, activities, events, and fitness data into a single call.
+    Use this instead of separate get_wellness + get_activities calls.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
@@ -489,11 +489,11 @@ async def get_week_in_review(
     api_key: str | None = None,
     weeks_ago: int = 0,
 ) -> str:
-    """Weekly coaching review: activities with coach ticks, load progression, zone distribution, and plan compliance.
+    """START HERE for weekly reviews. Activities, zones, compliance, load delta — all in one call.
 
     Summarizes the past 7 days (or a specified prior week) with per-activity ratings,
-    aggregated zone time, total load vs plan, and highlights. Designed for end-of-week
-    coaching conversations.
+    aggregated zone time, total load vs plan, and CTL progression. Use instead of
+    calling get_activities + get_zone_distribution + get_planned_vs_actual separately.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)

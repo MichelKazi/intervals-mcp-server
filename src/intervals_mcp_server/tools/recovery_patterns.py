@@ -34,12 +34,12 @@ async def get_recovery_patterns(
     api_key: str | None = None,
     days: int = 60,
 ) -> str:
-    """Analyze which recovery metrics predict your good vs bad training days.
+    """Use when asking "what predicts my good days?" or about sleep/HRV/recovery impact on performance.
 
     Correlates prior-day wellness (sleep, HRV, resting HR, mood, soreness, etc.)
     with next-day performance (load achieved, power output, intensity). Shows which
-    signals are most predictive for YOU specifically, and what your "good day" vs
-    "bad day" wellness profile looks like.
+    signals are most predictive for THIS athlete specifically, and their "good day" vs
+    "bad day" wellness profile.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
