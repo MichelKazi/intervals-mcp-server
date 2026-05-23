@@ -12,6 +12,7 @@ from typing import Any
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
+from intervals_mcp_server.resource_store import athlete_profile
 from intervals_mcp_server.tools.activities import (
     COACH_TICK_LABELS,
     COACH_TICK_VALUES,
@@ -388,6 +389,7 @@ async def get_daily_summary(
         today_wellness = wellness[-1]
 
     if today_wellness:
+        athlete_profile.update_from_wellness(today_wellness)
         lines.append("")
         lines.append("Wellness:")
         ctl = today_wellness.get("ctl")

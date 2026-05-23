@@ -17,6 +17,7 @@ import httpx
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
+from intervals_mcp_server.resource_store import athlete_profile, training_plan
 from intervals_mcp_server.trainerroad.client import TRAuthError, TRClient
 from intervals_mcp_server.trainerroad.converter import (
     build_structure_text,
@@ -445,6 +446,21 @@ async def get_trainerroad_workouts(
     # Infer plan phase from activity metadata if API endpoint didn't return it
     if not plan_info and activities:
         plan_info = _infer_plan_info(activities)
+
+    # Update resource store
+    training_plan.update_from_tr_plan(plan_info)
+    races = [a for a in activities if a.is_race and not a.is_completed]
+    if races:
+        training_plan.update_races(races)
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    week_workouts = [
+        a for a in activities
+        if not a.is_completed and not a.is_rest_day and a.workout_name
+        and a.date >= today_str
+    ]
+    if week_workouts:
+        training_plan.update_this_week(week_workouts[:7], today_str)
+    athlete_profile.update_phase(training_plan.phase, training_plan.phase_week)
 
     details_map: dict[str, TRWorkoutDetails] | None = None
     if include_details:

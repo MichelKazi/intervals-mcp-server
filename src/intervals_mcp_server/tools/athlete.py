@@ -10,6 +10,7 @@ from typing import Any
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
+from intervals_mcp_server.resource_store import athlete_profile
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 config = get_config()
@@ -84,6 +85,7 @@ async def get_athlete(
     if not result or not isinstance(result, dict):
         return f"No athlete data found for {athlete_id_to_use}."
 
+    athlete_profile.update_from_athlete(result)
     return _format_athlete(result)
 
 

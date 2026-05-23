@@ -7,6 +7,7 @@ from intervals_mcp_server.analytics.engine import TrainingAnalytics
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
+from intervals_mcp_server.resource_store import athlete_profile
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 config = get_config()
@@ -192,6 +193,9 @@ async def get_training_insights(
 
     activities = [a for a in (act_result if isinstance(act_result, list) else []) if isinstance(a, dict) and a.get("name")]
     wellness_data = [w for w in (well_result if isinstance(well_result, list) else []) if isinstance(w, dict)]
+
+    if wellness_data:
+        athlete_profile.update_from_wellness(wellness_data[-1])
 
     if not activities:
         return f"No activities found for {athlete_id_to_use} in the last {weeks} weeks."

@@ -82,6 +82,7 @@ from intervals_mcp_server.tools.folders import manage_folders  # noqa: E402
 from intervals_mcp_server.tools.gear import manage_gear  # noqa: E402
 from intervals_mcp_server.tools.routes import manage_routes  # noqa: E402
 from intervals_mcp_server.tools.sport_settings import manage_sport_settings  # noqa: E402
+from intervals_mcp_server.tools.athlete_context import get_athlete_context  # noqa: E402
 from intervals_mcp_server.tools.trainerroad import (  # noqa: E402
     get_trainerroad_workout_details,
     get_trainerroad_workouts,
@@ -151,6 +152,7 @@ __all__ = [
     "sync_trainerroad_calendar",
     "get_trainerroad_workouts",
     "get_trainerroad_workout_details",
+    "get_athlete_context",
 ]
 
 

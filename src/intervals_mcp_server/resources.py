@@ -1,6 +1,7 @@
 """MCP resources for Intervals.icu server — static context for LLM clients."""
 
 from intervals_mcp_server.mcp_instance import mcp
+from intervals_mcp_server.resource_store import athlete_profile, training_plan
 
 USAGE_GUIDE = """\
 # Intervals.icu MCP Server — Usage Guide
@@ -8,6 +9,9 @@ USAGE_GUIDE = """\
 ## Decision Tree: Which Tool To Call First
 
 ```
+SESSION START (call once at beginning of any coaching conversation):
+└── get_athlete_context()  ← returns profile (FTP, weight, fitness) + plan (phase, races, this week)
+
 User asks about...
 ├── "How's my training going?" / "Give me an update"
 │   └── get_training_insights(period="6w")  ← START HERE for any general coaching question
@@ -54,6 +58,11 @@ User asks about...
 4. **The `period` parameter is your zoom control.** `get_training_insights(period="4w")` for recent focus, `period="12w"` for macro view.
 
 ## Tool Categories
+
+### Tier 0: Session Context (call once at start)
+| Tool | When to use |
+|------|-------------|
+| `get_athlete_context` | Session start — profile (FTP, weight, CTL/ATL/TSB) + plan (phase, races, this week). Zero API calls if warm. |
 
 ### Tier 1: Start Here (composite analytics)
 | Tool | When to use |
@@ -152,3 +161,15 @@ The tools never crash or return empty results without explanation.
 def get_usage_guide() -> str:
     """Intervals.icu MCP server usage guide — decision tree, tool categories, anti-patterns."""
     return USAGE_GUIDE
+
+
+@mcp.resource("intervals://athlete-profile")
+def get_athlete_profile_resource() -> str:
+    """Athlete profile: FTP, weight, W/kg, CTL/ATL/TSB, HR metrics, training phase. Updated by tools automatically."""
+    return athlete_profile.format()
+
+
+@mcp.resource("intervals://training-plan")
+def get_training_plan_resource() -> str:
+    """Training plan: phase, week, race calendar, this week's workouts, today's plan. Updated by tools automatically."""
+    return training_plan.format()
