@@ -40,28 +40,59 @@ class TrainingAnalytics:
             pl.col("date").str.to_date("%Y-%m-%d")
         )
 
+    # Standard wellness fields with their API key → DataFrame column name mapping
+    _WELLNESS_FIELD_MAP = {
+        "ctl": "ctl",
+        "atl": "atl",
+        "rampRate": "ramp_rate",
+        "hrv": "hrv",
+        "restingHR": "resting_hr",
+        "sleepSecs": "sleep_secs",
+        "sleepQuality": "sleep_quality",
+        "weight": "weight",
+        "soreness": "soreness",
+        "fatigue": "fatigue",
+        "stress": "stress",
+        "mood": "mood",
+        "motivation": "motivation",
+        "spO2": "spo2",
+    }
+
+    # Fields to exclude from custom field detection (non-numeric, internal, or already mapped)
+    _WELLNESS_EXCLUDE = {
+        "id", "date", "athleteId", "athlete_id", "updatedAt", "updated",
+        "createdAt", "created", "locked", "type", "source",
+    }
+
     @staticmethod
     def wellness_frame(wellness: list[dict[str, Any]]) -> pl.DataFrame:
-        """Build a typed DataFrame from raw wellness dicts."""
+        """Build a typed DataFrame from raw wellness dicts.
+
+        Captures all standard fields plus any custom numeric fields (e.g. peptide
+        doses, supplements, custom metrics). Custom fields are included as-is using
+        their API key name as the column name.
+        """
+        # Discover custom fields across all entries
+        custom_keys: set[str] = set()
+        standard_api_keys = set(TrainingAnalytics._WELLNESS_FIELD_MAP.keys())
+        exclude = TrainingAnalytics._WELLNESS_EXCLUDE | standard_api_keys
+
+        for w in wellness:
+            for key, val in w.items():
+                if key not in exclude and isinstance(val, (int, float)):
+                    custom_keys.add(key)
+
         rows = []
         for w in wellness:
-            rows.append({
-                "date": (w.get("id") or "")[:10],
-                "ctl": w.get("ctl"),
-                "atl": w.get("atl"),
-                "ramp_rate": w.get("rampRate"),
-                "hrv": w.get("hrv"),
-                "resting_hr": w.get("restingHR"),
-                "sleep_secs": w.get("sleepSecs"),
-                "sleep_quality": w.get("sleepQuality"),
-                "weight": w.get("weight"),
-                "soreness": w.get("soreness"),
-                "fatigue": w.get("fatigue"),
-                "stress": w.get("stress"),
-                "mood": w.get("mood"),
-                "motivation": w.get("motivation"),
-                "spo2": w.get("spO2"),
-            })
+            row: dict[str, Any] = {"date": (w.get("id") or "")[:10]}
+            # Standard fields
+            for api_key, col_name in TrainingAnalytics._WELLNESS_FIELD_MAP.items():
+                row[col_name] = w.get(api_key)
+            # Custom fields (peptides, supplements, etc.)
+            for key in custom_keys:
+                row[key] = w.get(key)
+            rows.append(row)
+
         return pl.DataFrame(rows).with_columns(
             pl.col("date").str.to_date("%Y-%m-%d")
         )
@@ -140,7 +171,7 @@ class TrainingAnalytics:
 
     @staticmethod
     def wellness_trends(wf: pl.DataFrame, days: int = 28) -> dict[str, Any]:
-        """Rolling averages and z-scores for wellness metrics."""
+        """Rolling averages and z-scores for wellness metrics (including custom fields)."""
         wf = wf.sort("date").tail(days)
         if wf.is_empty():
             return {}
@@ -148,7 +179,15 @@ class TrainingAnalytics:
         results: dict[str, Any] = {}
         latest = wf.row(-1, named=True)
 
-        for col in ["hrv", "resting_hr", "sleep_secs", "weight"]:
+        # Standard fields + any custom numeric fields present in the frame
+        _skip = {"date", "ctl", "atl", "ramp_rate", "sleep_quality", "spo2"}
+        trend_cols = [
+            col for col in wf.columns
+            if col not in _skip
+            and wf[col].dtype in (pl.Float64, pl.Int64, pl.Float32, pl.Int32, pl.Int8, pl.Int16)
+        ]
+
+        for col in trend_cols:
             series = wf[col].drop_nulls()
             if series.is_empty():
                 continue
@@ -372,7 +411,13 @@ class TrainingAnalytics:
             return {"correlations": [], "patterns": [], "sample_size": len(joined)}
 
         # Compute correlations between wellness inputs and performance outputs
-        wellness_cols = ["hrv", "resting_hr", "sleep_secs", "soreness", "fatigue", "stress", "mood", "motivation"]
+        # Dynamically discover numeric wellness columns (includes custom fields like peptide doses)
+        _non_wellness = {"date", "ctl", "atl", "ramp_rate", "sleep_quality", "spo2", "weight"}
+        wellness_cols = [
+            col for col in wf_sorted.columns
+            if col not in _non_wellness
+            and wf_sorted[col].dtype in (pl.Float64, pl.Int64, pl.Float32, pl.Int32, pl.Int8, pl.Int16)
+        ]
         perf_cols = ["load", "avg_power", "if_"]
 
         correlations = []

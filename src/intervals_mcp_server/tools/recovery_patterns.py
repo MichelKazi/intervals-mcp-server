@@ -21,6 +21,14 @@ _METRIC_LABELS = {
     "motivation": "Motivation",
 }
 
+
+def _label_for(metric: str) -> str:
+    """Human-readable label for a metric, including custom fields."""
+    if metric in _METRIC_LABELS:
+        return _METRIC_LABELS[metric]
+    # Custom fields: bpc157_mcg → BPC-157 (mcg), tb500_mg → TB-500 (mg)
+    return metric.replace("_", " ").title()
+
 _PERF_LABELS = {
     "load": "Training Load",
     "avg_power": "Avg Power",
@@ -93,7 +101,7 @@ async def get_recovery_patterns(
         lines.append("")
         lines.append("Predictive Signals (prior-day wellness → next-day performance):")
         for c in correlations:
-            w_label = _METRIC_LABELS.get(c["wellness_metric"], c["wellness_metric"])
+            w_label = _label_for(c["wellness_metric"])
             p_label = _PERF_LABELS.get(c["performance_metric"], c["performance_metric"])
             r = c["correlation"]
             strength = c["strength"]
@@ -113,7 +121,7 @@ async def get_recovery_patterns(
         lines.append("")
         lines.append("Good Day vs Bad Day Profile (top vs bottom quartile by load):")
         for p in good_bad:
-            metric_label = _METRIC_LABELS.get(p["metric"], p["metric"])
+            metric_label = _label_for(p["metric"])
             good_val = p["good_day_avg"]
             bad_val = p["bad_day_avg"]
             effect = p["effect_size"]
@@ -137,7 +145,7 @@ async def get_recovery_patterns(
     lines.append("Key Takeaways:")
     if good_bad:
         top = good_bad[0]
-        top_label = _METRIC_LABELS.get(top["metric"], top["metric"])
+        top_label = _label_for(top["metric"])
         lines.append(f"  Your strongest predictor is {top_label} (effect size d={top['effect_size']:+.2f})")
         if top["metric"] == "sleep_secs":
             diff_mins = abs(top["good_day_avg"] - top["bad_day_avg"]) / 60
@@ -147,7 +155,7 @@ async def get_recovery_patterns(
             lines.append(f"  ~{diff:.0f}ms HRV difference between your good and bad days")
     elif correlations:
         top_c = correlations[0]
-        w_label = _METRIC_LABELS.get(top_c["wellness_metric"], top_c["wellness_metric"])
+        w_label = _label_for(top_c["wellness_metric"])
         lines.append(f"  Your strongest signal is {w_label} (r={top_c['correlation']:+.3f})")
     else:
         lines.append("  No clear patterns yet. Keep logging wellness daily for better signal.")

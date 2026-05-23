@@ -489,6 +489,79 @@ def test_aerobic_development_tool(monkeypatch):
     assert "Drift Trend" in result
 
 
+def test_custom_wellness_fields_in_frame():
+    """Test that custom numeric fields (e.g. peptide doses) are captured in the wellness frame."""
+    wellness = [
+        {"id": "2024-03-01", "ctl": 60, "atl": 55, "hrv": 45, "bpc157_mcg": 250, "tb500_mg": 2.5},
+        {"id": "2024-03-02", "ctl": 61, "atl": 56, "hrv": 48, "bpc157_mcg": 250, "tb500_mg": 2.5},
+        {"id": "2024-03-03", "ctl": 62, "atl": 57, "hrv": 42, "bpc157_mcg": 0, "tb500_mg": 0},
+    ]
+    analytics = TrainingAnalytics()
+    wf = analytics.wellness_frame(wellness)
+    assert "bpc157_mcg" in wf.columns
+    assert "tb500_mg" in wf.columns
+    assert wf["bpc157_mcg"].to_list() == [250, 250, 0]
+    assert wf["tb500_mg"].to_list() == [2.5, 2.5, 0.0]
+
+
+def test_custom_fields_in_recovery_patterns():
+    """Test that custom wellness fields are correlated with performance in recovery patterns."""
+    from datetime import datetime, timedelta
+
+    acts = []
+    wellness = []
+    start = datetime(2024, 3, 1)
+    for i in range(30):
+        d = start + timedelta(days=i)
+        # Peptide on/off cycle: on days 0-14, off days 15-29
+        dose = 250 if i < 15 else 0
+        # Performance correlates with dose (load higher when on peptide)
+        load = 90 + (20 if i < 15 else 0) + (i % 5) * 3
+
+        wellness.append({
+            "id": d.strftime("%Y-%m-%d"),
+            "ctl": 60, "atl": 55, "hrv": 45,
+            "bpc157_mcg": dose,
+        })
+        act_date = d + timedelta(days=1)
+        acts.append({
+            "id": f"a{i}",
+            "start_date_local": act_date.strftime("%Y-%m-%dT08:00:00"),
+            "type": "Ride",
+            "name": f"Ride {i}",
+            "moving_time": 3600,
+            "distance": 30000,
+            "icu_training_load": load,
+            "icu_average_watts": 200 + (10 if i < 15 else 0),
+            "average_heartrate": 140,
+        })
+
+    analytics = TrainingAnalytics()
+    af = analytics.activities_frame(acts)
+    wf = analytics.wellness_frame(wellness)
+    result = analytics.recovery_patterns(af, wf, lookback_days=60)
+
+    # Should find bpc157_mcg in the correlations or patterns
+    all_metrics = [c["wellness_metric"] for c in result["correlations"]]
+    all_pattern_metrics = [p["metric"] for p in result.get("patterns", [])]
+    assert "bpc157_mcg" in all_metrics or "bpc157_mcg" in all_pattern_metrics
+
+
+def test_custom_fields_in_wellness_trends():
+    """Test that custom fields get z-scores in wellness_trends."""
+    wellness = [{"id": f"2024-03-{i+1:02d}", "ctl": 60, "atl": 55, "bpc157_mcg": 250} for i in range(28)]
+    # Last day is 0 (off day)
+    wellness[-1]["bpc157_mcg"] = 0
+
+    analytics = TrainingAnalytics()
+    wf = analytics.wellness_frame(wellness)
+    trends = analytics.wellness_trends(wf, days=28)
+    # Custom field should appear in trends with z-score
+    assert "bpc157_mcg" in trends
+    # 0 vs mean of ~241 should give a negative z-score
+    assert trends["bpc157_mcg"]["z_score"] < 0
+
+
 def test_aerobic_development_concerning_rides():
     """Test that concerning rides (high drift at low IF) are flagged."""
     from datetime import datetime, timedelta
