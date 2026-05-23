@@ -443,7 +443,7 @@ class TestRaceEventPayload:
         act = TRCalendarActivity(
             activity_id="r1", date="2025-08-29", workout_name="Gateway II",
             tss=100, duration_secs=3600, is_completed=False,
-            activity_type=TR_ACTIVITY_TYPE_CYCLING, race_priority=1, notes="",
+            activity_type=TR_ACTIVITY_TYPE_CYCLING, race_priority=3, notes="",
         )
         payload = race_event_payload(act)
         assert payload["category"] == "RACE"
@@ -467,7 +467,7 @@ class TestRaceEventPayload:
         act = TRCalendarActivity(
             activity_id="r3", date="2025-08-28", workout_name="Gateway",
             tss=60, duration_secs=2400, is_completed=False,
-            activity_type=TR_ACTIVITY_TYPE_CYCLING, race_priority=3, notes="",
+            activity_type=TR_ACTIVITY_TYPE_CYCLING, race_priority=1, notes="",
         )
         payload = race_event_payload(act)
         assert "Priority: C Race" in payload["description"]

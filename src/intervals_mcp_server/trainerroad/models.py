@@ -135,12 +135,23 @@ class TRCalendarActivity:
     activity_type: int
     race_priority: int
     notes: str
-    plan_name: str | None = None
-    block_name: str | None = None
-    week_number: int | None = None
+
+    @classmethod
+    def _parse_date(cls, date_val) -> str:
+        """Parse date from either string or {Year, Month, Day} dict."""
+        if isinstance(date_val, dict):
+            y = date_val.get("Year", 0)
+            m = date_val.get("Month", 0)
+            d = date_val.get("Day", 0)
+            return f"{y:04d}-{m:02d}-{d:02d}"
+        date_str = str(date_val) if date_val else ""
+        if "T" in date_str:
+            date_str = date_str.split("T")[0]
+        return date_str
 
     @classmethod
     def from_api(cls, data: dict) -> TRCalendarActivity:
+        """Parse from the legacy /app/api/calendar/activities response."""
         completed_ride = data.get("CompletedRide")
         is_completed = completed_ride is not None
 
@@ -153,18 +164,10 @@ class TRCalendarActivity:
             tss = data.get("Tss")
             duration_secs = data.get("Duration")
 
-        date_str = data.get("Date", "")
-        if "T" in date_str:
-            date_str = date_str.split("T")[0]
+        date_str = cls._parse_date(data.get("Date", ""))
 
         raw_priority = data.get("RacePriority", "0") or "0"
         race_priority = int(raw_priority) if str(raw_priority).isdigit() else 0
-
-        # Training plan metadata (TR includes these on calendar entries)
-        plan_name = data.get("TrainingPlanName") or data.get("PlanName")
-        block_name = data.get("Block") or data.get("TrainingBlock") or data.get("BlockName")
-        week_raw = data.get("Week") or data.get("PlanWeek") or data.get("WeekNumber")
-        week_number = int(week_raw) if week_raw and str(week_raw).isdigit() else None
 
         return cls(
             activity_id=str(data.get("Id", "")),
@@ -176,9 +179,52 @@ class TRCalendarActivity:
             activity_type=data.get("ActivityType", 0),
             race_priority=race_priority,
             notes=data.get("Notes") or "",
-            plan_name=plan_name,
-            block_name=block_name,
-            week_number=week_number,
+        )
+
+    @classmethod
+    def from_timeline_event(cls, data: dict) -> TRCalendarActivity:
+        """Parse from the react-calendar timeline Events array.
+
+        Events are races with: Id, Name, Date{Year,Month,Day}, RacePriority,
+        ActivityType, Tss, Started (if completed).
+        Race priority: C=1, B=2, A=3.
+        """
+        date_str = cls._parse_date(data.get("Date"))
+        is_completed = data.get("Started") is not None and data.get("ManuallyCompleted", False)
+
+        return cls(
+            activity_id=str(data.get("Id", "")),
+            date=date_str,
+            workout_name=data.get("Name"),
+            tss=data.get("Tss"),
+            duration_secs=None,
+            is_completed=is_completed,
+            activity_type=data.get("ActivityType", TR_ACTIVITY_TYPE_CYCLING),
+            race_priority=data.get("RacePriority", 0) or 0,
+            notes="",
+        )
+
+    @classmethod
+    def from_timeline_planned(cls, data: dict) -> TRCalendarActivity:
+        """Parse from the react-calendar timeline PlannedActivities array.
+
+        PlannedActivities have: Id, Title, Date{Year,Month,Day}, Tss, Type,
+        WorkoutId, Status (0=planned, 1=completed).
+        """
+        date_str = cls._parse_date(data.get("Date"))
+        status = data.get("Status", 0)
+        is_completed = status == 1
+
+        return cls(
+            activity_id=str(data.get("Id", "")),
+            date=date_str,
+            workout_name=data.get("Title") or None,
+            tss=data.get("Tss"),
+            duration_secs=None,
+            is_completed=is_completed,
+            activity_type=data.get("Type", TR_ACTIVITY_TYPE_CYCLING),
+            race_priority=0,
+            notes="",
         )
 
     @property

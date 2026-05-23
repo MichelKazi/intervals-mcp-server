@@ -202,41 +202,117 @@ class TRClient:
         assert self._member is not None
         return self._member
 
+    async def get_calendar_timeline(
+        self, start_date: str, end_date: str
+    ) -> dict:
+        """Fetch the full calendar timeline (events, planned activities, annotations).
+
+        Uses the react-calendar API which requires member_id (not username).
+        Returns the raw timeline dict with keys: Events, PlannedActivities,
+        Annotations, Activities, etc.
+        """
+        member = await self.get_member()
+        data = await self._get(
+            f"/app/api/react-calendar/{member.member_id}/timeline",
+            params={"startDate": start_date, "endDate": end_date},
+        )
+        if isinstance(data, dict):
+            return data
+        return {}
+
     async def get_calendar_activities(
         self, start_date: str, end_date: str
     ) -> list[TRCalendarActivity]:
-        """Fetch calendar activities (planned + completed) for a date range."""
-        member = await self.get_member()
-        data = await self._get(
-            f"/app/api/calendar/activities/{member.username}",
-            params={"startDate": start_date, "endDate": end_date},
-        )
-        if not isinstance(data, list):
-            return []
-        return [TRCalendarActivity.from_api(item) for item in data if isinstance(item, dict)]
+        """Fetch calendar activities (planned + events) for a date range.
+
+        Uses the new react-calendar timeline endpoint and merges
+        PlannedActivities and Events into a unified list.
+        """
+        timeline = await self.get_calendar_timeline(start_date, end_date)
+        results: list[TRCalendarActivity] = []
+
+        # Parse race events
+        for event in timeline.get("Events", []):
+            if isinstance(event, dict):
+                results.append(TRCalendarActivity.from_timeline_event(event))
+
+        # Parse planned activities
+        for planned in timeline.get("PlannedActivities", []):
+            if isinstance(planned, dict):
+                results.append(TRCalendarActivity.from_timeline_planned(planned))
+
+        return results
+
+    async def _get_raw_calendar(self, start_date: str, end_date: str) -> list:
+        """Return raw calendar JSON for debugging field mapping."""
+        timeline = await self.get_calendar_timeline(start_date, end_date)
+        raw: list = []
+        raw.extend(timeline.get("Events", []))
+        raw.extend(timeline.get("PlannedActivities", [])[:5])
+        return raw
 
     async def get_training_plan(self) -> dict:
-        """Fetch current training plan info (phase, week, volume).
+        """Fetch current training plan info by inspecting the calendar timeline.
 
-        Tries multiple TR API endpoints since the internal API structure varies.
-        Returns raw dict with whatever plan metadata is available.
+        Uses annotations from the timeline to determine current training phase.
+        Annotation TypeIds map to phase boundaries:
+        - TypeId 2: Base phase marker
+        - TypeId 3: Build phase marker
+        - TypeId 6: Specialty phase marker
+        - TypeId 8: Week boundary
+
+        Returns dict with PhaseName and approximate week info.
         """
+        from datetime import datetime
+
         member = await self.get_member()
-        # Try the training-plan endpoint first
-        for path in (
-            f"/app/api/training-plan/{member.username}",
-            f"/app/api/calendar/training-plan/{member.username}",
-            f"/app/api/training-plans/{member.member_id}",
-        ):
-            try:
-                data = await self._get(path)
-                if isinstance(data, dict) and data:
-                    return data
-                if isinstance(data, list) and data:
-                    return data[0] if isinstance(data[0], dict) else {}
-            except httpx.HTTPStatusError:
-                continue
-        return {}
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        try:
+            timeline = await self.get_calendar_timeline(today, today)
+        except httpx.HTTPStatusError:
+            return {}
+
+        annotations = timeline.get("Annotations", [])
+        if not annotations:
+            return {}
+
+        # Phase type mapping from TR's phase-type enum
+        # Base1=0, Base2=1, Build=2, Specialty=3, Base3=4
+        phase_type_names = {2: "Base", 3: "Build", 6: "Specialty", 8: "Week"}
+
+        # Find the most recent phase annotation before/on today
+        today_dt = datetime.now()
+        current_phase = ""
+        week_count = 0
+
+        for ann in sorted(annotations, key=lambda a: (
+            a.get("Date", {}).get("Year", 0),
+            a.get("Date", {}).get("Month", 0),
+            a.get("Date", {}).get("Day", 0),
+        )):
+            date_dict = ann.get("Date", {})
+            ann_date = datetime(
+                date_dict.get("Year", 2000),
+                date_dict.get("Month", 1),
+                date_dict.get("Day", 1),
+            )
+            if ann_date > today_dt:
+                break
+
+            type_id = ann.get("TypeId", 0)
+            if type_id in (2, 3, 6):
+                current_phase = phase_type_names.get(type_id, "")
+                week_count = 0
+            elif type_id == 8:
+                week_count += 1
+
+        result: dict = {}
+        if current_phase:
+            result["PhaseName"] = current_phase
+        if week_count:
+            result["Week"] = week_count
+        return result
 
     async def get_workout_details(self, workout_id: str) -> TRWorkoutDetails:
         """Fetch full workout details including interval structure."""

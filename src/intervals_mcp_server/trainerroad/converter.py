@@ -198,7 +198,7 @@ def strength_event_payload(activity: TRCalendarActivity) -> dict:
 
 def race_event_payload(activity: TRCalendarActivity) -> dict:
     """Build an Intervals.icu event payload for a race."""
-    priority_label = {1: "A", 2: "B", 3: "C"}.get(activity.race_priority, "")
+    priority_label = {1: "C", 2: "B", 3: "A"}.get(activity.race_priority, "")
     desc_parts = [TR_SYNC_MARKER]
     if priority_label:
         desc_parts.append(f"Priority: {priority_label} Race")
@@ -252,7 +252,7 @@ def format_tr_calendar_compact(
     from datetime import datetime
 
     now = datetime.now()
-    lines = [f"TrainerRoad Calendar (as of {now.strftime('%Y-%m-%d %H:%M')}):"]
+    lines = [f"TrainerRoad Calendar (today is {now.strftime('%A %Y-%m-%d %H:%M %Z').strip()}):"]
 
     if plan_info:
         phase = plan_info.get("PhaseName") or plan_info.get("Block") or plan_info.get("CurrentPhase") or ""
@@ -287,7 +287,7 @@ def format_tr_calendar_compact(
     if races:
         lines.append("  Races:")
         for act in races:
-            priority_label = {1: "A", 2: "B", 3: "C"}.get(act.race_priority, "?")
+            priority_label = {1: "C", 2: "B", 3: "A"}.get(act.race_priority, "?")
             name = act.workout_name or "Race"
             lines.append(f"    {act.date} — [{priority_label} Race] {name}")
         lines.append("")

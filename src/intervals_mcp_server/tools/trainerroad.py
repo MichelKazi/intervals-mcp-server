@@ -74,17 +74,7 @@ def _default_end_date() -> str:
 
 
 def _infer_plan_info(activities: list) -> dict | None:
-    """Infer training plan phase/week from activity metadata when the plan API isn't available."""
-    for act in activities:
-        if act.block_name or act.plan_name or act.week_number:
-            info: dict = {}
-            if act.plan_name:
-                info["PlanName"] = act.plan_name
-            if act.block_name:
-                info["PhaseName"] = act.block_name
-            if act.week_number:
-                info["Week"] = act.week_number
-            return info
+    """No-op fallback — plan info now comes from get_training_plan()."""
     return None
 
 
@@ -244,7 +234,7 @@ async def sync_trainerroad_calendar(
     unchanged = 0
     failed = 0
     now = datetime.now()
-    lines = [f"TrainerRoad Sync ({member.username}): {start} to {end} (as of {now.strftime('%Y-%m-%d %H:%M')})"]
+    lines = [f"TrainerRoad Sync ({member.username}): {start} to {end} (today is {now.strftime('%A %Y-%m-%d %H:%M %Z').strip()})"]
 
     # Show plan phase context
     plan_info = _infer_plan_info(activities)
@@ -267,7 +257,7 @@ async def sync_trainerroad_calendar(
     if races:
         lines.append("  Upcoming Races:")
         for r in races:
-            priority_label = {1: "A", 2: "B", 3: "C"}.get(r.race_priority, "?")
+            priority_label = {1: "C", 2: "B", 3: "A"}.get(r.race_priority, "?")
             name = r.workout_name or "Race"
             lines.append(f"    {r.date} — [{priority_label} Race] {name}")
         lines.append("")
@@ -409,6 +399,7 @@ async def get_trainerroad_workouts(
     start_date: str | None = None,
     end_date: str | None = None,
     include_details: bool = False,
+    debug_raw: bool = False,
 ) -> str:
     """Fetch upcoming planned workouts and races from your TrainerRoad calendar (read-only).
 
@@ -420,6 +411,7 @@ async def get_trainerroad_workouts(
         start_date: Start date in YYYY-MM-DD (defaults to today)
         end_date: End date in YYYY-MM-DD (defaults to 6 months out)
         include_details: If True, also fetches interval structure for each workout
+        debug_raw: If True, returns raw JSON from TR API for diagnosing field mapping
     """
     client = _get_tr_client()
     if not client:
@@ -444,6 +436,11 @@ async def get_trainerroad_workouts(
         activities = await client.get_calendar_activities(start, end)
     except httpx.HTTPStatusError as e:
         return f"Error fetching TR calendar: {e}"
+
+    if debug_raw:
+        import json
+        raw_data = await client._get_raw_calendar(start, end)
+        return json.dumps(raw_data[:5], indent=2, default=str)
 
     # Infer plan phase from activity metadata if API endpoint didn't return it
     if not plan_info and activities:
