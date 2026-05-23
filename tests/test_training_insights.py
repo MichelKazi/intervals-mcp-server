@@ -1,0 +1,170 @@
+"""Tests for the polars-based training analytics engine."""
+
+import asyncio
+import os
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
+os.environ.setdefault("API_KEY", "test")
+os.environ.setdefault("ATHLETE_ID", "i1")
+
+from intervals_mcp_server.analytics.engine import TrainingAnalytics
+from intervals_mcp_server.tools.training_insights import get_training_insights
+
+
+def _make_activities(n=20, base_load=80):
+    """Generate fake activity dicts spanning multiple weeks."""
+    from datetime import datetime, timedelta
+
+    acts = []
+    start = datetime(2024, 3, 1)
+    for i in range(n):
+        d = start + timedelta(days=i * 2)
+        acts.append({
+            "id": f"a{i}",
+            "start_date_local": d.strftime("%Y-%m-%dT08:00:00"),
+            "type": "Ride" if i % 3 != 0 else "Run",
+            "name": f"Activity {i}",
+            "moving_time": 3600 + i * 120,
+            "distance": 30000 + i * 1000,
+            "icu_training_load": base_load + i * 3,
+            "icu_average_watts": 200 + i * 2,
+            "average_heartrate": 140 + (i % 5),
+            "icu_efficiency_factor": 1.4 + i * 0.01,
+            "decoupling": 3.0 + (i % 4) * 0.5,
+        })
+    return acts
+
+
+def _make_wellness(n=28):
+    """Generate fake wellness dicts."""
+    from datetime import datetime, timedelta
+
+    entries = []
+    start = datetime(2024, 3, 1)
+    for i in range(n):
+        d = start + timedelta(days=i)
+        entries.append({
+            "id": d.strftime("%Y-%m-%d"),
+            "ctl": 60 + i * 0.5,
+            "atl": 55 + i * 0.7,
+            "rampRate": 0.5,
+            "hrv": 45 + (i % 7),
+            "restingHR": 52 + (i % 3),
+            "sleepSecs": 25200 + i * 300,
+            "sleepQuality": 2,
+            "weight": 72.0,
+            "soreness": 3,
+            "fatigue": 4,
+            "stress": 3,
+            "mood": 7,
+            "motivation": 8,
+        })
+    return entries
+
+
+def test_activities_frame():
+    acts = _make_activities(10)
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    assert len(df) == 10
+    assert "load" in df.columns
+    assert "date" in df.columns
+    assert df["load"].sum() > 0
+
+
+def test_wellness_frame():
+    well = _make_wellness(14)
+    analytics = TrainingAnalytics()
+    df = analytics.wellness_frame(well)
+    assert len(df) == 14
+    assert "ctl" in df.columns
+    assert "hrv" in df.columns
+
+
+def test_load_trend():
+    acts = _make_activities(30, base_load=60)
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    trend = analytics.load_trend(df, weeks=6)
+    assert "weeks" in trend
+    assert len(trend["weeks"]) > 0
+    assert trend["current_load"] > 0
+
+
+def test_efficiency_trend():
+    acts = _make_activities(20)
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    eff = analytics.efficiency_trend(df, weeks=6)
+    assert "weeks" in eff
+    assert len(eff["weeks"]) > 0
+    assert eff["trend_pct"] is not None
+
+
+def test_wellness_trends():
+    well = _make_wellness(28)
+    analytics = TrainingAnalytics()
+    wf = analytics.wellness_frame(well)
+    trends = analytics.wellness_trends(wf, days=28)
+    assert "hrv" in trends
+    assert "resting_hr" in trends
+    assert "tsb" in trends
+    assert trends["hrv"]["current"] > 0
+
+
+def test_standout_efforts():
+    acts = _make_activities(20, base_load=60)
+    # Add one outlier
+    acts.append({
+        "id": "outlier",
+        "start_date_local": "2024-03-30T08:00:00",
+        "type": "Ride",
+        "name": "Big Effort",
+        "moving_time": 14400,
+        "distance": 120000,
+        "icu_training_load": 350,
+        "icu_average_watts": 280,
+        "average_heartrate": 155,
+    })
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    standouts = analytics.standout_efforts(df, days=60)
+    assert len(standouts) > 0
+    assert any(s["name"] == "Big Effort" for s in standouts)
+
+
+def test_sport_distribution():
+    acts = _make_activities(15)
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    dist = analytics.sport_distribution(df)
+    assert len(dist) == 2  # Ride + Run
+    types = [d["type"] for d in dist]
+    assert "Ride" in types
+    assert "Run" in types
+
+
+def test_get_training_insights_tool(monkeypatch):
+    """Integration test: the MCP tool returns formatted output."""
+    acts = _make_activities(20)
+    well = _make_wellness(28)
+
+    call_count = {"n": 0}
+
+    async def fake_request(*_args, **kwargs):
+        call_count["n"] += 1
+        url = kwargs.get("url", _args[0] if _args else "")
+        if "wellness" in url:
+            return well
+        return acts
+
+    monkeypatch.setattr("intervals_mcp_server.tools.training_insights.make_intervals_request", fake_request)
+
+    result = asyncio.run(get_training_insights(athlete_id="i1", period="6w"))
+    assert "Training Insights" in result
+    assert "Load Progression:" in result
+    assert "Aerobic Efficiency:" in result
+    assert "Wellness Signals:" in result
+    assert "Sport Mix:" in result

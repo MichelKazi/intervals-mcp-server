@@ -69,6 +69,7 @@ from intervals_mcp_server.tools.wellness import (  # noqa: F401
     get_wellness,
     update_wellness,
 )
+from intervals_mcp_server.tools.training_insights import get_training_insights  # noqa: F401
 from intervals_mcp_server.tools.workouts import manage_workouts  # noqa: F401
 
 
@@ -136,6 +137,8 @@ __all__ = [
     "get_planned_vs_actual",
     "get_efficiency_trend",
     "get_power_profile_assessment",
+    # Training insights (polars)
+    "get_training_insights",
     # TrainerRoad sync
     "sync_trainerroad_calendar",
     "get_trainerroad_workouts",
