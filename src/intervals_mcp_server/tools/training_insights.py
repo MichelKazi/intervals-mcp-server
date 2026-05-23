@@ -200,7 +200,8 @@ async def get_training_insights(
     af = analytics.activities_frame(activities)
     wf = analytics.wellness_frame(wellness_data) if wellness_data else None
 
-    lines = [f"Training Insights ({start_date} to {end_date}, {len(activities)} activities):"]
+    now = datetime.now()
+    lines = [f"Training Insights (generated {now.strftime('%Y-%m-%d %H:%M')}, period {start_date} to {end_date}, {len(activities)} activities):"]
     lines.append("")
 
     # Load trend

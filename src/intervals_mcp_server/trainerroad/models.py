@@ -135,6 +135,9 @@ class TRCalendarActivity:
     activity_type: int
     race_priority: int
     notes: str
+    plan_name: str | None = None
+    block_name: str | None = None
+    week_number: int | None = None
 
     @classmethod
     def from_api(cls, data: dict) -> TRCalendarActivity:
@@ -157,6 +160,12 @@ class TRCalendarActivity:
         raw_priority = data.get("RacePriority", "0") or "0"
         race_priority = int(raw_priority) if str(raw_priority).isdigit() else 0
 
+        # Training plan metadata (TR includes these on calendar entries)
+        plan_name = data.get("TrainingPlanName") or data.get("PlanName")
+        block_name = data.get("Block") or data.get("TrainingBlock") or data.get("BlockName")
+        week_raw = data.get("Week") or data.get("PlanWeek") or data.get("WeekNumber")
+        week_number = int(week_raw) if week_raw and str(week_raw).isdigit() else None
+
         return cls(
             activity_id=str(data.get("Id", "")),
             date=date_str,
@@ -167,6 +176,9 @@ class TRCalendarActivity:
             activity_type=data.get("ActivityType", 0),
             race_priority=race_priority,
             notes=data.get("Notes") or "",
+            plan_name=plan_name,
+            block_name=block_name,
+            week_number=week_number,
         )
 
     @property

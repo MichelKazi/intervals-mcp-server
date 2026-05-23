@@ -215,6 +215,29 @@ class TRClient:
             return []
         return [TRCalendarActivity.from_api(item) for item in data if isinstance(item, dict)]
 
+    async def get_training_plan(self) -> dict:
+        """Fetch current training plan info (phase, week, volume).
+
+        Tries multiple TR API endpoints since the internal API structure varies.
+        Returns raw dict with whatever plan metadata is available.
+        """
+        member = await self.get_member()
+        # Try the training-plan endpoint first
+        for path in (
+            f"/app/api/training-plan/{member.username}",
+            f"/app/api/calendar/training-plan/{member.username}",
+            f"/app/api/training-plans/{member.member_id}",
+        ):
+            try:
+                data = await self._get(path)
+                if isinstance(data, dict) and data:
+                    return data
+                if isinstance(data, list) and data:
+                    return data[0] if isinstance(data[0], dict) else {}
+            except httpx.HTTPStatusError:
+                continue
+        return {}
+
     async def get_workout_details(self, workout_id: str) -> TRWorkoutDetails:
         """Fetch full workout details including interval structure."""
         data = await self._get(f"/app/api/workoutdetails/{workout_id}")

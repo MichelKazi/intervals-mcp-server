@@ -246,36 +246,75 @@ def plain_event_payload(
 def format_tr_calendar_compact(
     activities: list,
     details_map: dict[str, TRWorkoutDetails] | None = None,
+    plan_info: dict | None = None,
 ) -> str:
     """Format TR calendar activities into a compact string for LLM consumption."""
-    if not activities:
-        return "No planned workouts found in the specified date range."
+    from datetime import datetime
 
-    lines = ["TrainerRoad Calendar:"]
+    now = datetime.now()
+    lines = [f"TrainerRoad Calendar (as of {now.strftime('%Y-%m-%d %H:%M')}):"]
+
+    if plan_info:
+        phase = plan_info.get("PhaseName") or plan_info.get("Block") or plan_info.get("CurrentPhase") or ""
+        week = plan_info.get("Week") or plan_info.get("CurrentWeek") or plan_info.get("WeekNumber") or ""
+        plan_name = plan_info.get("PlanName") or plan_info.get("Name") or ""
+        if phase or week:
+            phase_parts = []
+            if plan_name:
+                phase_parts.append(plan_name)
+            if phase:
+                phase_parts.append(f"Phase: {phase}")
+            if week:
+                phase_parts.append(f"Week {week}")
+            lines.append(f"  Plan: {' | '.join(phase_parts)}")
+            lines.append("")
+
+    if not activities:
+        lines.append("No planned workouts found in the specified date range.")
+        return "\n".join(lines)
+
+    races = []
+    workouts = []
+
     for act in activities:
         if act.is_completed:
             continue
+        if act.is_race:
+            races.append(act)
+        elif act.workout_name or act.duration_secs:
+            workouts.append(act)
 
-        name = act.workout_name or "Unnamed"
-        parts = [f"  {act.date} — {name}"]
-        if act.tss:
-            parts.append(f"TSS:{act.tss:.0f}")
-        if act.duration_secs:
-            h, m = divmod(act.duration_secs // 60, 60)
-            if h:
-                parts.append(f"{h}h{m:02d}m")
-            else:
-                parts.append(f"{m}m")
+    if races:
+        lines.append("  Races:")
+        for act in races:
+            priority_label = {1: "A", 2: "B", 3: "C"}.get(act.race_priority, "?")
+            name = act.workout_name or "Race"
+            lines.append(f"    {act.date} — [{priority_label} Race] {name}")
+        lines.append("")
 
-        if details_map and act.activity_id and act.activity_id in details_map:
-            wd = details_map[act.activity_id]
-            structure = build_structure_text(wd.intervals)
-            if structure:
-                step_count = structure.count("\n") + 1
-                parts.append(f"({step_count} steps)")
+    if workouts:
+        lines.append("  Workouts:")
+        for act in workouts:
+            name = act.workout_name or "Unnamed"
+            parts = [f"    {act.date} — {name}"]
+            if act.tss:
+                parts.append(f"TSS:{act.tss:.0f}")
+            if act.duration_secs:
+                h, m = divmod(act.duration_secs // 60, 60)
+                if h:
+                    parts.append(f"{h}h{m:02d}m")
+                else:
+                    parts.append(f"{m}m")
 
-        lines.append(" ".join(parts))
+            if details_map and act.activity_id and act.activity_id in details_map:
+                wd = details_map[act.activity_id]
+                structure = build_structure_text(wd.intervals)
+                if structure:
+                    step_count = structure.count("\n") + 1
+                    parts.append(f"({step_count} steps)")
 
-    if len(lines) == 1:
-        return "No upcoming (unfinished) workouts in the specified date range."
+            lines.append(" ".join(parts))
+
+    if not races and not workouts:
+        lines.append("No upcoming (unfinished) workouts in the specified date range.")
     return "\n".join(lines)

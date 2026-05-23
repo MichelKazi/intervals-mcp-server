@@ -73,6 +73,21 @@ def _default_end_date() -> str:
     return (datetime.now() + timedelta(days=180)).strftime("%Y-%m-%d")
 
 
+def _infer_plan_info(activities: list) -> dict | None:
+    """Infer training plan phase/week from activity metadata when the plan API isn't available."""
+    for act in activities:
+        if act.block_name or act.plan_name or act.week_number:
+            info: dict = {}
+            if act.plan_name:
+                info["PlanName"] = act.plan_name
+            if act.block_name:
+                info["PhaseName"] = act.block_name
+            if act.week_number:
+                info["Week"] = act.week_number
+            return info
+    return None
+
+
 def _event_date(event: dict) -> str:
     """Extract YYYY-MM-DD from an Intervals.icu event."""
     date = event.get("start_date_local", "")
@@ -205,7 +220,7 @@ async def sync_trainerroad_calendar(
 
     planned = [
         a for a in activities
-        if not a.is_completed and a.workout_name and not a.is_rest_day
+        if not a.is_completed and not a.is_rest_day and (a.workout_name or a.is_race)
     ]
 
     try:
@@ -228,7 +243,34 @@ async def sync_trainerroad_calendar(
     deleted = 0
     unchanged = 0
     failed = 0
-    lines = [f"TrainerRoad Sync ({member.username}): {start} to {end}"]
+    now = datetime.now()
+    lines = [f"TrainerRoad Sync ({member.username}): {start} to {end} (as of {now.strftime('%Y-%m-%d %H:%M')})"]
+
+    # Show plan phase context
+    plan_info = _infer_plan_info(activities)
+    if plan_info:
+        phase = plan_info.get("PhaseName", "")
+        week = plan_info.get("Week", "")
+        plan_name = plan_info.get("PlanName", "")
+        phase_parts = []
+        if plan_name:
+            phase_parts.append(plan_name)
+        if phase:
+            phase_parts.append(f"Phase: {phase}")
+        if week:
+            phase_parts.append(f"Week {week}")
+        if phase_parts:
+            lines.append(f"  Plan: {' | '.join(phase_parts)}")
+
+    # Show races prominently
+    races = [a for a in planned if a.is_race]
+    if races:
+        lines.append("  Upcoming Races:")
+        for r in races:
+            priority_label = {1: "A", 2: "B", 3: "C"}.get(r.race_priority, "?")
+            name = r.workout_name or "Race"
+            lines.append(f"    {r.date} — [{priority_label} Race] {name}")
+        lines.append("")
 
     claimed_event_ids: set[str] = set()
 
@@ -368,10 +410,11 @@ async def get_trainerroad_workouts(
     end_date: str | None = None,
     include_details: bool = False,
 ) -> str:
-    """Fetch upcoming planned workouts from your TrainerRoad calendar (read-only).
+    """Fetch upcoming planned workouts and races from your TrainerRoad calendar (read-only).
 
-    Returns a compact list of planned workouts with dates, names, TSS, and duration.
-    Does not modify anything on Intervals.icu.
+    Returns current training phase (Build/Base/Specialty + week number), upcoming races
+    with priority (A/B/C), and planned workouts with dates, names, TSS, and duration.
+    Includes current date/time as a time anchor.
 
     Args:
         start_date: Start date in YYYY-MM-DD (defaults to today)
@@ -391,10 +434,20 @@ async def get_trainerroad_workouts(
     except (TRAuthError, httpx.HTTPStatusError) as e:
         return f"TrainerRoad auth failed: {e}"
 
+    plan_info: dict | None = None
+    try:
+        plan_info = await client.get_training_plan()
+    except (httpx.HTTPStatusError, Exception):
+        pass
+
     try:
         activities = await client.get_calendar_activities(start, end)
     except httpx.HTTPStatusError as e:
         return f"Error fetching TR calendar: {e}"
+
+    # Infer plan phase from activity metadata if API endpoint didn't return it
+    if not plan_info and activities:
+        plan_info = _infer_plan_info(activities)
 
     details_map: dict[str, TRWorkoutDetails] | None = None
     if include_details:
@@ -404,7 +457,7 @@ async def get_trainerroad_workouts(
         ]
         details_map = await _resolve_workout_details(client, planned)
 
-    return format_tr_calendar_compact(activities, details_map)
+    return format_tr_calendar_compact(activities, details_map, plan_info=plan_info)
 
 
 @mcp.tool()
