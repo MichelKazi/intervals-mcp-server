@@ -235,6 +235,287 @@ class TrainingAnalytics:
             .to_dicts()
         )
 
+    @staticmethod
+    def fatigue_risk(df: pl.DataFrame) -> dict[str, Any]:
+        """Acute:chronic workload ratio (ACWR) with injury risk bands.
+
+        ACWR = 7-day rolling load / 28-day rolling load.
+        Risk bands: <0.8 undertrained, 0.8-1.3 sweet spot, 1.3-1.5 caution, >1.5 danger.
+        """
+        daily_load = (
+            df.group_by("date")
+            .agg(pl.col("load").sum().alias("daily_load"))
+            .sort("date")
+        )
+
+        if len(daily_load) < 14:
+            return {"days": [], "current_acwr": None, "risk_band": "insufficient data"}
+
+        # Fill missing dates with 0 load
+        date_range = pl.date_range(
+            daily_load["date"].min(), daily_load["date"].max(), eager=True
+        ).alias("date")
+        full_range = pl.DataFrame({"date": date_range})
+        daily_load = full_range.join(daily_load, on="date", how="left").with_columns(
+            pl.col("daily_load").fill_null(0)
+        )
+
+        daily_load = daily_load.with_columns([
+            pl.col("daily_load").rolling_sum(window_size=7).alias("acute_load"),
+            pl.col("daily_load").rolling_sum(window_size=28).alias("chronic_load"),
+        ]).with_columns(
+            pl.when(pl.col("chronic_load") > 0)
+            .then(pl.col("acute_load") / (pl.col("chronic_load") / 4))
+            .otherwise(None)
+            .alias("acwr")
+        )
+
+        # Only return last 14 days of data
+        recent = daily_load.filter(pl.col("acwr").is_not_null()).tail(14)
+        if recent.is_empty():
+            return {"days": [], "current_acwr": None, "risk_band": "insufficient data"}
+
+        current_acwr = recent["acwr"][-1]
+        if current_acwr < 0.8:
+            risk_band = "undertrained"
+        elif current_acwr <= 1.3:
+            risk_band = "sweet spot"
+        elif current_acwr <= 1.5:
+            risk_band = "caution"
+        else:
+            risk_band = "danger"
+
+        # Week-over-week ACWR trend
+        acwr_7d_ago = recent["acwr"][-8] if len(recent) >= 8 else None
+        acwr_delta = round(current_acwr - acwr_7d_ago, 2) if acwr_7d_ago is not None else None
+
+        # Spike detection: any day in last 7 where ACWR jumped > 0.3 in one day
+        last_7 = recent.tail(7)
+        spikes = []
+        if len(last_7) > 1:
+            acwr_vals = last_7["acwr"].to_list()
+            dates = last_7["date"].to_list()
+            for i in range(1, len(acwr_vals)):
+                if acwr_vals[i] is not None and acwr_vals[i - 1] is not None:
+                    jump = acwr_vals[i] - acwr_vals[i - 1]
+                    if jump > 0.3:
+                        spikes.append({"date": str(dates[i]), "jump": round(jump, 2)})
+
+        return {
+            "days": recent.select("date", "acute_load", "chronic_load", "acwr").to_dicts(),
+            "current_acwr": round(current_acwr, 2),
+            "risk_band": risk_band,
+            "acwr_delta_7d": acwr_delta,
+            "spikes": spikes,
+        }
+
+    @staticmethod
+    def power_curve_progression(
+        recent_curve: list[int | float | None],
+        baseline_curve: list[int | float | None],
+    ) -> dict[str, Any]:
+        """Compare recent power bests to baseline across key durations.
+
+        Returns percentile rank of recent vs baseline at 5s, 30s, 1min, 5min, 20min, 60min.
+        """
+        key_durations = {
+            "5s": 5, "30s": 30, "1min": 60, "5min": 300, "20min": 1200, "60min": 3600,
+        }
+
+        comparisons = []
+        for label, secs in key_durations.items():
+            recent_w = _extract_curve_value(recent_curve, secs)
+            baseline_w = _extract_curve_value(baseline_curve, secs)
+
+            if recent_w is None and baseline_w is None:
+                continue
+
+            entry: dict[str, Any] = {"duration": label, "seconds": secs}
+            if recent_w is not None:
+                entry["recent_watts"] = int(recent_w)
+            if baseline_w is not None:
+                entry["baseline_watts"] = int(baseline_w)
+            if recent_w and baseline_w and baseline_w > 0:
+                entry["pct_of_best"] = round(recent_w / baseline_w * 100, 1)
+            comparisons.append(entry)
+
+        # Identify rider profile (strengths)
+        profile = _classify_power_profile(comparisons)
+
+        return {"comparisons": comparisons, "profile": profile}
+
+    @staticmethod
+    def recovery_patterns(
+        af: pl.DataFrame, wf: pl.DataFrame, lookback_days: int = 60
+    ) -> dict[str, Any]:
+        """Correlate prior-day wellness signals with next-day performance.
+
+        Identifies which recovery metrics (sleep, HRV, RHR, soreness, etc.) are
+        most predictive of performance for this athlete.
+        """
+        af_sorted = af.sort("date")
+        wf_sorted = wf.sort("date")
+
+        if len(af_sorted) < 10 or len(wf_sorted) < 10:
+            return {"correlations": [], "patterns": [], "sample_size": 0}
+
+        # Join: for each activity, get prior-day wellness
+        af_with_prior = af_sorted.with_columns(
+            (pl.col("date") - pl.duration(days=1)).alias("prior_date")
+        )
+
+        joined = af_with_prior.join(
+            wf_sorted, left_on="prior_date", right_on="date", how="inner", suffix="_w"
+        )
+
+        if len(joined) < 8:
+            return {"correlations": [], "patterns": [], "sample_size": len(joined)}
+
+        # Compute correlations between wellness inputs and performance outputs
+        wellness_cols = ["hrv", "resting_hr", "sleep_secs", "soreness", "fatigue", "stress", "mood", "motivation"]
+        perf_cols = ["load", "avg_power", "if_"]
+
+        correlations = []
+        for w_col in wellness_cols:
+            if w_col not in joined.columns:
+                continue
+            w_series = joined[w_col].drop_nulls()
+            if len(w_series) < 8:
+                continue
+
+            for p_col in perf_cols:
+                if p_col not in joined.columns:
+                    continue
+                valid = joined.filter(
+                    pl.col(w_col).is_not_null() & pl.col(p_col).is_not_null()
+                )
+                if len(valid) < 8:
+                    continue
+
+                corr = valid.select(pl.corr(w_col, p_col)).item()
+                if corr is not None and abs(corr) > 0.2:
+                    correlations.append({
+                        "wellness_metric": w_col,
+                        "performance_metric": p_col,
+                        "correlation": round(corr, 3),
+                        "strength": "strong" if abs(corr) > 0.5 else "moderate",
+                        "direction": "positive" if corr > 0 else "negative",
+                        "n": len(valid),
+                    })
+
+        correlations.sort(key=lambda x: -abs(x["correlation"]))
+
+        # Pattern mining: split activities into "good day" vs "bad day" based on load/power
+        # and compare the prior-day wellness between groups
+        patterns = _mine_good_bad_patterns(joined, wellness_cols)
+
+        return {
+            "correlations": correlations[:10],
+            "patterns": patterns,
+            "sample_size": len(joined),
+        }
+
+
+def _mine_good_bad_patterns(joined: pl.DataFrame, wellness_cols: list[str]) -> list[dict[str, Any]]:
+    """Split into top/bottom quartile performance days and compare prior wellness."""
+    load_series = joined["load"].drop_nulls()
+    if len(load_series) < 12:
+        return []
+
+    q75 = load_series.quantile(0.75)
+    q25 = load_series.quantile(0.25)
+    if q75 is None or q25 is None or q75 == q25:
+        return []
+
+    good_days = joined.filter(pl.col("load") >= q75)
+    bad_days = joined.filter(pl.col("load") <= q25)
+
+    if len(good_days) < 3 or len(bad_days) < 3:
+        return []
+
+    patterns = []
+    for col in wellness_cols:
+        if col not in joined.columns:
+            continue
+        good_vals = good_days[col].drop_nulls()
+        bad_vals = bad_days[col].drop_nulls()
+        if len(good_vals) < 3 or len(bad_vals) < 3:
+            continue
+
+        good_mean = good_vals.mean()
+        bad_mean = bad_vals.mean()
+        if good_mean is None or bad_mean is None:
+            continue
+
+        overall_std = joined[col].drop_nulls().std()
+        if not overall_std or overall_std == 0:
+            continue
+
+        effect_size = (good_mean - bad_mean) / overall_std
+        if abs(effect_size) > 0.4:
+            patterns.append({
+                "metric": col,
+                "good_day_avg": round(good_mean, 1),
+                "bad_day_avg": round(bad_mean, 1),
+                "effect_size": round(effect_size, 2),
+                "interpretation": _interpret_pattern(col, effect_size),
+            })
+
+    patterns.sort(key=lambda x: -abs(x["effect_size"]))
+    return patterns[:6]
+
+
+def _interpret_pattern(metric: str, effect_size: float) -> str:
+    """Human-readable interpretation of a wellness→performance pattern."""
+    direction = "higher" if effect_size > 0 else "lower"
+    magnitude = "much" if abs(effect_size) > 0.8 else "somewhat"
+
+    interpretations = {
+        "hrv": f"{magnitude} {direction} HRV the day before predicts better performance",
+        "resting_hr": f"{magnitude} {direction} resting HR the day before predicts better performance",
+        "sleep_secs": f"{magnitude} {'more' if effect_size > 0 else 'less'} sleep the night before predicts better performance",
+        "soreness": f"{magnitude} {direction} soreness score the day before predicts better performance",
+        "fatigue": f"{magnitude} {direction} fatigue score the day before predicts better performance",
+        "stress": f"{magnitude} {direction} stress the day before predicts better performance",
+        "mood": f"{magnitude} {direction} mood the day before predicts better performance",
+        "motivation": f"{magnitude} {direction} motivation the day before predicts better performance",
+    }
+    return interpretations.get(metric, f"{magnitude} {direction} {metric} correlates with better days")
+
+
+def _extract_curve_value(curve: list[int | float | None], secs: int) -> float | None:
+    if not curve:
+        return None
+    if secs < len(curve) and curve[secs] is not None:
+        return float(curve[secs])
+    return None
+
+
+def _classify_power_profile(comparisons: list[dict[str, Any]]) -> str:
+    """Classify rider type based on where they're strongest relative to their own baseline."""
+    if not comparisons:
+        return "unknown"
+
+    best_pct = 0.0
+    best_duration = ""
+    for c in comparisons:
+        pct = c.get("pct_of_best", 0)
+        if pct > best_pct:
+            best_pct = pct
+            best_duration = c["duration"]
+
+    short = ["5s", "30s"]
+    medium = ["1min", "5min"]
+    long = ["20min", "60min"]
+
+    if best_duration in short:
+        return "sprinter/neuromuscular"
+    elif best_duration in medium:
+        return "puncheur/anaerobic"
+    elif best_duration in long:
+        return "time trialist/aerobic"
+    return "all-rounder"
+
 
 def _pct_change(old: float | None, new: float | None) -> float | None:
     if not old or not new:

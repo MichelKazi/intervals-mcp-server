@@ -89,6 +89,9 @@ from intervals_mcp_server.tools.wellness import (  # noqa: E402
     get_wellness,
     update_wellness,
 )
+from intervals_mcp_server.tools.fatigue_risk import get_fatigue_risk  # noqa: E402
+from intervals_mcp_server.tools.power_progression import get_power_progression  # noqa: E402
+from intervals_mcp_server.tools.recovery_patterns import get_recovery_patterns  # noqa: E402
 from intervals_mcp_server.tools.training_insights import get_training_insights  # noqa: E402
 from intervals_mcp_server.tools.workouts import manage_workouts  # noqa: E402
 
@@ -137,6 +140,9 @@ __all__ = [
     "get_efficiency_trend",
     "get_power_profile_assessment",
     "get_training_insights",
+    "get_fatigue_risk",
+    "get_power_progression",
+    "get_recovery_patterns",
     "sync_trainerroad_calendar",
     "get_trainerroad_workouts",
     "get_trainerroad_workout_details",

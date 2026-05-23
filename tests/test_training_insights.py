@@ -10,6 +10,9 @@ os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
 
 from intervals_mcp_server.analytics.engine import TrainingAnalytics
+from intervals_mcp_server.tools.fatigue_risk import get_fatigue_risk
+from intervals_mcp_server.tools.power_progression import get_power_progression
+from intervals_mcp_server.tools.recovery_patterns import get_recovery_patterns
 from intervals_mcp_server.tools.training_insights import get_training_insights
 
 
@@ -151,10 +154,7 @@ def test_get_training_insights_tool(monkeypatch):
     acts = _make_activities(20)
     well = _make_wellness(28)
 
-    call_count = {"n": 0}
-
     async def fake_request(*_args, **kwargs):
-        call_count["n"] += 1
         url = kwargs.get("url", _args[0] if _args else "")
         if "wellness" in url:
             return well
@@ -168,3 +168,223 @@ def test_get_training_insights_tool(monkeypatch):
     assert "Aerobic Efficiency:" in result
     assert "Wellness Signals:" in result
     assert "Sport Mix:" in result
+
+
+def test_fatigue_risk():
+    """Test ACWR computation with enough data."""
+    acts = _make_activities(40, base_load=70)
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    risk = analytics.fatigue_risk(df)
+    assert risk["current_acwr"] is not None
+    assert risk["risk_band"] in ("undertrained", "sweet spot", "caution", "danger")
+    assert len(risk["days"]) > 0
+
+
+def test_fatigue_risk_insufficient_data():
+    """Test ACWR with too little data."""
+    acts = _make_activities(3, base_load=70)
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(acts)
+    risk = analytics.fatigue_risk(df)
+    assert risk["risk_band"] == "insufficient data"
+
+
+def test_fatigue_risk_tool(monkeypatch):
+    """Integration test for the fatigue risk tool."""
+    acts = _make_activities(40, base_load=70)
+
+    async def fake_request(*_args, **_kwargs):
+        return acts
+
+    monkeypatch.setattr("intervals_mcp_server.tools.fatigue_risk.make_intervals_request", fake_request)
+
+    result = asyncio.run(get_fatigue_risk(athlete_id="i1"))
+    assert "Fatigue Risk Assessment" in result
+    assert "ACWR" in result
+
+
+def test_power_curve_progression():
+    """Test power curve comparison."""
+    recent = [None] * 3601
+    baseline = [None] * 3601
+    # Fill key durations
+    for secs, recent_w, baseline_w in [(5, 900, 950), (60, 400, 420), (300, 300, 310), (1200, 270, 280), (3600, 240, 250)]:
+        recent[secs] = recent_w
+        baseline[secs] = baseline_w
+
+    analytics = TrainingAnalytics()
+    result = analytics.power_curve_progression(recent, baseline)
+    assert "comparisons" in result
+    assert len(result["comparisons"]) >= 4
+    assert result["profile"] in ("sprinter/neuromuscular", "puncheur/anaerobic", "time trialist/aerobic", "all-rounder")
+    # Check pct_of_best is computed
+    for c in result["comparisons"]:
+        if c.get("pct_of_best"):
+            assert 80 < c["pct_of_best"] < 100
+
+
+def test_power_progression_tool(monkeypatch):
+    """Integration test for the power progression tool."""
+    curve = [None] * 3601
+    for secs, watts in [(5, 900), (30, 600), (60, 400), (300, 300), (1200, 270), (3600, 240)]:
+        curve[secs] = watts
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs.get("url", "")
+        if "power-curves" in url:
+            return curve
+        # Athlete endpoint for weight
+        return {"weight": 72.0}
+
+    monkeypatch.setattr("intervals_mcp_server.tools.power_progression.make_intervals_request", fake_request)
+
+    result = asyncio.run(get_power_progression(athlete_id="i1"))
+    assert "Power Curve Progression" in result
+    assert "W/kg" in result
+    assert "Profile:" in result
+
+
+def test_recovery_patterns():
+    """Test recovery pattern correlation analysis."""
+    from datetime import datetime, timedelta
+
+    # Create activities and wellness with known correlation:
+    # higher sleep → higher load next day
+    acts = []
+    wellness = []
+    start = datetime(2024, 3, 1)
+    for i in range(30):
+        d = start + timedelta(days=i)
+        sleep_hours = 6 + (i % 3)  # varies 6-8h
+        load = 60 + (i % 3) * 20  # correlates with sleep pattern
+
+        wellness.append({
+            "id": d.strftime("%Y-%m-%d"),
+            "ctl": 60, "atl": 55,
+            "hrv": 45 + (i % 5),
+            "restingHR": 52,
+            "sleepSecs": sleep_hours * 3600,
+            "soreness": 3,
+            "fatigue": 4,
+            "stress": 3,
+            "mood": 7,
+            "motivation": 8,
+        })
+        # Activity is on the next day (so it correlates with prior-day wellness)
+        act_date = d + timedelta(days=1)
+        acts.append({
+            "id": f"a{i}",
+            "start_date_local": act_date.strftime("%Y-%m-%dT08:00:00"),
+            "type": "Ride",
+            "name": f"Ride {i}",
+            "moving_time": 3600,
+            "distance": 30000,
+            "icu_training_load": load,
+            "icu_average_watts": 200 + (i % 3) * 10,
+            "average_heartrate": 140,
+        })
+
+    analytics = TrainingAnalytics()
+    af = analytics.activities_frame(acts)
+    wf = analytics.wellness_frame(wellness)
+    result = analytics.recovery_patterns(af, wf, lookback_days=60)
+
+    assert result["sample_size"] > 0
+    # Should find sleep correlation since we made it deterministic
+    assert len(result["correlations"]) > 0 or len(result["patterns"]) > 0
+
+
+def test_recovery_patterns_tool(monkeypatch):
+    """Integration test for recovery patterns tool."""
+    from datetime import datetime, timedelta
+
+    acts = []
+    wellness = []
+    start = datetime(2024, 3, 1)
+    for i in range(30):
+        d = start + timedelta(days=i)
+        wellness.append({
+            "id": d.strftime("%Y-%m-%d"),
+            "ctl": 60, "atl": 55,
+            "hrv": 45 + (i % 7),
+            "restingHR": 52 + (i % 3),
+            "sleepSecs": 25200 + i * 300,
+            "soreness": 3 + (i % 3),
+            "fatigue": 4,
+            "stress": 3,
+            "mood": 7,
+            "motivation": 8,
+        })
+        act_date = d + timedelta(days=1)
+        acts.append({
+            "id": f"a{i}",
+            "start_date_local": act_date.strftime("%Y-%m-%dT08:00:00"),
+            "type": "Ride",
+            "name": f"Ride {i}",
+            "moving_time": 3600,
+            "distance": 30000,
+            "icu_training_load": 70 + i * 2,
+            "icu_average_watts": 200 + i,
+            "average_heartrate": 140,
+        })
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs.get("url", "")
+        if "wellness" in url:
+            return wellness
+        return acts
+
+    monkeypatch.setattr("intervals_mcp_server.tools.recovery_patterns.make_intervals_request", fake_request)
+
+    result = asyncio.run(get_recovery_patterns(athlete_id="i1", days=60))
+    assert "Recovery Pattern Analysis" in result
+    assert "paired days" in result
+
+
+def test_recovery_patterns_insufficient_data(monkeypatch):
+    """Test graceful handling when not enough paired data."""
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs.get("url", "")
+        if "wellness" in url:
+            return [{"id": "2024-03-01", "ctl": 60, "atl": 55}]
+        return [{"id": "a1", "start_date_local": "2024-03-05T08:00:00", "type": "Ride", "name": "Ride", "moving_time": 3600, "icu_training_load": 80}]
+
+    monkeypatch.setattr("intervals_mcp_server.tools.recovery_patterns.make_intervals_request", fake_request)
+
+    result = asyncio.run(get_recovery_patterns(athlete_id="i1", days=60))
+    assert "Insufficient paired data" in result
+
+
+def test_missing_wellness_fields():
+    """Test that analytics handle sparse wellness data gracefully."""
+    sparse_wellness = [
+        {"id": "2024-03-01", "ctl": 60, "atl": 55},
+        {"id": "2024-03-02", "hrv": 45},
+        {"id": "2024-03-03", "sleepSecs": 28800, "ctl": 62, "atl": 57},
+    ]
+    analytics = TrainingAnalytics()
+    wf = analytics.wellness_frame(sparse_wellness)
+    assert len(wf) == 3
+    trends = analytics.wellness_trends(wf, days=28)
+    # Should still compute TSB from whatever CTL/ATL is available
+    assert "tsb" in trends
+
+
+def test_missing_activity_fields():
+    """Test that analytics handle activities with missing power/HR gracefully."""
+    sparse_acts = [
+        {"id": "a1", "start_date_local": "2024-03-01T08:00:00", "type": "Ride", "name": "Ride 1", "moving_time": 3600, "icu_training_load": 80},
+        {"id": "a2", "start_date_local": "2024-03-03T08:00:00", "type": "Run", "name": "Run 1", "moving_time": 2400, "icu_training_load": 50},
+        {"id": "a3", "start_date_local": "2024-03-05T08:00:00", "type": "Ride", "name": "Ride 2", "moving_time": 5400, "icu_training_load": 120, "icu_average_watts": 220, "average_heartrate": 145},
+    ]
+    analytics = TrainingAnalytics()
+    df = analytics.activities_frame(sparse_acts)
+    assert len(df) == 3
+    # Efficiency should only use the one activity with both power and HR
+    eff = analytics.efficiency_trend(df, weeks=4)
+    assert "weeks" in eff
+    # Load trend should work fine
+    trend = analytics.load_trend(df, weeks=4)
+    assert trend["current_load"] > 0
