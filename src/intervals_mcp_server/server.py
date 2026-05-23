@@ -83,7 +83,9 @@ from intervals_mcp_server.tools.activity_management import (  # pylint: disable=
     update_activity,
 )
 from intervals_mcp_server.tools.activity_review import (  # pylint: disable=wrong-import-position  # noqa: E402
+    get_daily_summary,
     get_latest_activity,
+    get_week_in_review,
     review_activity,
 )
 from intervals_mcp_server.tools.athlete import (  # pylint: disable=wrong-import-position  # noqa: E402
@@ -223,6 +225,8 @@ __all__ = [
     # Activity review
     "get_latest_activity",
     "review_activity",
+    "get_daily_summary",
+    "get_week_in_review",
     # Athlete
     "get_athlete",
     "update_athlete",

@@ -5,6 +5,7 @@ Provides composite tools that combine multiple API calls into single operations,
 reducing round-trips and token usage in LLM conversations.
 """
 
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -15,6 +16,11 @@ from intervals_mcp_server.tools.activities import (
     COACH_TICK_LABELS,
     COACH_TICK_VALUES,
     _is_strava_restricted,
+)
+from intervals_mcp_server.tools.coaching_analytics import (
+    _fetch_activities_range,
+    _fetch_events_range,
+    _fetch_wellness_range,
 )
 from intervals_mcp_server.utils.formatting import format_activity_summary
 from intervals_mcp_server.utils.validation import resolve_athlete_id
@@ -340,5 +346,287 @@ async def review_activity(
     if actions:
         lines.append("")
         lines.append("Actions: " + " | ".join(actions))
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def get_daily_summary(
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """Morning briefing: today's wellness, yesterday's activities, today's planned workouts, and current training load.
+
+    Combines wellness, activities, events, and fitness data into a single call for
+    a daily coaching check-in. Useful as the first call in a coaching conversation.
+
+    Args:
+        athlete_id: The Intervals.icu athlete ID (optional)
+        api_key: The Intervals.icu API key (optional)
+    """
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    wellness = await _fetch_wellness_range(athlete_id_to_use, yesterday, today, api_key)
+    activities = await _fetch_activities_range(athlete_id_to_use, yesterday, today, api_key)
+    events = await _fetch_events_range(athlete_id_to_use, today, tomorrow, api_key)
+
+    lines = [f"Daily Summary ({today}):"]
+
+    # Wellness / readiness
+    today_wellness = None
+    for w in wellness:
+        if w.get("id", "")[:10] == today:
+            today_wellness = w
+            break
+    if not today_wellness and wellness:
+        today_wellness = wellness[-1]
+
+    if today_wellness:
+        lines.append("")
+        lines.append("Wellness:")
+        ctl = today_wellness.get("ctl")
+        atl = today_wellness.get("atl")
+        if ctl is not None and atl is not None:
+            tsb = round(ctl - atl, 1)
+            if tsb > 5:
+                form = "Fresh"
+            elif tsb > -10:
+                form = "Neutral"
+            elif tsb > -25:
+                form = "Fatigued"
+            else:
+                form = "Very Fatigued"
+            lines.append(f"  CTL: {ctl} | ATL: {atl} | TSB: {tsb} ({form})")
+
+        rhr = today_wellness.get("restingHR")
+        hrv = today_wellness.get("hrv")
+        weight = today_wellness.get("weight")
+        sleep_secs = today_wellness.get("sleepSecs")
+        parts = []
+        if rhr:
+            parts.append(f"RHR: {rhr}")
+        if hrv:
+            parts.append(f"HRV: {hrv}")
+        if weight:
+            parts.append(f"Weight: {weight}kg")
+        if sleep_secs:
+            parts.append(f"Sleep: {round(sleep_secs / 3600, 1)}h")
+        if parts:
+            lines.append(f"  {' | '.join(parts)}")
+
+        subjective = []
+        for key, label in [("soreness", "Sore"), ("fatigue", "Fatigue"), ("stress", "Stress"), ("mood", "Mood")]:
+            val = today_wellness.get(key)
+            if val is not None:
+                subjective.append(f"{label}:{val}")
+        if subjective:
+            lines.append(f"  {', '.join(subjective)}")
+
+    # Yesterday's activities
+    yesterday_acts = [
+        a for a in activities
+        if (a.get("start_date_local") or a.get("startTime", ""))[:10] == yesterday
+    ]
+    if yesterday_acts:
+        lines.append("")
+        lines.append("Yesterday's Activities:")
+        for act in yesterday_acts:
+            name = act.get("name", "Unnamed")
+            atype = act.get("type", "")
+            dur = act.get("moving_time") or act.get("elapsed_time")
+            load = act.get("icu_training_load") or act.get("trainingLoad")
+            parts = [f"  {name}"]
+            if atype:
+                parts[0] += f" ({atype})"
+            if dur:
+                parts.append(_seconds_to_hms(dur))
+            if load:
+                parts.append(f"Load: {load:.0f}")
+            tick = act.get("coach_tick")
+            if tick:
+                label = COACH_TICK_LABELS.get(tick, "")
+                if label:
+                    parts.append(f"Coach: {label}")
+            lines.append(" | ".join(parts))
+
+    # Today's planned workouts
+    planned = [e for e in events if e.get("category") == "WORKOUT"]
+    if planned:
+        lines.append("")
+        lines.append("Today's Plan:")
+        for event in planned:
+            name = event.get("name", "Unnamed")
+            etype = event.get("type", "")
+            dur = event.get("moving_time") or event.get("duration")
+            load = event.get("icu_training_load") or event.get("load")
+            desc = event.get("description", "")
+            parts = [f"  {name}"]
+            if etype:
+                parts[0] += f" ({etype})"
+            if dur:
+                parts.append(_seconds_to_hms(dur))
+            if load:
+                parts.append(f"Target Load: {load:.0f}")
+            lines.append(" | ".join(parts))
+            if desc:
+                lines.append(f"    {desc[:120]}")
+    elif not yesterday_acts:
+        lines.append("")
+        lines.append("No planned workouts for today and no activities yesterday.")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def get_week_in_review(
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+    weeks_ago: int = 0,
+) -> str:
+    """Weekly coaching review: activities with coach ticks, load progression, zone distribution, and plan compliance.
+
+    Summarizes the past 7 days (or a specified prior week) with per-activity ratings,
+    aggregated zone time, total load vs plan, and highlights. Designed for end-of-week
+    coaching conversations.
+
+    Args:
+        athlete_id: The Intervals.icu athlete ID (optional)
+        api_key: The Intervals.icu API key (optional)
+        weeks_ago: 0 for current week, 1 for last week, etc. (optional, defaults to 0)
+    """
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    now = datetime.now()
+    end = now - timedelta(weeks=weeks_ago)
+    start = end - timedelta(days=7)
+    start_date = start.strftime("%Y-%m-%d")
+    end_date = end.strftime("%Y-%m-%d")
+
+    activities = await _fetch_activities_range(athlete_id_to_use, start_date, end_date, api_key)
+    events = await _fetch_events_range(athlete_id_to_use, start_date, end_date, api_key)
+    wellness = await _fetch_wellness_range(athlete_id_to_use, start_date, end_date, api_key)
+
+    lines = [f"Week in Review ({start_date} to {end_date}):"]
+
+    if not activities:
+        lines.append("  No activities this week.")
+        return "\n".join(lines)
+
+    # Per-activity summary
+    lines.append("")
+    lines.append("Activities:")
+    total_load = 0.0
+    total_duration = 0.0
+    total_distance = 0.0
+    by_type: dict[str, int] = defaultdict(int)
+    power_zones: dict[int, float] = defaultdict(float)
+    hr_zones: dict[int, float] = defaultdict(float)
+    unreviewed = []
+
+    for act in sorted(activities, key=lambda a: a.get("start_date_local", a.get("startTime", ""))):
+        name = act.get("name", "Unnamed")
+        atype = act.get("type", "Other")
+        date = (act.get("start_date_local") or act.get("startTime", ""))[:10]
+        dur = act.get("moving_time") or act.get("elapsed_time") or 0
+        load = act.get("icu_training_load") or act.get("trainingLoad") or 0
+        dist = act.get("distance") or 0
+        tick = act.get("coach_tick")
+
+        total_load += load
+        total_duration += dur
+        total_distance += dist
+        by_type[atype] += 1
+
+        tick_str = ""
+        if tick:
+            tick_str = f" [{COACH_TICK_LABELS.get(tick, '?')}]"
+        else:
+            unreviewed.append(act.get("id", ""))
+
+        parts = [f"  {date} {name} ({atype})"]
+        if dur:
+            parts.append(_seconds_to_hms(dur))
+        if load:
+            parts.append(f"Load:{load:.0f}")
+        lines.append(f"{' | '.join(parts)}{tick_str}")
+
+        # Aggregate zones
+        pz = act.get("icu_zone_times")
+        if isinstance(pz, list):
+            for i, secs in enumerate(pz):
+                if isinstance(secs, (int, float)) and secs > 0:
+                    power_zones[i + 1] += secs
+        hz = act.get("icu_hr_zone_times")
+        if isinstance(hz, list):
+            for i, secs in enumerate(hz):
+                if isinstance(secs, (int, float)) and secs > 0:
+                    hr_zones[i + 1] += secs
+
+    # Totals
+    lines.append("")
+    lines.append("Totals:")
+    type_summary = ", ".join(f"{v}x {k}" for k, v in sorted(by_type.items()))
+    lines.append(f"  {len(activities)} activities ({type_summary})")
+    lines.append(f"  Duration: {_seconds_to_hms(total_duration)} | Distance: {total_distance/1000:.1f}km | Load: {total_load:.0f}")
+
+    # Zone distribution (compact)
+    total_pz_time = sum(power_zones.values())
+    if total_pz_time > 0:
+        lines.append("")
+        lines.append("Power Zones:")
+        zone_parts = []
+        for z in sorted(power_zones.keys()):
+            pct = round(power_zones[z] / total_pz_time * 100)
+            if pct > 0:
+                zone_parts.append(f"Z{z}:{pct}%")
+        lines.append(f"  {' | '.join(zone_parts)}")
+        easy = sum(power_zones.get(z, 0) for z in [1, 2])
+        hard = sum(power_zones.get(z, 0) for z in [5, 6, 7])
+        lines.append(f"  Easy: {round(easy/total_pz_time*100)}% | Hard: {round(hard/total_pz_time*100)}%")
+
+    # Plan compliance
+    planned = [e for e in events if e.get("category") == "WORKOUT"]
+    if planned:
+        completed = 0
+        planned_load = 0.0
+        for event in planned:
+            event_date = (event.get("start_date_local") or event.get("date", ""))[:10]
+            pl = event.get("icu_training_load") or event.get("load") or 0
+            planned_load += pl
+            day_acts = [
+                a for a in activities
+                if (a.get("start_date_local") or a.get("startTime", ""))[:10] == event_date
+            ]
+            if day_acts:
+                completed += 1
+        lines.append("")
+        compliance = round(completed / len(planned) * 100) if planned else 0
+        lines.append(f"Plan Compliance: {completed}/{len(planned)} workouts ({compliance}%)")
+        if planned_load > 0:
+            lines.append(f"  Planned Load: {planned_load:.0f} | Actual: {total_load:.0f} ({round(total_load/planned_load*100)}%)")
+
+    # CTL progression over the week
+    if wellness:
+        first_w = wellness[0]
+        last_w = wellness[-1]
+        ctl_start = first_w.get("ctl")
+        ctl_end = last_w.get("ctl")
+        if ctl_start is not None and ctl_end is not None:
+            delta = round(ctl_end - ctl_start, 1)
+            lines.append("")
+            lines.append(f"Fitness: CTL {ctl_start} → {ctl_end} ({'+' if delta >= 0 else ''}{delta})")
+
+    # Unreviewed activities
+    if unreviewed:
+        lines.append("")
+        lines.append(f"Unreviewed: {len(unreviewed)} activities need coach tick")
 
     return "\n".join(lines)
