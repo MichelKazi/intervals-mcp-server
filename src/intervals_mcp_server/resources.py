@@ -1,5 +1,6 @@
 """MCP resources for Intervals.icu server — static context for LLM clients."""
 
+from intervals_mcp_server.coaching_principles import format_all_principles, get_principles_for_context, format_principles
 from intervals_mcp_server.mcp_instance import mcp
 from intervals_mcp_server.resource_store import athlete_profile, training_plan
 
@@ -155,6 +156,21 @@ All analytics tools degrade gracefully:
 
 The tools never crash or return empty results without explanation.
 """
+
+
+@mcp.resource("intervals://coaching-principles")
+def get_coaching_principles_resource() -> str:
+    """Full coaching principles knowledge base — distilled from research papers and athlete history. Provides evidence-based thresholds, recommendations, and anti-patterns."""
+    return format_all_principles()
+
+
+@mcp.resource("intervals://coaching-principles/{context}")
+def get_coaching_principles_by_context(context: str) -> str:
+    """Coaching principles filtered by context (e.g., fatigue_risk, aerobic_development, planning, race_prep, nutrition, recovery, build_phase, zone_distribution, readiness)."""
+    principles = get_principles_for_context([context])
+    if not principles:
+        return f"No principles found for context '{context}'. Available: fatigue_risk, aerobic_development, zone_distribution, readiness, planning, nutrition, race_prep, recovery, build_phase."
+    return format_principles(principles)
 
 
 @mcp.resource("intervals://usage-guide")

@@ -5,6 +5,7 @@ from typing import Any
 
 from intervals_mcp_server.analytics.engine import TrainingAnalytics
 from intervals_mcp_server.api.client import make_intervals_request
+from intervals_mcp_server.coaching_principles import get_annotation
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 from intervals_mcp_server.resource_store import athlete_profile
@@ -46,6 +47,24 @@ def _format_load_trend(trend: dict[str, Any]) -> list[str]:
         pct = trend["load_trend_pct"]
         direction = "Building" if pct > 5 else "Tapering" if pct < -5 else "Maintaining"
         lines.append(f"  → {direction} ({pct:+.1f}% over period)")
+
+    # Flag high monotony weeks with research context
+    high_monotony_weeks = [w for w in trend["weeks"] if (w.get("monotony") or 0) > 2.0]
+    if high_monotony_weeks:
+        annotation = get_annotation("monotony_overtraining")
+        if annotation:
+            lines.append(f"  ⚠ {len(high_monotony_weeks)} week(s) with monotony >2.0 — {annotation}")
+
+    # Flag excessive ramp rates
+    for w in trend["weeks"]:
+        delta = w.get("load_delta")
+        prev_load = (w.get("total_load") or 0) - (delta or 0)
+        if delta and prev_load > 0 and (delta / prev_load) > 0.20:
+            annotation = get_annotation("ramp_rate")
+            if annotation:
+                lines.append(f"  ⚠ Week of {str(w['week'])[:10]}: load jumped >{20}% — {annotation}")
+            break
+
     return lines
 
 

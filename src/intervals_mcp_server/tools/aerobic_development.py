@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from intervals_mcp_server.analytics.engine import TrainingAnalytics
 from intervals_mcp_server.api.client import make_intervals_request
+from intervals_mcp_server.coaching_principles import get_annotation
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 from intervals_mcp_server.utils.validation import resolve_athlete_id
@@ -127,14 +128,25 @@ async def get_aerobic_development(
         lines.append(f"Pacing & Drift: r={pacing['vi_drift_correlation']:+.3f}")
         lines.append(f"  → {pacing['interpretation']}")
 
-    # Actionable summary
+    # Research context
     lines.append("")
+    if threshold or (concerning and len(concerning) >= 2):
+        annotation = get_annotation("cardiac_drift_threshold")
+        if annotation:
+            lines.append(f"  Research: {annotation}")
+        annotation = get_annotation("volume_before_intensity")
+        if annotation:
+            lines.append(f"  Research: {annotation}")
+        lines.append("")
+
+    # Actionable summary
     lines.append("Recommendations:")
     if trend and trend["direction"] == "improving":
         lines.append("  Current approach working — maintain zone 2 volume")
     elif threshold:
         lines.append(f"  Build longer steady rides to push drift threshold past {threshold}")
         lines.append("  Keep intensity strictly Z2 (IF 0.65-0.75) on base rides")
+        lines.append("  Do not advance to build phase until drift <5% at target endurance duration")
     if concerning:
         lines.append("  Address easy-ride drift with nose-breathing discipline and lower targets")
     if pacing and pacing["vi_drift_correlation"] > 0.3:

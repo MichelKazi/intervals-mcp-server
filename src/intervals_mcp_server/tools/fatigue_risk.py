@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from intervals_mcp_server.analytics.engine import TrainingAnalytics
 from intervals_mcp_server.api.client import make_intervals_request
+from intervals_mcp_server.coaching_principles import get_annotation
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 from intervals_mcp_server.utils.validation import resolve_athlete_id
@@ -83,13 +84,26 @@ async def get_fatigue_risk(
                 band = "●" if 0.8 <= acwr <= 1.3 else "⚠" if acwr <= 1.5 else "✗"
                 lines.append(f"    {date_str}: {acwr:.2f} {band} (acute={acute:.0f}, chronic={chronic:.0f})")
 
-    # Recommendation
+    # Research-backed annotation
     lines.append("")
     band = risk["risk_band"]
+    if band in ("danger", "caution"):
+        annotation = get_annotation("acwr_injury_risk")
+        if annotation:
+            lines.append(f"  Research: {annotation}")
+    if risk.get("acwr_delta_7d") and risk["acwr_delta_7d"] > 0.2:
+        annotation = get_annotation("ramp_rate")
+        if annotation:
+            lines.append(f"  Research: {annotation}")
+
+    # Recommendation
+    lines.append("")
     if band == "danger":
         lines.append("  Recommendation: Significant deload needed. High injury risk from rapid load spike.")
+        lines.append("  Action: Reduce volume 30%, maintain frequency. No new intensity for 3-5 days.")
     elif band == "caution":
         lines.append("  Recommendation: Moderate today. Avoid adding volume — consolidate current load.")
+        lines.append("  Action: Reduce volume 20%, keep scheduled intensity but fewer intervals.")
     elif band == "undertrained":
         lines.append("  Recommendation: Safe to increase load. Build gradually (≤10% weekly increase).")
     else:
