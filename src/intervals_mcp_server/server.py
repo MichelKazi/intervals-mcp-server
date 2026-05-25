@@ -93,6 +93,7 @@ from intervals_mcp_server.tools.wellness import (  # noqa: E402
     get_wellness,
     update_wellness,
 )
+from intervals_mcp_server.tools.wellness_journal import sync_wellness_journal  # noqa: E402
 from intervals_mcp_server.tools.aerobic_development import get_aerobic_development  # noqa: E402
 from intervals_mcp_server.tools.fatigue_risk import get_fatigue_risk  # noqa: E402
 from intervals_mcp_server.tools.power_progression import get_power_progression  # noqa: E402
@@ -153,10 +154,16 @@ __all__ = [
     "get_trainerroad_workouts",
     "get_trainerroad_workout_details",
     "get_athlete_context",
+    "sync_wellness_journal",
 ]
 
 
 if __name__ == "__main__":
     validate_athlete_id(config.athlete_id)
+
+    # Sync coaching principles from Supabase staging (no-ops if not configured)
+    from intervals_mcp_server.coaching_principles import sync_coaching_principles
+    sync_coaching_principles()
+
     selected_transport = setup_transport()
     start_server(mcp, selected_transport)

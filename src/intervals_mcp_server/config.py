@@ -31,6 +31,8 @@ class Config:
     trainerroad_password: str
     trainerroad_cookie: str
     trainerroad_member_id: str
+    supabase_url: str
+    supabase_service_role_key: str
 
 
 _config_instance: Config | None = None  # pylint: disable=invalid-name
@@ -54,6 +56,8 @@ def load_config() -> Config:
     trainerroad_password = os.getenv("TRAINERROAD_PASSWORD", "")
     trainerroad_cookie = os.getenv("TRAINERROAD_COOKIE", "")
     trainerroad_member_id = os.getenv("TRAINERROAD_MEMBER_ID", "")
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
     # Validate athlete_id if provided (empty string is allowed)
     if athlete_id:
@@ -68,6 +72,8 @@ def load_config() -> Config:
         trainerroad_password=trainerroad_password,
         trainerroad_cookie=trainerroad_cookie,
         trainerroad_member_id=trainerroad_member_id,
+        supabase_url=supabase_url,
+        supabase_service_role_key=supabase_service_role_key,
     )
 
 

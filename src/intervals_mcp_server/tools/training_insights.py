@@ -9,6 +9,7 @@ from intervals_mcp_server.coaching_principles import get_annotation
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 from intervals_mcp_server.resource_store import athlete_profile
+from intervals_mcp_server.risk_flags import raise_risk_flag, resolve_risk_flag
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 config = get_config()
@@ -173,6 +174,78 @@ def _format_sport_dist(dist: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _write_wellness_risk_flags(well_trends: dict[str, Any], wf) -> None:
+    """Detect and write wellness-based risk flags."""
+    import polars as pl
+
+    # HRV suppression
+    hrv_data = well_trends.get("hrv")
+    if hrv_data and hrv_data.get("z_score") is not None:
+        z = hrv_data["z_score"]
+        if z < -2.5:
+            raise_risk_flag("HRV_SUPPRESSION", "critical", {
+                "hrv": hrv_data["current"],
+                "baseline_28d": hrv_data["mean_28d"],
+                "z_score": z,
+            }, "get_training_insights")
+        elif z < -1.5:
+            raise_risk_flag("HRV_SUPPRESSION", "warning", {
+                "hrv": hrv_data["current"],
+                "baseline_28d": hrv_data["mean_28d"],
+                "z_score": z,
+            }, "get_training_insights")
+        else:
+            resolve_risk_flag("HRV_SUPPRESSION")
+
+    # RHR elevated
+    rhr_data = well_trends.get("resting_hr")
+    if rhr_data and rhr_data.get("z_score") is not None:
+        z = rhr_data["z_score"]
+        if z > 2.5:
+            raise_risk_flag("RHR_ELEVATED", "critical", {
+                "rhr": rhr_data["current"],
+                "baseline_28d": rhr_data["mean_28d"],
+                "z_score": z,
+            }, "get_training_insights")
+        elif z > 1.5:
+            raise_risk_flag("RHR_ELEVATED", "warning", {
+                "rhr": rhr_data["current"],
+                "baseline_28d": rhr_data["mean_28d"],
+                "z_score": z,
+            }, "get_training_insights")
+        else:
+            resolve_risk_flag("RHR_ELEVATED")
+
+    # Sleep debt: check for 3+ consecutive days below baseline
+    sleep_data = well_trends.get("sleep_secs")
+    if sleep_data and sleep_data.get("mean_28d"):
+        baseline_h = sleep_data["mean_28d"] / 3600
+        try:
+            sleep_series = wf.sort("date")["sleep_secs"].drop_nulls().tail(7)
+            if len(sleep_series) >= 3:
+                consecutive = 0
+                max_consecutive = 0
+                avg_sleep_h = 0.0
+                for val in sleep_series.to_list():
+                    if val / 3600 < baseline_h * 0.85:
+                        consecutive += 1
+                        max_consecutive = max(max_consecutive, consecutive)
+                    else:
+                        consecutive = 0
+                recent_vals = sleep_series.tail(max_consecutive).to_list() if max_consecutive >= 3 else []
+                if max_consecutive >= 3 and recent_vals:
+                    avg_sleep_h = sum(v / 3600 for v in recent_vals) / len(recent_vals)
+                    raise_risk_flag("SLEEP_DEBT", "warning", {
+                        "avg_sleep_h": round(avg_sleep_h, 1),
+                        "baseline_h": round(baseline_h, 1),
+                        "consecutive_days": max_consecutive,
+                    }, "get_training_insights")
+                else:
+                    resolve_risk_flag("SLEEP_DEBT")
+        except Exception:
+            pass
+
+
 @mcp.tool()
 async def get_training_insights(
     athlete_id: str | None = None,
@@ -244,6 +317,7 @@ async def get_training_insights(
         if well_trends:
             lines.extend(_format_wellness(well_trends))
             lines.append("")
+            _write_wellness_risk_flags(well_trends, wf)
 
     # Standout efforts
     standouts = analytics.standout_efforts(af, days=min(weeks * 7, 28))

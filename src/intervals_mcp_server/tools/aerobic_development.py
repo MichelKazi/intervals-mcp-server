@@ -7,6 +7,7 @@ from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.coaching_principles import get_annotation
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
+from intervals_mcp_server.risk_flags import raise_risk_flag, resolve_risk_flag
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 config = get_config()
@@ -107,6 +108,17 @@ async def get_aerobic_development(
             lines.append(f"  → Worsening by {abs(trend['improvement_pct']):.1f}% — possible overtraining or detraining")
         else:
             lines.append(f"  → Stable ({trend['improvement_pct']:+.1f}%)")
+
+    # Drift regression risk flag
+    if trend:
+        if trend["direction"] == "declining" and abs(trend["improvement_pct"]) > 15:
+            raise_risk_flag("DRIFT_REGRESSION", "warning", {
+                "recent_avg_drift": round(trend["second_half_avg"], 1),
+                "prior_avg_drift": round(trend["first_half_avg"], 1),
+                "regression_pct": round(abs(trend["improvement_pct"]), 1),
+            }, "get_aerobic_development")
+        else:
+            resolve_risk_flag("DRIFT_REGRESSION")
 
     # Concerning rides
     concerning = dev.get("concerning_rides", [])

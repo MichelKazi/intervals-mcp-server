@@ -7,6 +7,7 @@ from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.coaching_principles import get_annotation
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
+from intervals_mcp_server.risk_flags import raise_risk_flag, resolve_risk_flag
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 config = get_config()
@@ -109,4 +110,82 @@ async def get_fatigue_risk(
     else:
         lines.append("  Recommendation: Training load well managed. Continue as planned.")
 
+    # --- Risk flag writes ---
+    _write_fatigue_risk_flags(risk, af, analytics, weeks=8)
+
     return "\n".join(lines)
+
+
+def _write_fatigue_risk_flags(risk: dict, af, analytics, weeks: int) -> None:
+    """Write/resolve risk flags based on fatigue analysis."""
+    acwr = risk.get("current_acwr")
+    if acwr is not None:
+        if acwr > 1.5:
+            days = risk.get("days", [])
+            days_in_zone = sum(1 for d in days[-7:] if d.get("acwr") and d["acwr"] > 1.3)
+            raise_risk_flag("ACWR_SPIKE", "critical", {
+                "acwr": acwr,
+                "acute_load": days[-1]["acute_load"] if days else 0,
+                "chronic_load": days[-1]["chronic_load"] if days else 0,
+                "days_in_zone": days_in_zone,
+            }, "get_fatigue_risk")
+        elif acwr > 1.3:
+            days = risk.get("days", [])
+            days_in_zone = sum(1 for d in days[-7:] if d.get("acwr") and d["acwr"] > 1.3)
+            raise_risk_flag("ACWR_SPIKE", "warning", {
+                "acwr": acwr,
+                "acute_load": days[-1]["acute_load"] if days else 0,
+                "chronic_load": days[-1]["chronic_load"] if days else 0,
+                "days_in_zone": days_in_zone,
+            }, "get_fatigue_risk")
+        else:
+            resolve_risk_flag("ACWR_SPIKE")
+
+    # Load trend flags (monotony, ramp rate, collapse)
+    load = analytics.load_trend(af, weeks=weeks)
+    load_weeks = load.get("weeks", [])
+    if load_weeks:
+        latest_week = load_weeks[-1]
+        monotony = latest_week.get("monotony")
+        if monotony is not None and monotony > 2.0:
+            daily_loads = []
+            if latest_week.get("mean_load") and latest_week.get("std_load"):
+                daily_loads = []  # Can't reconstruct per-day from weekly aggregates
+            raise_risk_flag("HIGH_MONOTONY", "warning", {
+                "monotony": round(monotony, 2),
+                "week_start": str(latest_week.get("week", ""))[:10],
+            }, "get_fatigue_risk")
+        else:
+            resolve_risk_flag("HIGH_MONOTONY")
+
+        if len(load_weeks) >= 2:
+            current_load = latest_week.get("total_load") or 0
+            prev_load = load_weeks[-2].get("total_load") or 0
+            if prev_load > 0:
+                increase_pct = ((current_load - prev_load) / prev_load) * 100
+                if increase_pct > 30:
+                    raise_risk_flag("RAMP_RATE", "critical", {
+                        "current_week_load": round(current_load),
+                        "prev_week_load": round(prev_load),
+                        "increase_pct": round(increase_pct, 1),
+                    }, "get_fatigue_risk")
+                elif increase_pct > 20:
+                    raise_risk_flag("RAMP_RATE", "warning", {
+                        "current_week_load": round(current_load),
+                        "prev_week_load": round(prev_load),
+                        "increase_pct": round(increase_pct, 1),
+                    }, "get_fatigue_risk")
+                else:
+                    resolve_risk_flag("RAMP_RATE")
+
+            # Load collapse: current week < 50% of 4-week average
+            if len(load_weeks) >= 4:
+                avg_4w = sum(w.get("total_load") or 0 for w in load_weeks[-5:-1]) / 4
+                if avg_4w > 0 and current_load < avg_4w * 0.5:
+                    raise_risk_flag("LOAD_COLLAPSE", "warning", {
+                        "current_week_load": round(current_load),
+                        "avg_4w_load": round(avg_4w),
+                        "drop_pct": round((1 - current_load / avg_4w) * 100, 1),
+                    }, "get_fatigue_risk")
+                else:
+                    resolve_risk_flag("LOAD_COLLAPSE")

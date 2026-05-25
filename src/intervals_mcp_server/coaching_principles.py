@@ -18,8 +18,12 @@ Each principle has:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
+
+logger = logging.getLogger("intervals_icu_mcp_server")
 
 
 @dataclass
@@ -30,6 +34,9 @@ class CoachingPrinciple:
     evidence: str
     threshold: str | None = None
     recommendation: str | None = None
+    source: str = "hardcoded"
+    confidence: str = "established"
+    supersedes: str | None = None
 
 
 PRINCIPLES: list[CoachingPrinciple] = [
@@ -238,11 +245,6 @@ PRINCIPLES: list[CoachingPrinciple] = [
 ]
 
 
-def get_principles_for_context(contexts: list[str]) -> list[CoachingPrinciple]:
-    """Return principles matching any of the given context tags."""
-    return [p for p in PRINCIPLES if any(c in p.context for c in contexts)]
-
-
 def format_principles(principles: list[CoachingPrinciple]) -> str:
     """Format principles as a readable string for MCP resource output."""
     if not principles:
@@ -279,7 +281,7 @@ def format_all_principles() -> str:
         "- Michel Kazi training history 2020-2026",
         "",
     ]
-    lines.append(format_principles(PRINCIPLES))
+    lines.append(format_principles(_merged_principles()))
     return "\n".join(lines)
 
 
@@ -299,10 +301,85 @@ CONTEXT_TAGS: dict[str, list[str]] = {
 
 def get_annotation(principle_id: str) -> str | None:
     """Get a short annotation string for inline use in tool output."""
-    for p in PRINCIPLES:
+    for p in _merged_principles():
         if p.id == principle_id:
             short = p.principle.split(".")[0] + "."
+            prefix = "[experimental] " if p.confidence == "experimental" else ""
             if p.threshold:
-                return f"{short} (trigger: {p.threshold})"
-            return short
+                return f"{prefix}{short} (trigger: {p.threshold})"
+            return f"{prefix}{short}"
     return None
+
+
+# --- Staging sync ---
+
+_staging_principles: list[CoachingPrinciple] = []
+_staging_last_sync: datetime | None = None
+_STAGING_TTL_SECONDS = 300  # Re-check every 5 minutes
+
+
+def sync_coaching_principles() -> int:
+    """Read coaching_principles_staging from Supabase and merge into runtime.
+
+    Returns number of staging principles loaded. Safe to call at any time —
+    no-ops if Supabase is not configured.
+    """
+    global _staging_principles, _staging_last_sync
+
+    from intervals_mcp_server.supabase_client import supabase_select
+
+    rows = supabase_select("coaching_principles_staging", {"active": True})
+    if not rows:
+        _staging_last_sync = datetime.now()
+        return 0
+
+    staging = []
+    for row in rows:
+        staging.append(CoachingPrinciple(
+            id=row["id"],
+            context=row.get("context") or [],
+            principle=row.get("principle", ""),
+            evidence=row.get("evidence", ""),
+            threshold=row.get("threshold"),
+            recommendation=row.get("recommendation"),
+            source="staging",
+            confidence=row.get("confidence", "experimental"),
+            supersedes=row.get("supersedes"),
+        ))
+
+    _staging_principles = staging
+    _staging_last_sync = datetime.now()
+    logger.info(
+        "Loaded %d staging principles, %d supersede hardcoded",
+        len(staging),
+        sum(1 for p in staging if p.supersedes),
+    )
+    return len(staging)
+
+
+def _maybe_refresh_staging() -> None:
+    """Refresh staging if TTL has expired."""
+    global _staging_last_sync
+    if _staging_last_sync is None:
+        sync_coaching_principles()
+        return
+    elapsed = (datetime.now() - _staging_last_sync).total_seconds()
+    if elapsed > _STAGING_TTL_SECONDS:
+        sync_coaching_principles()
+
+
+def _merged_principles() -> list[CoachingPrinciple]:
+    """Return hardcoded + staging principles with supersedes applied."""
+    _maybe_refresh_staging()
+    if not _staging_principles:
+        return PRINCIPLES
+
+    superseded_ids = {p.supersedes for p in _staging_principles if p.supersedes}
+    merged = [p for p in PRINCIPLES if p.id not in superseded_ids]
+    merged.extend(_staging_principles)
+    return merged
+
+
+def get_principles_for_context(contexts: list[str]) -> list[CoachingPrinciple]:
+    """Return principles matching any of the given context tags."""
+    return [p for p in _merged_principles() if any(c in p.context for c in contexts)]
