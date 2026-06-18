@@ -46,24 +46,27 @@ def _get_zone(power_pct: int) -> str:
     return "recovery"
 
 
-def _work_intervals(intervals: list[TRIntervalData]) -> list[TRIntervalData]:
-    """Filter to main-set intervals (skip warmup/cooldown heuristically)."""
+def _main_set_intervals(intervals: list[TRIntervalData]) -> list[TRIntervalData]:
+    """Strip warmup/cooldown from edges but keep inter-set rest intact."""
     work = [iv for iv in intervals if iv.name != "Workout"]
     if not work:
         return []
 
-    # If all intervals are 0% power, it's an unstructured ride — return empty
     if all(iv.start_target_power_percent == 0 for iv in work):
         return []
 
-    # Strip leading low-power intervals (warmup)
     while work and work[0].start_target_power_percent <= 65:
         work = work[1:]
-    # Strip trailing low-power intervals (cooldown)
     while work and work[-1].start_target_power_percent <= 65:
         work = work[:-1]
 
     return work
+
+
+def _work_intervals(intervals: list[TRIntervalData]) -> list[TRIntervalData]:
+    """Filter to active work intervals only (no warmup, cooldown, or inter-set rest)."""
+    main_set = _main_set_intervals(intervals)
+    return [iv for iv in main_set if iv.start_target_power_percent > 65]
 
 
 def classify_zones(intervals: list[TRIntervalData]) -> list[str]:
@@ -93,15 +96,15 @@ def classify_zones(intervals: list[TRIntervalData]) -> list[str]:
 def classify_tags(workout: TRWorkoutDetails) -> list[str]:
     """Derive training tags from workout structure and description."""
     tags: list[str] = []
-    work = _work_intervals(workout.intervals)
-    if not work:
+    main_set = _main_set_intervals(workout.intervals)
+    if not main_set:
         return tags
 
-    powers = [iv.start_target_power_percent for iv in work]
-    durations = [iv.duration_secs for iv in work]
+    powers = [iv.start_target_power_percent for iv in main_set]
+    durations = [iv.duration_secs for iv in main_set]
 
     # Over-under detection: alternating above/below threshold
-    if len(work) >= 4:
+    if len(main_set) >= 4:
         above_below = [p > 100 for p in powers]
         alternations = sum(1 for i in range(1, len(above_below)) if above_below[i] != above_below[i - 1])
         if alternations >= 3:
@@ -184,12 +187,12 @@ def classify_adaptation_target(zones: list[str], tags: list[str]) -> str:
 
 def classify_interval_pattern(intervals: list[TRIntervalData], tags: list[str]) -> str:
     """Classify the interval structure pattern."""
-    work = _work_intervals(intervals)
-    if not work:
+    main_set = _main_set_intervals(intervals)
+    if not main_set:
         return "steady_state"
 
-    powers = [iv.start_target_power_percent for iv in work]
-    durations = [iv.duration_secs for iv in work]
+    powers = [iv.start_target_power_percent for iv in main_set]
+    durations = [iv.duration_secs for iv in main_set]
 
     # Check for existing tag matches (order matters — most specific first)
     if "tabata" in tags:
@@ -211,7 +214,7 @@ def classify_interval_pattern(intervals: list[TRIntervalData], tags: list[str]) 
 
     # Short intervals: 30s-2min work bouts
     short_count = sum(1 for d in durations if 30 <= d <= 120)
-    if short_count >= 4 and short_count / len(work) >= 0.4:
+    if short_count >= 4 and short_count / len(main_set) >= 0.4:
         return "short_intervals"
 
     # Pyramid: power goes up then comes back down
@@ -271,17 +274,17 @@ def classify_race_specificity(workout: TRWorkoutDetails, tags: list[str], patter
 
 
 def compute_work_recovery_durations(intervals: list[TRIntervalData]) -> dict:
-    """Compute typical work and recovery interval durations."""
-    work = _work_intervals(intervals)
-    if not work:
+    """Compute typical work and recovery interval durations from the main set."""
+    main_set = _main_set_intervals(intervals)
+    if not main_set:
         return {"work_duration_avg": 0, "recovery_duration_avg": 0}
 
     work_durations = []
     recovery_durations = []
-    for iv in work:
-        if iv.start_target_power_percent >= 88:
+    for iv in main_set:
+        if iv.start_target_power_percent > 65:
             work_durations.append(iv.duration_secs)
-        elif iv.start_target_power_percent <= 75:
+        else:
             recovery_durations.append(iv.duration_secs)
 
     return {
