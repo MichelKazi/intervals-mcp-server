@@ -13,6 +13,7 @@ from typing import Any
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.api.vault_client import vault_read, vault_write_with_links, vault_update
 from intervals_mcp_server.config import get_config
+from intervals_mcp_server.warnings import collect_warnings
 from intervals_mcp_server.mcp_instance import mcp
 from intervals_mcp_server.supabase_client import get_supabase, supabase_select, supabase_upsert
 
@@ -274,7 +275,7 @@ async def write_race_report(
     vault_ok = await vault_write_with_links(vault_path, note_content)
     vault_status = "written" if vault_ok else "FAILED (pending retry)"
 
-    # 6. Update intervals.icu activity description with vault link (if activity exists)
+    # 6. Update intervals.icu activity description with vault link and mark as race (if activity exists)
     activity_linked = False
     if activity_id and activity:
         existing_desc = activity.get("description") or ""
@@ -282,7 +283,7 @@ async def write_race_report(
         await make_intervals_request(
             url=f"/activity/{activity_id}",
             method="PUT",
-            data={"description": new_desc},
+            data={"description": new_desc, "race": True},
         )
         activity_linked = True
 
@@ -379,14 +380,14 @@ async def link_race_report(
     if isinstance(activity, dict) and activity.get("error"):
         return f"Error: activity {activity_id} not found on intervals.icu"
 
-    # Update activity description with vault link
+    # Update activity description with vault link and mark as race
     if isinstance(activity, dict):
         existing_desc = activity.get("description") or ""
         new_desc = _activity_description_with_link(existing_desc, vault_path)
         await make_intervals_request(
             url=f"/activity/{activity_id}",
             method="PUT",
-            data={"description": new_desc},
+            data={"description": new_desc, "race": True},
         )
 
     # Update Supabase row with activity_id
@@ -513,6 +514,7 @@ async def get_race_report(
     if vault_content:
         output += vault_content
 
+    output += await collect_warnings()
     return output
 
 

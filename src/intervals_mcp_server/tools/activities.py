@@ -11,6 +11,7 @@ from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_activity_message, format_activity_summary, format_intervals
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
+from intervals_mcp_server.warnings import collect_warnings
 
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
@@ -140,6 +141,7 @@ async def get_activities(
             "(connect your device directly to Intervals.icu instead)."
         )
 
+    output += await collect_warnings()
     return output
 
 
@@ -170,6 +172,7 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
         detailed_view += "\nHeart Rate Zones:\n"
         for zone in zones.get("hr", []):
             detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
+    detailed_view += await collect_warnings()
     return detailed_view
 
 
