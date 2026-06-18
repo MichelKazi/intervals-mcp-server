@@ -27,6 +27,12 @@ ZONE_TO_ADAPTATION = {
     "sprint": "sprint_power",
 }
 
+ZONE_INTENSITY_CEILING = {
+    "endurance": 80,
+    "recovery": 60,
+    "tempo": 95,
+    "sweet-spot": 105,
+}
 
 
 def _format_duration(secs: int) -> str:
@@ -125,12 +131,51 @@ def _format_workout_option(
     dur = _format_duration(workout.get("duration_secs", 0))
     tss = workout.get("tss", 0)
     pattern = workout.get("interval_pattern", "")
+    is_race = workout.get("race_specific", False)
 
     line = f"    Option {label}: {name} [{wid}] — {dur}, TSS {tss:.0f}"
     if pattern:
         line += f", {pattern} pattern"
+    if is_race:
+        line += " [RACE-SPECIFIC]"
     line += f"\n      Why: {reasoning}"
     return line
+
+
+def _search_zone_pool(
+    zone: str,
+    adaptation: str | None,
+    tss_floor: float,
+    tss_ceiling: float,
+    duration_max_secs: int,
+    race_specific: bool,
+    indoor_only: bool,
+) -> list[dict]:
+    """Search for workouts appropriate to a zone, with intensity guardrails."""
+    intensity_ceiling = ZONE_INTENSITY_CEILING.get(zone)
+
+    pool = search_library(
+        adaptation_target=adaptation,
+        duration_max=duration_max_secs,
+        duration_min=2700,
+        tss_min=tss_floor,
+        tss_max=tss_ceiling,
+        intensity_max=intensity_ceiling,
+        race_specific=race_specific if race_specific else None,
+        indoor_only=indoor_only if indoor_only else None,
+        limit=12,
+    )
+    if not pool:
+        pool = search_library(
+            adaptation_target=adaptation,
+            duration_max=duration_max_secs,
+            tss_max=tss_ceiling,
+            intensity_max=intensity_ceiling,
+            race_specific=race_specific if race_specific else None,
+            indoor_only=indoor_only if indoor_only else None,
+            limit=12,
+        )
+    return pool
 
 
 @mcp.tool()
@@ -148,6 +193,9 @@ async def build_training_block(
     Produces a week-by-week menu where each hard-day slot has 2-3 workout options with
     coaching reasoning. Uses directeur's planning context to apply constraints (patterns,
     confounds, readiness) and progressive overload. Easy days get duration/zone prescriptions.
+
+    Target TSS represents the total weekly training load budget (hard days + easy days combined).
+    Hard-day workouts are sized to leave room for easy-day volume (estimated at 40-60 TSS/day).
 
     This is a recommendation tool — it does NOT schedule anything. Use create_custom_workout
     or the Intervals.icu calendar to schedule chosen workouts.
@@ -200,9 +248,22 @@ async def build_training_block(
     if volume_collapse:
         constraints_applied.append("volume_collapse detected → Week 1 conservative (-30% TSS)")
 
-    readiness_red = readiness.get("verdict") == "red"
+    readiness_verdict = readiness.get("verdict")
+    readiness_red = readiness_verdict == "red"
+    readiness_yellow = readiness_verdict == "yellow"
+
     if readiness_red:
-        constraints_applied.append("readiness RED → first 2 days are easy regardless")
+        constraints_applied.append(
+            "readiness RED → no structured intensity recommended this week. "
+            "Consider all-easy until readiness improves."
+        )
+    elif readiness_yellow:
+        suggested_hard = max(1, hard_days_per_week - 1)
+        constraints_applied.append(
+            f"readiness YELLOW → consider reducing to {suggested_hard} hard day(s). "
+            f"You requested {hard_days_per_week}; menu generated as requested but "
+            f"use judgment on volume."
+        )
 
     if confound_dates:
         date_strs = sorted(d.isoformat() for d in confound_dates)
@@ -220,12 +281,21 @@ async def build_training_block(
     zone_rotation = _assign_zones_to_days(hard_days_per_week, target_zones)
 
     duration_max_secs = max_duration_minutes * 60
+    hard_budget_per_day = baseline_tss * 0.6 / max(hard_days_per_week, 1)
+    easy_total_per_week = baseline_tss * 0.4
+    tss_floor = hard_budget_per_day * 0.4
+    tss_ceiling = hard_budget_per_day * 1.6
 
     lines = []
     lines.append(f"=== Training Block: {weeks} weeks ({recovery_pattern} pattern) ===")
     lines.append(
         f"Baseline TSS/week: ~{baseline_tss:.0f} | Hard days: {hard_days_per_week}/week | "
         f"Targets: {', '.join(target_zones)}"
+    )
+    lines.append(
+        f"TSS budget: ~{hard_budget_per_day:.0f}/hard day × {hard_days_per_week} + "
+        f"~{easy_total_per_week:.0f} easy/recovery = "
+        f"~{hard_budget_per_day * hard_days_per_week + easy_total_per_week:.0f} total"
     )
 
     if constraints_applied:
@@ -237,24 +307,10 @@ async def build_training_block(
     zone_workout_pools: dict[str, list[dict]] = {}
     for zone in target_zones:
         adaptation = ZONE_TO_ADAPTATION.get(zone)
-        tss_floor = baseline_tss / (hard_days_per_week * 2.5)
-        pool = search_library(
-            adaptation_target=adaptation,
-            duration_max=duration_max_secs,
-            duration_min=2700,
-            tss_min=tss_floor,
-            race_specific=race_specific if race_specific else None,
-            indoor_only=indoor_only if indoor_only else None,
-            limit=12,
+        pool = _search_zone_pool(
+            zone, adaptation, tss_floor, tss_ceiling,
+            duration_max_secs, race_specific, indoor_only,
         )
-        if not pool:
-            pool = search_library(
-                adaptation_target=adaptation,
-                duration_max=duration_max_secs,
-                race_specific=race_specific if race_specific else None,
-                indoor_only=indoor_only if indoor_only else None,
-                limit=12,
-            )
         zone_workout_pools[zone] = pool
 
     for week_idx, week_target in enumerate(week_targets):
@@ -297,6 +353,12 @@ async def build_training_block(
                 )
                 lines.append(_format_workout_option(workout, labels[i], reasoning))
 
+            if len(results) < 3:
+                lines.append(
+                    f"    (Only {len(results)} matching workout(s) in library — "
+                    f"use search_workout_library with wider filters for more options.)"
+                )
+
             lines.append("")
 
         lines.append(
@@ -306,10 +368,23 @@ async def build_training_block(
 
     lines.append("")
     lines.append("---")
+
+    if race_specific:
+        lines.append(
+            "Note: race_specific=true filters for workouts tagged as race-simulation "
+            "(variable power, surges, incomplete recovery). If few results appear, the "
+            "library may not have enough race-tagged inventory for this zone/duration — "
+            "try without race_specific or use search_workout_library directly."
+        )
+
     lines.append(
         "This is a menu of options, not a rigid plan. Pick workouts based on how "
         "you feel each day. Use search_workout_library for alternatives or "
         "create_custom_workout to schedule."
+    )
+    lines.append(
+        "Confound dates are listed but not mapped to specific calendar days here — "
+        "avoid scheduling hard days on those dates when using create_custom_workout."
     )
 
     if not planning_ctx:
