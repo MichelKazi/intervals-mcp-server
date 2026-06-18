@@ -6,27 +6,36 @@ of the classifier (e.g. endurance-labeled workouts that are structurally anaerob
 
 Usage:
     SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... uv run python scripts/reclassify_library.py
+    uv run python scripts/reclassify_library.py --dry-run   # show changes without applying
 """
 
 import json
 import logging
+import os
 import sys
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-from intervals_mcp_server.supabase_client import get_supabase
-from intervals_mcp_server.trainerroad.classifier import (
-    classify_adaptation_target,
-    classify_interval_pattern,
-    classify_race_specificity,
-    classify_tags,
-    classify_zones,
-    compute_intensity_range,
-    compute_work_recovery_durations,
-    count_work_intervals,
-)
+from intervals_mcp_server.trainerroad.classifier import classify_workout
 from intervals_mcp_server.trainerroad.models import TRIntervalData, TRWorkoutDetails
+
+
+def get_client():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+
+    url = os.environ.get("SUPABASE_URL", "")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not url or not key:
+        logger.error("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars.")
+        sys.exit(1)
+
+    from supabase import create_client
+    return create_client(url, key)
 
 
 def intervals_from_json(raw: str | list) -> list[TRIntervalData]:
@@ -63,40 +72,12 @@ def reclassify_row(row: dict) -> dict | None:
         duration_minutes=dur_secs // 60 if dur_secs else 0,
         intervals=intervals,
     )
-
-    zones = classify_zones(intervals)
-    tags = classify_tags(workout)
-    intensity_min, intensity_max = compute_intensity_range(intervals)
-    interval_count = count_work_intervals(intervals)
-    pattern = classify_interval_pattern(intervals, tags)
-    adaptation = classify_adaptation_target(zones, tags)
-    race_specific = classify_race_specificity(workout, tags, pattern)
-    durations = compute_work_recovery_durations(intervals)
-
-    if pattern not in tags:
-        tags.append(pattern)
-    if race_specific and "race-specific" not in tags:
-        tags.append("race-specific")
-
-    return {
-        "zone_focus": zones,
-        "tags": tags,
-        "intensity_min": intensity_min,
-        "intensity_max": intensity_max,
-        "interval_count": interval_count,
-        "adaptation_target": adaptation,
-        "interval_pattern": pattern,
-        "race_specific": race_specific,
-        "work_duration_avg": durations["work_duration_avg"],
-        "recovery_duration_avg": durations["recovery_duration_avg"],
-    }
+    return classify_workout(workout)
 
 
 def main():
-    client = get_supabase()
-    if not client:
-        logger.error("Supabase not configured.")
-        sys.exit(1)
+    dry_run = "--dry-run" in sys.argv
+    client = get_client()
 
     batch_size = 100
     offset = 0
@@ -133,10 +114,17 @@ def main():
                     new_class["interval_pattern"] != old_pattern or
                     new_class["race_specific"] != old_race):
                     changed += 1
+                    if dry_run:
+                        logger.info(
+                            "CHANGE %s: zone %s->%s pattern %s->%s",
+                            row["name"], old_zone, new_class["zone_focus"],
+                            old_pattern, new_class["interval_pattern"],
+                        )
 
-                client.table("tr_workout_library").update(new_class).eq(
-                    "tr_workout_id", row["tr_workout_id"]
-                ).execute()
+                if not dry_run:
+                    client.table("tr_workout_library").update(new_class).eq(
+                        "tr_workout_id", row["tr_workout_id"]
+                    ).execute()
                 updated += 1
             except Exception as e:
                 errors += 1
@@ -145,7 +133,8 @@ def main():
         offset += batch_size
         logger.info("Processed %d rows (%d changed, %d errors)...", updated, changed, errors)
 
-    logger.info("Done. Updated %d rows, %d changed classification, %d errors.", updated, changed, errors)
+    action = "Would update" if dry_run else "Updated"
+    logger.info("Done. %s %d rows, %d changed classification, %d errors.", action, updated, changed, errors)
 
 
 if __name__ == "__main__":
