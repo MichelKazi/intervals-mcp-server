@@ -113,6 +113,11 @@ from intervals_mcp_server.tools.workout_library import (  # noqa: E402
     search_workout_library,
 )
 from intervals_mcp_server.tools.workouts import manage_workouts  # noqa: E402
+from intervals_mcp_server.tools.coaching_state import (  # noqa: E402
+    get_coaching_state,
+    get_readiness_verdict,
+)
+from intervals_mcp_server.tools.training_planner import build_training_block  # noqa: E402
 
 __all__ = [
     "make_intervals_request",
@@ -177,6 +182,9 @@ __all__ = [
     "search_workout_library",
     "get_workout_from_library",
     "create_custom_workout",
+    "get_coaching_state",
+    "get_readiness_verdict",
+    "build_training_block",
 ]
 
 
