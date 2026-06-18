@@ -46,6 +46,16 @@ class TRMemberInfo:
         return self.member_id > 0 and bool(self.username)
 
 
+def _extract_power_percent(data: dict) -> int:
+    """Extract power % from interval data — handles both API formats."""
+    # New format: StartTarget is [low, high] array of %FTP
+    start_target = data.get("StartTarget")
+    if start_target and isinstance(start_target, list) and len(start_target) >= 1:
+        return int(start_target[0])
+    # Legacy format
+    return data.get("StartTargetPowerPercent", 0)
+
+
 @dataclass
 class TRIntervalData:
     """A single interval step within a TR workout."""
@@ -65,7 +75,7 @@ class TRIntervalData:
             name=data.get("Name", ""),
             is_fake=data.get("IsFake", False),
             test_interval=data.get("TestInterval", False),
-            start_target_power_percent=data.get("StartTargetPowerPercent", 0),
+            start_target_power_percent=_extract_power_percent(data),
         )
 
     @property

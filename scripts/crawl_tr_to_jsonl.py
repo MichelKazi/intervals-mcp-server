@@ -101,52 +101,61 @@ async def crawl(limit: int | None = None):
                 if not workouts:
                     break
 
+                # Collect new workout IDs from this page
+                new_wids = []
                 for w in workouts:
                     wid = str(w.get("Id", ""))
                     if not wid or wid in seen_ids:
                         continue
                     seen_ids.add(wid)
+                    new_wids.append(wid)
 
-                    try:
-                        details = await client.get_workout_details(wid)
-                    except Exception as e:
-                        logger.warning("Failed %s: %s", wid, e)
-                        continue
+                # Fetch details concurrently (10 at a time)
+                for batch_start in range(0, len(new_wids), 10):
+                    batch_wids = new_wids[batch_start:batch_start + 10]
+                    tasks = [client.get_workout_details(wid) for wid in batch_wids]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                    classification = classify_workout(details)
-                    intervals_json = [_interval_to_dict(iv) for iv in details.intervals]
+                    for wid, result in zip(batch_wids, results):
+                        if isinstance(result, Exception):
+                            logger.warning("Failed %s: %s", wid, result)
+                            continue
 
-                    row = {
-                        "tr_workout_id": details.workout_id,
-                        "name": details.name,
-                        "description": (details.description or "")[:2000],
-                        "duration_secs": details.duration_secs,
-                        "tss": details.tss,
-                        "is_outside": details.is_outside,
-                        "sport_type": details.sport_type,
-                        "zone_focus": classification["zone_focus"],
-                        "tags": classification["tags"],
-                        "intensity_min": classification["intensity_min"],
-                        "intensity_max": classification["intensity_max"],
-                        "interval_count": classification["interval_count"],
-                        "adaptation_target": classification["adaptation_target"],
-                        "interval_pattern": classification["interval_pattern"],
-                        "race_specific": classification["race_specific"],
-                        "work_duration_avg": classification["work_duration_avg"],
-                        "recovery_duration_avg": classification["recovery_duration_avg"],
-                        "intervals_json": intervals_json,
-                    }
+                        details = result
+                        classification = classify_workout(details)
+                        intervals_json = [_interval_to_dict(iv) for iv in details.intervals]
 
-                    print(json.dumps(row))
-                    total += 1
+                        row = {
+                            "tr_workout_id": details.workout_id,
+                            "name": details.name,
+                            "description": (details.description or "")[:2000],
+                            "duration_secs": details.duration_secs,
+                            "tss": details.tss,
+                            "is_outside": details.is_outside,
+                            "sport_type": details.sport_type,
+                            "zone_focus": classification["zone_focus"],
+                            "tags": classification["tags"],
+                            "intensity_min": classification["intensity_min"],
+                            "intensity_max": classification["intensity_max"],
+                            "interval_count": classification["interval_count"],
+                            "adaptation_target": classification["adaptation_target"],
+                            "interval_pattern": classification["interval_pattern"],
+                            "race_specific": classification["race_specific"],
+                            "work_duration_avg": classification["work_duration_avg"],
+                            "recovery_duration_avg": classification["recovery_duration_avg"],
+                            "intervals_json": intervals_json,
+                        }
 
-                    await asyncio.sleep(0.3)
+                        print(json.dumps(row), flush=True)
+                        total += 1
 
                     if limit and total >= limit:
                         break
 
+                if limit and total >= limit:
+                    break
+
                 page += 1
-                await asyncio.sleep(0.5)
 
             except Exception as e:
                 logger.warning("Error term='%s' page=%d: %s", term, page, e)
