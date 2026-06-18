@@ -52,11 +52,15 @@ def _work_intervals(intervals: list[TRIntervalData]) -> list[TRIntervalData]:
     if not work:
         return []
 
-    # Strip first interval if it's low power (warmup)
-    if work and work[0].start_target_power_percent <= 65:
+    # If all intervals are 0% power, it's an unstructured ride — return empty
+    if all(iv.start_target_power_percent == 0 for iv in work):
+        return []
+
+    # Strip leading low-power intervals (warmup)
+    while work and work[0].start_target_power_percent <= 65:
         work = work[1:]
-    # Strip last interval if it's low power (cooldown)
-    if work and work[-1].start_target_power_percent <= 65:
+    # Strip trailing low-power intervals (cooldown)
+    while work and work[-1].start_target_power_percent <= 65:
         work = work[:-1]
 
     return work
@@ -187,11 +191,11 @@ def classify_interval_pattern(intervals: list[TRIntervalData], tags: list[str]) 
     powers = [iv.start_target_power_percent for iv in work]
     durations = [iv.duration_secs for iv in work]
 
-    # Check for existing tag matches
-    if "over-under" in tags:
-        return "over_under"
+    # Check for existing tag matches (order matters — most specific first)
     if "tabata" in tags:
         return "tabata"
+    if "over-under" in tags:
+        return "over_under"
     if "progressive" in tags:
         return "progressive"
 
