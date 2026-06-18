@@ -94,7 +94,10 @@ def _build_workout_reasoning(
 
     parts = [f"{zone.replace('-', ' ').title()} work — {zone_desc}."]
     if pattern:
-        parts.append(f"Structure: {pattern.replace('_', ' ')} intervals.")
+        pattern_label = pattern.replace("_", " ")
+        if not pattern_label.endswith("intervals"):
+            pattern_label += " intervals"
+        parts.append(f"Structure: {pattern_label}.")
 
     if zone_delta:
         delta = zone_delta.get("personal_delta")
