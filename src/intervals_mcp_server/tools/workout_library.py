@@ -337,6 +337,175 @@ async def create_custom_workout(
     return "\n".join(lines)
 
 
+ZONE_TO_ADAPTATION = {
+    "threshold": "threshold_power",
+    "vo2max": "vo2max",
+    "sweet-spot": "threshold_power",
+    "anaerobic": "anaerobic_capacity",
+    "endurance": "aerobic_base",
+    "tempo": "tempo_endurance",
+    "sprint": "sprint_power",
+    "recovery": "recovery",
+}
+
+
+@mcp.tool()
+async def find_workout_alternatives(
+    tr_workout_id: str,
+    adjustment: str | None = None,
+    target_zone: str | None = None,
+    max_duration_minutes: int | None = None,
+    indoor_only: bool | None = None,
+    limit: int = 5,
+) -> str:
+    """Find alternative workouts based on a reference workout, applying directional adjustments.
+
+    Takes a workout you've already identified and finds alternatives that shift in a
+    specified direction. Useful when the athlete says things like:
+    - "I only have 60 minutes" → adjustment="shorter"
+    - "I'm feeling great, give me something harder" → adjustment="harder"
+    - "Same vibe but with more intervals" → adjustment="similar"
+    - "I don't have the legs for VO2max today" → target_zone="sweet-spot"
+
+    Args:
+        tr_workout_id: The reference workout ID to pivot from
+        adjustment: Direction to shift. Options:
+            - "shorter" — same zone/intensity, less time
+            - "longer" — same zone/intensity, more time
+            - "easier" — same zone, lower TSS/intensity
+            - "harder" — same zone, higher TSS/intensity
+            - "similar" — same zone, duration, and TSS band (different workout)
+            If omitted, defaults to "similar"
+        target_zone: Override the zone entirely (e.g. switch from vo2max to sweet-spot).
+            Options: threshold, vo2max, sweet-spot, anaerobic, endurance, tempo, sprint, recovery
+        max_duration_minutes: Cap the duration of alternatives (e.g. 60 if short on time)
+        indoor_only: Only return indoor/trainer workouts
+        limit: Number of alternatives to return (default 5)
+    """
+    from intervals_mcp_server.supabase_client import get_supabase
+
+    client = get_supabase()
+    if client is None:
+        return "Supabase not configured."
+
+    try:
+        ref_result = (
+            client.table("tr_workout_library")
+            .select("name,duration_secs,tss,zone_focus,adaptation_target,"
+                    "interval_pattern,intensity_min,intensity_max,interval_count,"
+                    "work_duration_avg,is_outside,race_specific")
+            .eq("tr_workout_id", tr_workout_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        return f"Error fetching reference workout: {e}"
+
+    if not ref_result.data:
+        return f"Workout {tr_workout_id} not found in library."
+
+    ref = ref_result.data[0]
+    ref_tss = ref.get("tss") or 0
+    ref_duration = ref.get("duration_secs") or 0
+    ref_zones = ref.get("zone_focus") or []
+    ref_adaptation = ref.get("adaptation_target")
+    ref_intensity_max = ref.get("intensity_max") or 0
+
+    adjustment = adjustment or "similar"
+
+    if target_zone:
+        search_adaptation = ZONE_TO_ADAPTATION.get(target_zone, ref_adaptation)
+    else:
+        search_adaptation = ref_adaptation
+
+    tss_min = None
+    tss_max = None
+    duration_min_secs = None
+    duration_max_secs = None
+    intensity_min = None
+    intensity_max = None
+
+    if adjustment == "shorter":
+        duration_max_secs = int(ref_duration * 0.8)
+        duration_min_secs = int(ref_duration * 0.4)
+        tss_min = ref_tss * 0.5
+        tss_max = ref_tss * 0.9
+    elif adjustment == "longer":
+        duration_min_secs = int(ref_duration * 1.1)
+        duration_max_secs = int(ref_duration * 1.8)
+        tss_min = ref_tss * 1.0
+        tss_max = ref_tss * 1.8
+    elif adjustment == "easier":
+        duration_min_secs = int(ref_duration * 0.7)
+        duration_max_secs = int(ref_duration * 1.1)
+        tss_max = ref_tss * 0.85
+        tss_min = ref_tss * 0.4
+    elif adjustment == "harder":
+        duration_min_secs = int(ref_duration * 0.9)
+        duration_max_secs = int(ref_duration * 1.3)
+        tss_min = ref_tss * 1.1
+        tss_max = ref_tss * 1.8
+    else:  # similar
+        duration_min_secs = int(ref_duration * 0.85)
+        duration_max_secs = int(ref_duration * 1.15)
+        tss_min = ref_tss * 0.85
+        tss_max = ref_tss * 1.15
+
+    if max_duration_minutes:
+        cap = max_duration_minutes * 60
+        if duration_max_secs is None or cap < duration_max_secs:
+            duration_max_secs = cap
+        if duration_min_secs and duration_min_secs > cap:
+            duration_min_secs = int(cap * 0.5)
+
+    results = search_library(
+        adaptation_target=search_adaptation,
+        duration_min=duration_min_secs,
+        duration_max=duration_max_secs,
+        tss_min=tss_min,
+        tss_max=tss_max,
+        intensity_min=intensity_min,
+        intensity_max=intensity_max,
+        indoor_only=indoor_only,
+        limit=limit + 1,
+    )
+
+    results = [w for w in results if w.get("tr_workout_id") != tr_workout_id][:limit]
+
+    if not results:
+        results = search_library(
+            adaptation_target=search_adaptation,
+            duration_max=duration_max_secs,
+            tss_max=tss_max,
+            indoor_only=indoor_only,
+            limit=limit + 1,
+        )
+        results = [w for w in results if w.get("tr_workout_id") != tr_workout_id][:limit]
+
+    ref_name = ref.get("name", "?")
+    ref_dur_str = _format_duration(ref_duration)
+    zone_str = target_zone or (ref_zones[0] if ref_zones else "?")
+
+    lines = [
+        f"Alternatives for {ref_name} [{tr_workout_id}] "
+        f"({ref_dur_str}, TSS {ref_tss:.0f}, {zone_str})",
+        f"Adjustment: {adjustment}"
+        + (f" | Zone override: {target_zone}" if target_zone else ""),
+        "",
+    ]
+
+    if not results:
+        lines.append("No alternatives found with these constraints.")
+        lines.append("Try widening: remove max_duration_minutes, or use a broader adjustment.")
+        return "\n".join(lines)
+
+    for w in results:
+        lines.append(_format_search_result(w))
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def _build_workout_doc(steps: list[dict[str, Any]], description: str | None = None) -> dict:
     """Convert simplified step dicts into intervals.icu workout_doc format."""
     doc_steps = []
