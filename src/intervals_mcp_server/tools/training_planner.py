@@ -27,20 +27,6 @@ ZONE_TO_ADAPTATION = {
     "sprint": "sprint_power",
 }
 
-PATTERN_DESCRIPTIONS = {
-    "over_under": "over-unders build threshold tolerance and lactate clearance",
-    "short_intervals": "short repeats maximize time at high physiological stress",
-    "long_intervals": "long efforts build sustained power and mental toughness",
-    "steady_state": "steady-state work develops pacing discipline",
-    "race_simulation": "mimics race demands with variable power",
-    "progressive": "progressive intervals build fatigue resistance",
-    "tabata": "maximal anaerobic stimulus in minimal time",
-    "microbursts": "neuromuscular power with aerobic recovery stress",
-    "pyramid": "varied durations prevent pacing staleness",
-    "descending": "descending intervals reward finishing strong",
-    "ascending": "ascending intervals build into harder work",
-    "sprint_repeats": "repeated sprints for peak power under fatigue",
-}
 
 
 def _format_duration(secs: int) -> str:
