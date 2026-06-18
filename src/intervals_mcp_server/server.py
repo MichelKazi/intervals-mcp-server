@@ -99,6 +99,12 @@ from intervals_mcp_server.tools.fatigue_risk import get_fatigue_risk  # noqa: E4
 from intervals_mcp_server.tools.power_progression import get_power_progression  # noqa: E402
 from intervals_mcp_server.tools.recovery_patterns import get_recovery_patterns  # noqa: E402
 from intervals_mcp_server.tools.training_insights import get_training_insights  # noqa: E402
+from intervals_mcp_server.tools.race_reports import (  # noqa: E402
+    get_race_report,
+    query_race_reports,
+    verify_race_report_links,
+    write_race_report,
+)
 from intervals_mcp_server.tools.workouts import manage_workouts  # noqa: E402
 
 __all__ = [
@@ -155,6 +161,10 @@ __all__ = [
     "get_trainerroad_workout_details",
     "get_athlete_context",
     "sync_wellness_journal",
+    "write_race_report",
+    "get_race_report",
+    "query_race_reports",
+    "verify_race_report_links",
 ]
 
 
