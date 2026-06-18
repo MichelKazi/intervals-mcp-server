@@ -202,20 +202,22 @@ async def post_level_correction(zone: str, proposed_level: float, rationale: str
 
 
 async def get_coaching_snapshot(zone: str = "threshold") -> dict:
-    """Fetch readiness + patterns concurrently, then progression for key zone."""
+    """Fetch readiness + patterns + levels concurrently, then progression for key zone."""
     config = get_config()
     if not config.directeur_url:
         return {"error": "Coaching state unavailable (DIRECTEUR_URL not configured)."}
 
-    readiness_result, patterns_result = await asyncio.gather(
+    readiness_result, patterns_result, levels_result = await asyncio.gather(
         get_readiness(),
         get_active_patterns(),
+        get_levels(),
         return_exceptions=True,
     )
 
     results: dict = {}
     results["readiness"] = readiness_result if isinstance(readiness_result, dict) else None
     results["patterns"] = patterns_result if isinstance(patterns_result, dict) else None
+    results["levels"] = levels_result if isinstance(levels_result, dict) else None
 
     progression = await get_progression(zone)
     results["progression"] = {zone: progression} if progression else {}

@@ -72,6 +72,19 @@ async def get_coaching_state(zone: str = "threshold") -> str:
     else:
         parts.append("Patterns: unavailable")
 
+    levels_data = snapshot.get("levels")
+    if levels_data and levels_data.get("zones"):
+        zones = levels_data["zones"]
+        sorted_zones = sorted(zones.items(), key=lambda x: x[1].get("level", 0), reverse=True)
+        level_strs = [f"{z.replace('_',' ').title()}={info.get('level', '?')}" for z, info in sorted_zones]
+        parts.append(f"Levels: {', '.join(level_strs)}")
+        # Flag asymmetry if present
+        for info in zones.values():
+            note = info.get("asymmetry_note")
+            if note:
+                parts.append(f"  Asymmetry: {note}")
+                break
+
     progression = snapshot.get("progression", {})
     if progression:
         for z, state in progression.items():
