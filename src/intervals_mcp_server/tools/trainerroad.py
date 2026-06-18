@@ -30,6 +30,7 @@ from intervals_mcp_server.trainerroad.converter import (
     _format_duration,
     _strip_html,
 )
+from intervals_mcp_server.trainerroad.library import upsert_workout
 from intervals_mcp_server.trainerroad.models import (
     TR_ACTIVITY_TYPE_REST,
     TRWorkoutDetails,
@@ -136,6 +137,7 @@ async def _resolve_workout_details(
             seen_names[name] = wd
             if wd:
                 details[act.activity_id] = wd
+                upsert_workout(wd)
         except httpx.HTTPStatusError:
             seen_names[name] = None
 
@@ -501,6 +503,9 @@ async def get_trainerroad_workout_details(
 
     if not workout:
         return f"No workout found matching '{workout_name}' in the TrainerRoad library."
+
+    # Auto-backfill to library cache
+    upsert_workout(workout)
 
     lines = [f"Workout: {workout.name}"]
     lines.append(f"  Sport: {workout.sport_type}")

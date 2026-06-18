@@ -107,6 +107,11 @@ from intervals_mcp_server.tools.race_reports import (  # noqa: E402
     verify_race_report_links,
     write_race_report,
 )
+from intervals_mcp_server.tools.workout_library import (  # noqa: E402
+    create_custom_workout,
+    get_workout_from_library,
+    search_workout_library,
+)
 from intervals_mcp_server.tools.workouts import manage_workouts  # noqa: E402
 
 __all__ = [
@@ -169,6 +174,9 @@ __all__ = [
     "link_race_report",
     "query_race_reports",
     "verify_race_report_links",
+    "search_workout_library",
+    "get_workout_from_library",
+    "create_custom_workout",
 ]
 
 
