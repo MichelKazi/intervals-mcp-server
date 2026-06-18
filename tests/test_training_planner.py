@@ -80,6 +80,7 @@ MOCK_PLANNING_CONTEXT = {
     "readiness": {"verdict": "green", "confounds": {}},
     "confounds_upcoming": [],
     "volume_trend_weekly": [5, 6, 5, 4],
+    "weekly_tss": [380.0, 410.0, 350.0, 390.0],
     "total_scored_recent": 200,
 }
 
@@ -166,7 +167,11 @@ def mock_config(monkeypatch):
     cfg._config_instance = None
 
 
-def _mock_search(zone_focus=None, **kwargs):
+def _mock_search(adaptation_target=None, zone_focus=None, **kwargs):
+    if adaptation_target == "threshold_power":
+        return MOCK_WORKOUTS_THRESHOLD
+    if adaptation_target == "vo2max":
+        return MOCK_WORKOUTS_VO2MAX
     if zone_focus == "threshold":
         return MOCK_WORKOUTS_THRESHOLD
     if zone_focus == "vo2max":
@@ -259,3 +264,81 @@ class TestBuildTrainingBlock:
             result = await build_training_block(weeks=1)
 
         assert "confounds block hard work" in result
+
+    @pytest.mark.asyncio
+    async def test_baseline_tss_from_weekly_tss(self, mock_config):
+        """Bug fix: TSS baseline should come from weekly_tss, not ride counts."""
+        ctx = {
+            **MOCK_PLANNING_CONTEXT,
+            "weekly_tss": [350.0, 400.0, 380.0, 0.0],
+        }
+        with patch("intervals_mcp_server.tools.training_planner.get_planning_context",
+                   new_callable=AsyncMock, return_value=ctx), \
+             patch("intervals_mcp_server.tools.training_planner.search_library",
+                   side_effect=_mock_search):
+            result = await build_training_block(weeks=4, hard_days_per_week=2)
+
+        assert "~0" not in result
+        assert "Baseline TSS/week: ~377" in result
+
+    @pytest.mark.asyncio
+    async def test_baseline_tss_fallback_no_weekly_tss(self, mock_config):
+        """When weekly_tss is absent, falls back to ride count heuristic."""
+        ctx = {
+            **MOCK_PLANNING_CONTEXT,
+            "weekly_tss": [],
+            "volume_trend_weekly": [5, 4, 5, 6],
+        }
+        with patch("intervals_mcp_server.tools.training_planner.get_planning_context",
+                   new_callable=AsyncMock, return_value=ctx), \
+             patch("intervals_mcp_server.tools.training_planner.search_library",
+                   side_effect=_mock_search):
+            result = await build_training_block(weeks=2)
+
+        assert "~0" not in result
+        assert "Baseline TSS/week: ~350" in result
+
+    @pytest.mark.asyncio
+    async def test_searches_by_adaptation_target(self, mock_config):
+        """Bug fix: workout search uses adaptation_target, not zone_focus."""
+        search_calls = []
+
+        def tracking_search(**kwargs):
+            search_calls.append(kwargs)
+            return _mock_search(**kwargs)
+
+        with patch("intervals_mcp_server.tools.training_planner.get_planning_context",
+                   new_callable=AsyncMock, return_value=MOCK_PLANNING_CONTEXT), \
+             patch("intervals_mcp_server.tools.training_planner.search_library",
+                   side_effect=tracking_search):
+            result = await build_training_block(
+                weeks=1, target_zones=["threshold", "vo2max"]
+            )
+
+        assert len(search_calls) >= 2
+        assert search_calls[0]["adaptation_target"] == "threshold_power"
+        assert search_calls[1]["adaptation_target"] == "vo2max"
+        assert "Kaweah +2" in result
+        assert "Brasted +5" in result
+
+    @pytest.mark.asyncio
+    async def test_progressive_overload_nonzero(self, mock_config):
+        """Bug fix: build weeks must show increasing TSS, not all zero."""
+        ctx = {
+            **MOCK_PLANNING_CONTEXT,
+            "weekly_tss": [400.0, 380.0, 420.0, 390.0],
+        }
+        with patch("intervals_mcp_server.tools.training_planner.get_planning_context",
+                   new_callable=AsyncMock, return_value=ctx), \
+             patch("intervals_mcp_server.tools.training_planner.search_library",
+                   side_effect=_mock_search):
+            result = await build_training_block(weeks=4, recovery_pattern="3:1")
+
+        assert "Week 1 (Build)" in result
+        assert "Week 2 (Build)" in result
+        assert "Week 3 (Build)" in result
+        assert "Week 4 (Recovery)" in result
+        # Week 2 TSS should be higher than Week 1
+        assert "Target TSS: ~398" in result  # week 1: baseline * 1.0
+        assert "Target TSS: ~417" in result  # week 2: baseline * 1.05
+        assert "Target TSS: ~437" in result  # week 3: baseline * 1.10

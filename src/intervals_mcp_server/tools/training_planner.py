@@ -17,6 +17,16 @@ ZONE_REASONING = {
     "sprint": "neuromuscular power and peak wattage",
 }
 
+ZONE_TO_ADAPTATION = {
+    "threshold": "threshold_power",
+    "vo2max": "vo2max",
+    "sweet-spot": "threshold_power",
+    "anaerobic": "anaerobic_capacity",
+    "endurance": "aerobic_base",
+    "tempo": "tempo_endurance",
+    "sprint": "sprint_power",
+}
+
 PATTERN_DESCRIPTIONS = {
     "over_under": "over-unders build threshold tolerance and lactate clearance",
     "short_intervals": "short repeats maximize time at high physiological stress",
@@ -189,9 +199,14 @@ async def build_training_block(
         confound_dates = _find_confound_dates(planning_ctx)
 
     baseline_tss = 350.0
-    if volume_trend and len(volume_trend) >= 2:
-        avg_hours = sum(volume_trend) / len(volume_trend)
-        baseline_tss = avg_hours * 60.0
+    weekly_tss = planning_ctx.get("weekly_tss", []) if planning_ctx else []
+    if weekly_tss:
+        nonzero_weeks = [t for t in weekly_tss if t > 0]
+        if nonzero_weeks:
+            baseline_tss = sum(nonzero_weeks) / len(nonzero_weeks)
+    elif volume_trend and any(volume_trend):
+        avg_rides = sum(volume_trend) / len(volume_trend)
+        baseline_tss = avg_rides * 70.0
 
     volume_collapse = any(
         p.get("pattern_type") == "volume_collapse" for p in active_patterns
@@ -251,8 +266,9 @@ async def build_training_block(
             day_num = day_idx + 1
             lines.append(f"  Hard Day {day_num} ({zone}):")
 
+            adaptation = ZONE_TO_ADAPTATION.get(zone)
             results = search_library(
-                zone_focus=zone,
+                adaptation_target=adaptation,
                 duration_max=duration_max_secs,
                 race_specific=race_specific if race_specific else None,
                 indoor_only=indoor_only if indoor_only else None,
