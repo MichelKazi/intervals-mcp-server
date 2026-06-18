@@ -118,6 +118,10 @@ from intervals_mcp_server.tools.coaching_state import (  # noqa: E402
     get_readiness_verdict,
 )
 from intervals_mcp_server.tools.training_planner import build_training_block  # noqa: E402
+from intervals_mcp_server.tools.activity_analysis import (  # noqa: E402
+    analyze_activity,
+    get_activity_analysis,
+)
 
 __all__ = [
     "make_intervals_request",
@@ -185,6 +189,8 @@ __all__ = [
     "get_coaching_state",
     "get_readiness_verdict",
     "build_training_block",
+    "analyze_activity",
+    "get_activity_analysis",
 ]
 
 

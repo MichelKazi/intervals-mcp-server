@@ -99,6 +99,62 @@ async def get_planning_context(lookback_days: int = 28) -> dict | None:
         return None
 
 
+async def trigger_activity_analysis(
+    activity_id: str | None = None,
+    oldest: str | None = None,
+    newest: str | None = None,
+    mode: str | None = None,
+) -> dict | None:
+    """Trigger activity analysis on directeur. Returns summary of what was analyzed."""
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        body: dict = {}
+        if activity_id:
+            body["activity_id"] = activity_id
+        if oldest:
+            body["oldest"] = oldest
+        if newest:
+            body["newest"] = newest
+        if mode:
+            body["mode"] = mode
+        resp = await _get_client().post("/actions/analyze", json=body, timeout=120.0)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur activity analysis trigger failed: %s", e)
+        return None
+
+
+async def get_activity_analysis(activity_id: str) -> dict | None:
+    """Fetch a completed activity analysis from directeur."""
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().get(f"/analysis/{activity_id}")
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur analysis fetch for %s failed: %s", activity_id, e)
+        return None
+
+
+async def get_recent_analyses(limit: int = 5) -> list | None:
+    """Fetch recent activity analyses from directeur."""
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().get("/analysis/recent", params={"limit": limit})
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur recent analyses fetch failed: %s", e)
+        return None
+
+
 async def get_coaching_snapshot(zone: str = "threshold") -> dict:
     """Fetch readiness + patterns concurrently, then progression for key zone."""
     config = get_config()
