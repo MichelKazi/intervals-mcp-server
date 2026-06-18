@@ -169,11 +169,12 @@ async def _fetch_tsb_ctl(date: str) -> tuple[float | None, float | None]:
 
 @mcp.tool()
 async def write_race_report(
-    activity_id: str,
     race_name: str,
     race_type: str,
     result: str,
     report_body: dict[str, str],
+    date: str | None = None,
+    activity_id: str | None = None,
     dropped: bool = False,
     laps_completed: int | None = None,
     total_laps: int | None = None,
@@ -186,15 +187,20 @@ async def write_race_report(
 ) -> str:
     """Write a race report — creates vault note, updates intervals.icu activity/event, indexes in Supabase.
 
-    Idempotent: re-calling with the same activity_id overwrites the existing report.
+    Works regardless of upload order: call with just date if the activity isn't uploaded yet,
+    then use link_race_report later to attach the activity. If activity_id is provided, the
+    activity description is updated immediately.
+
+    Idempotent: re-calling with the same (athlete_id, date, race_name) overwrites the existing report.
 
     Args:
-        activity_id: Intervals.icu activity ID for this race
         race_name: Human-readable race name (e.g. "Table Mountain Crit")
         race_type: Priority level — A, B, or C
         result: Race outcome — DNF, DNS, DQ, "finish", or position like "12th"
         report_body: Dict of section content. Keys: context, what_happened,
                      pattern_mechanism_notes, interpretation, intervention_effectiveness, next_time_track
+        date: Race date YYYY-MM-DD (required if activity_id not provided)
+        activity_id: Intervals.icu activity ID (optional — link later via link_race_report)
         dropped: Whether you were dropped / exited early
         laps_completed: Laps completed before exit (if applicable)
         total_laps: Total laps in the race (if known)
@@ -212,16 +218,21 @@ async def write_race_report(
         if err:
             return f"Error: {err}"
 
-    # 2. Fetch activity to get date and validate existence
-    activity = await make_intervals_request(url=f"/activity/{activity_id}")
-    if isinstance(activity, dict) and activity.get("error"):
-        return f"Error fetching activity {activity_id}: {activity.get('message')}"
-    if not isinstance(activity, dict):
-        return f"Error: unexpected response for activity {activity_id}"
+    # 2. Determine race date — from activity if available, otherwise from date param
+    race_date = date
+    activity = None
 
-    race_date = (activity.get("start_date_local") or activity.get("startTime", ""))[:10]
+    if activity_id:
+        activity = await make_intervals_request(url=f"/activity/{activity_id}")
+        if isinstance(activity, dict) and activity.get("error"):
+            activity = None
+        elif isinstance(activity, dict):
+            activity_date = (activity.get("start_date_local") or activity.get("startTime", ""))[:10]
+            if activity_date:
+                race_date = activity_date
+
     if not race_date:
-        return "Error: could not determine race date from activity"
+        return "Error: provide either activity_id (for an uploaded activity) or date"
 
     # 3. Auto-fetch TSB/CTL if not overridden
     tsb = tsb_override
@@ -250,7 +261,7 @@ async def write_race_report(
         "total_laps": total_laps,
         "tsb_at_race": tsb,
         "ctl_at_race": ctl,
-        "intervals_activity_id": activity_id,
+        "intervals_activity_id": activity_id or "",
         "intervals_event_id": event_id,
         "tags": tags,
         "patterns": patterns or [],
@@ -263,14 +274,17 @@ async def write_race_report(
     vault_ok = await vault_write_with_links(vault_path, note_content)
     vault_status = "written" if vault_ok else "FAILED (pending retry)"
 
-    # 6. Update intervals.icu activity description with vault link
-    existing_desc = activity.get("description") or ""
-    new_desc = _activity_description_with_link(existing_desc, vault_path)
-    await make_intervals_request(
-        url=f"/activity/{activity_id}",
-        method="PUT",
-        data={"description": new_desc},
-    )
+    # 6. Update intervals.icu activity description with vault link (if activity exists)
+    activity_linked = False
+    if activity_id and activity:
+        existing_desc = activity.get("description") or ""
+        new_desc = _activity_description_with_link(existing_desc, vault_path)
+        await make_intervals_request(
+            url=f"/activity/{activity_id}",
+            method="PUT",
+            data={"description": new_desc},
+        )
+        activity_linked = True
 
     # 7. Update event notes if event_id provided
     if event_id:
@@ -286,7 +300,7 @@ async def write_race_report(
                 data={"description": new_event_desc},
             )
 
-    # 8. Upsert Supabase index
+    # 8. Upsert Supabase index (keyed on athlete+date+race_name for order-independence)
     supabase_row = {
         "athlete_id": config.athlete_id,
         "date": race_date,
@@ -297,7 +311,7 @@ async def write_race_report(
         "finish_position": finish_position,
         "tsb_at_race": tsb,
         "ctl_at_race": ctl,
-        "intervals_activity_id": activity_id,
+        "intervals_activity_id": activity_id or "",
         "intervals_event_id": event_id,
         "vault_path": vault_path,
         "patterns": json.dumps(patterns or []),
@@ -305,15 +319,100 @@ async def write_race_report(
         "vault_write_ok": vault_ok,
         "updated_at": datetime.now().isoformat(),
     }
-    supabase_upsert("race_reports", supabase_row, on_conflict="athlete_id,intervals_activity_id")
+    supabase_upsert("race_reports", supabase_row, on_conflict="athlete_id,date,race_name")
 
+    activity_msg = f"Activity {activity_id} description updated" if activity_linked else "No activity linked yet (use link_race_report after upload)"
     return (
         f"Race report {'created' if vault_ok else 'indexed (vault write pending)'}.\n"
         f"  Vault: {vault_path} ({vault_status})\n"
-        f"  Activity {activity_id} description updated\n"
+        f"  {activity_msg}\n"
         f"  {'Event ' + event_id + ' description updated' if event_id else ''}\n"
         f"  Supabase indexed: race_reports\n"
         f"  TSB: {tsb}, CTL: {ctl}, Date: {race_date}"
+    )
+
+
+@mcp.tool()
+async def link_race_report(
+    activity_id: str,
+    date: str | None = None,
+    race_name: str | None = None,
+) -> str:
+    """Link an uploaded activity to an existing race report written before upload.
+
+    Finds the unlinked report by date or race_name, sets the activity_id, updates
+    the activity description with the vault path pointer, and updates the vault note
+    frontmatter with the activity_id.
+
+    Args:
+        activity_id: The intervals.icu activity ID to link
+        date: Race date YYYY-MM-DD to find the report (provide date or race_name)
+        race_name: Race name to find the report (provide date or race_name)
+    """
+    if not date and not race_name:
+        return "Error: provide date or race_name to identify the report to link"
+
+    client = get_supabase()
+    if client is None:
+        return "Error: Supabase not configured"
+
+    # Find the report
+    try:
+        query = client.table("race_reports").select("*").eq("athlete_id", config.athlete_id)
+        if date:
+            query = query.eq("date", date)
+        if race_name:
+            query = query.ilike("race_name", f"%{race_name}%")
+        result = query.limit(1).execute()
+        rows = result.data or []
+    except Exception as e:
+        return f"Error querying race_reports: {e}"
+
+    if not rows:
+        return "No matching race report found to link."
+
+    row = rows[0]
+    vault_path = row.get("vault_path")
+
+    # Validate activity exists
+    activity = await make_intervals_request(url=f"/activity/{activity_id}")
+    if isinstance(activity, dict) and activity.get("error"):
+        return f"Error: activity {activity_id} not found on intervals.icu"
+
+    # Update activity description with vault link
+    if isinstance(activity, dict):
+        existing_desc = activity.get("description") or ""
+        new_desc = _activity_description_with_link(existing_desc, vault_path)
+        await make_intervals_request(
+            url=f"/activity/{activity_id}",
+            method="PUT",
+            data={"description": new_desc},
+        )
+
+    # Update Supabase row with activity_id
+    try:
+        client.table("race_reports").update({
+            "intervals_activity_id": activity_id,
+            "updated_at": datetime.now().isoformat(),
+        }).eq("id", row["id"]).execute()
+    except Exception as e:
+        return f"Error updating Supabase: {e}"
+
+    # Update vault note frontmatter with activity_id
+    if vault_path:
+        content = await vault_read(vault_path)
+        if content and 'intervals_activity_id: ""' in content:
+            updated_content = content.replace(
+                'intervals_activity_id: ""',
+                f'intervals_activity_id: "{activity_id}"',
+            )
+            await vault_update(vault_path, updated_content)
+
+    return (
+        f"Linked activity {activity_id} to race report: {row['race_name']} ({row['date']})\n"
+        f"  Activity description updated with vault pointer\n"
+        f"  Supabase row updated\n"
+        f"  Vault note frontmatter updated"
     )
 
 

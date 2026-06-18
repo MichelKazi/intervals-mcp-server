@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS race_reports (
     finish_position INTEGER,
     tsb_at_race NUMERIC,
     ctl_at_race NUMERIC,
-    intervals_activity_id TEXT NOT NULL,
+    intervals_activity_id TEXT,
     intervals_event_id TEXT,
     vault_path TEXT,
     patterns JSONB DEFAULT '[]'::JSONB,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS race_reports (
     vault_write_ok BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (athlete_id, intervals_activity_id)
+    UNIQUE (athlete_id, date, race_name)
 );
 
 -- Indexes for common query patterns

@@ -101,6 +101,7 @@ from intervals_mcp_server.tools.recovery_patterns import get_recovery_patterns  
 from intervals_mcp_server.tools.training_insights import get_training_insights  # noqa: E402
 from intervals_mcp_server.tools.race_reports import (  # noqa: E402
     get_race_report,
+    link_race_report,
     query_race_reports,
     verify_race_report_links,
     write_race_report,
@@ -163,6 +164,7 @@ __all__ = [
     "sync_wellness_journal",
     "write_race_report",
     "get_race_report",
+    "link_race_report",
     "query_race_reports",
     "verify_race_report_links",
 ]
