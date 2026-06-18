@@ -94,6 +94,8 @@ def test_make_intervals_request_bad_json(monkeypatch, caplog):
             supabase_url="",
             supabase_service_role_key="",
             second_brain_mcp_url="",
+            directeur_url="",
+            directeur_api_key="",
         ),
     )
 

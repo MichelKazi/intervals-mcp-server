@@ -11,6 +11,7 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
+from intervals_mcp_server.directeur_client import get_readiness
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 from intervals_mcp_server.resource_store import athlete_profile
 from intervals_mcp_server.tool_warnings import collect_warnings
@@ -766,5 +767,15 @@ async def get_coaching_brief(
     warnings_block = await collect_warnings()
     if warnings_block:
         lines.append(warnings_block)
+
+    # Directeur readiness (non-blocking enrichment)
+    readiness_data = await get_readiness()
+    if readiness_data and readiness_data.get("verdict"):
+        verdict = readiness_data["verdict"].upper()
+        reasoning = readiness_data.get("reasoning", "")
+        readiness_line = f"  Readiness: {verdict}"
+        if reasoning:
+            readiness_line += f" — {reasoning}"
+        lines.insert(1, readiness_line)
 
     return "\n".join(lines)

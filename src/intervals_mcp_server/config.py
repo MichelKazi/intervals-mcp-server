@@ -34,6 +34,8 @@ class Config:
     supabase_url: str
     supabase_service_role_key: str
     second_brain_mcp_url: str
+    directeur_url: str
+    directeur_api_key: str
 
 
 _config_instance: Config | None = None  # pylint: disable=invalid-name
@@ -60,6 +62,8 @@ def load_config() -> Config:
     supabase_url = os.getenv("SUPABASE_URL", "")
     supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     second_brain_mcp_url = os.getenv("SECOND_BRAIN_MCP_URL", "")
+    directeur_url = os.getenv("DIRECTEUR_URL", "")
+    directeur_api_key = os.getenv("DIRECTEUR_API_KEY", "")
 
     # Validate athlete_id if provided (empty string is allowed)
     if athlete_id:
@@ -77,6 +81,8 @@ def load_config() -> Config:
         supabase_url=supabase_url,
         supabase_service_role_key=supabase_service_role_key,
         second_brain_mcp_url=second_brain_mcp_url,
+        directeur_url=directeur_url,
+        directeur_api_key=directeur_api_key,
     )
 
 
