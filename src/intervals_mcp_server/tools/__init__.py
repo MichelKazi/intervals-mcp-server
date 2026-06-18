@@ -75,6 +75,10 @@ from intervals_mcp_server.tools.power_progression import get_power_progression  
 from intervals_mcp_server.tools.recovery_patterns import get_recovery_patterns  # noqa: F401
 from intervals_mcp_server.tools.training_insights import get_training_insights  # noqa: F401
 from intervals_mcp_server.tools.workouts import manage_workouts  # noqa: F401
+from intervals_mcp_server.tools.progression_levels import (  # noqa: F401
+    correct_progression_level,
+    get_progression_levels,
+)
 
 
 def register_tools(mcp_instance: FastMCP) -> None:
@@ -151,4 +155,7 @@ __all__ = [
     "sync_trainerroad_calendar",
     "get_trainerroad_workouts",
     "get_trainerroad_workout_details",
+    # Progression levels
+    "get_progression_levels",
+    "correct_progression_level",
 ]

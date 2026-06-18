@@ -155,6 +155,52 @@ async def get_recent_analyses(limit: int = 5) -> list | None:
         return None
 
 
+async def get_levels(zone: str | None = None) -> dict | None:
+    """Fetch progression levels from directeur."""
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        path = f"/levels/{zone}" if zone else "/levels"
+        resp = await _get_client().get(path)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur levels fetch failed: %s", e)
+        return None
+
+
+async def recompute_levels() -> dict | None:
+    """Trigger fresh level computation on directeur."""
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().post("/levels/recompute", timeout=60.0)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur levels recompute failed: %s", e)
+        return None
+
+
+async def post_level_correction(zone: str, proposed_level: float, rationale: str, duration_days: int = 14) -> dict | None:
+    """Submit an athlete correction to a progression level."""
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().post(
+            f"/levels/{zone}/correct",
+            json={"proposed_level": proposed_level, "rationale": rationale, "duration_days": duration_days},
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur level correction for %s failed: %s", zone, e)
+        return None
+
+
 async def get_coaching_snapshot(zone: str = "threshold") -> dict:
     """Fetch readiness + patterns concurrently, then progression for key zone."""
     config = get_config()
