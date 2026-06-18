@@ -11,7 +11,7 @@ from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_activity_message, format_activity_summary, format_intervals
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
-from intervals_mcp_server.warnings import collect_warnings
+from intervals_mcp_server.tool_warnings import collect_warnings
 
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 

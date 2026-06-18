@@ -13,7 +13,7 @@ from typing import Any
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.api.vault_client import vault_read, vault_write_with_links, vault_update
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.warnings import collect_warnings
+from intervals_mcp_server.tool_warnings import collect_warnings
 from intervals_mcp_server.mcp_instance import mcp
 from intervals_mcp_server.supabase_client import get_supabase, supabase_select, supabase_upsert
 
