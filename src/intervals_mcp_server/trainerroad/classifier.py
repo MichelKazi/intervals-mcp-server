@@ -64,9 +64,20 @@ def _main_set_intervals(intervals: list[TRIntervalData]) -> list[TRIntervalData]
 
 
 def _work_intervals(intervals: list[TRIntervalData]) -> list[TRIntervalData]:
-    """Filter to active work intervals only (no warmup, cooldown, or inter-set rest)."""
+    """Filter to active work intervals only (no warmup, cooldown, or inter-set rest).
+
+    Uses an adaptive threshold: if the workout contains high-intensity work (>= 110% FTP),
+    the floor for "work" rises to 76% (tempo+) to avoid counting endurance recovery segments
+    between sprint/VO2max efforts as work.
+    """
     main_set = _main_set_intervals(intervals)
-    return [iv for iv in main_set if iv.start_target_power_percent > 65]
+    if not main_set:
+        return []
+
+    peak_power = max(iv.start_target_power_percent for iv in main_set)
+    threshold = 75 if peak_power >= 110 else 65
+
+    return [iv for iv in main_set if iv.start_target_power_percent > threshold]
 
 
 def classify_zones(intervals: list[TRIntervalData]) -> list[str]:
@@ -103,12 +114,17 @@ def classify_tags(workout: TRWorkoutDetails) -> list[str]:
     powers = [iv.start_target_power_percent for iv in main_set]
     durations = [iv.duration_secs for iv in main_set]
 
-    # Over-under detection: alternating above/below threshold
-    if len(main_set) >= 4:
-        above_below = [p > 100 for p in powers]
-        alternations = sum(1 for i in range(1, len(above_below)) if above_below[i] != above_below[i - 1])
-        if alternations >= 3:
-            tags.append("over-under")
+    # Over-under detection: requires genuine repeating two-phase cycle near threshold.
+    # Both phases must be in the 85-108% range (sweet-spot to threshold), and the pattern
+    # must repeat at least 3 times with consistent intensity bands.
+    if len(main_set) >= 6:
+        threshold_band = [iv for iv in main_set if 85 <= iv.start_target_power_percent <= 108]
+        if len(threshold_band) >= 6:
+            tb_powers = [iv.start_target_power_percent for iv in threshold_band]
+            above_below = [p > 97 for p in tb_powers]
+            alternations = sum(1 for i in range(1, len(above_below)) if above_below[i] != above_below[i - 1])
+            if alternations >= 5:
+                tags.append("over-under")
 
     # Short intervals (< 2min work bouts)
     short_count = sum(1 for d in durations if d <= 120)
