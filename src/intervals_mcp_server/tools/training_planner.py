@@ -320,7 +320,7 @@ async def build_training_block(
         week_hard_budget = week_tss * 0.6 / max(hard_days_per_week, 1)
         week_tss_floor = week_hard_budget * 0.7
         week_tss_ceiling = week_hard_budget * 1.3
-        week_duration_min = 2700 + (week_idx * 300)
+        week_duration_min = int(duration_max_secs * (0.5 + week_idx * 0.1))
 
         lines.append(
             f"  Per-session target: ~{week_hard_budget:.0f} TSS "
@@ -337,8 +337,12 @@ async def build_training_block(
                 duration_max_secs, race_specific, indoor_only,
                 duration_min=week_duration_min,
             )
-            pool.sort(key=lambda w: abs(w.get("tss", 0) - week_hard_budget))
-            results = pool[:3]
+            pool.sort(key=lambda w: (
+                abs(w.get("tss", 0) - week_hard_budget),
+                -(w.get("interval_count", 0) or 0),
+            ))
+            progression_offset = week_idx * 3
+            results = pool[progression_offset:progression_offset + 3] or pool[:3]
 
             if not results:
                 lines.append(
