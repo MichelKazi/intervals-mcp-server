@@ -251,6 +251,7 @@ async def get_training_insights(
     athlete_id: str | None = None,
     api_key: str | None = None,
     period: str = "6w",
+    detail: str = "full",
 ) -> str:
     """START HERE for any general training question. Comprehensive server-side analytics in one call.
 
@@ -258,10 +259,13 @@ async def get_training_insights(
     wellness z-scores vs 28-day baseline, standout efforts (statistical outliers),
     and sport distribution. Replaces calling get_activities + get_wellness + manual math.
 
+    Set detail='brief' for a compact summary (≤10 lines).
+
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
         api_key: The Intervals.icu API key (optional)
         period: Analysis window — e.g. "4w", "6w", "8w", "12w" (optional, defaults to "6w")
+        detail: "full" (default) for verbose output, "brief" for compact ≤10 line summary
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -312,6 +316,7 @@ async def get_training_insights(
         lines.append("")
 
     # Wellness
+    well_trends = None
     if wf is not None and not wf.is_empty():
         well_trends = analytics.wellness_trends(wf, days=28)
         if well_trends:
@@ -321,6 +326,71 @@ async def get_training_insights(
 
     # Standout efforts
     standouts = analytics.standout_efforts(af, days=min(weeks * 7, 28))
+
+    # Brief mode - compact summary
+    if detail == "brief":
+        brief_lines = ["Training Insights (brief):"]
+
+        # CTL/ATL/TSB line
+        if wf is not None and not wf.is_empty() and well_trends:
+            tsb = well_trends.get("tsb")
+            ctl = well_trends.get("ctl")
+            atl = well_trends.get("atl")
+            if tsb is not None:
+                if tsb > 15:
+                    form = "Very Fresh"
+                elif tsb > 5:
+                    form = "Fresh"
+                elif tsb > -10:
+                    form = "Neutral"
+                elif tsb > -25:
+                    form = "Fatigued"
+                else:
+                    form = "Very Fatigued"
+                brief_lines.append(f"  Form: CTL={ctl} ATL={atl} TSB={tsb} ({form})")
+
+        # Ramp rate + monotony
+        load_trend_pct = load.get("load_trend_pct")
+        latest_monotony = None
+        if load["weeks"]:
+            latest_monotony = load["weeks"][-1].get("monotony")
+        ramp_parts = []
+        if load_trend_pct is not None:
+            direction = "Building" if load_trend_pct > 5 else "Tapering" if load_trend_pct < -5 else "Maintaining"
+            ramp_parts.append(f"Ramp: {direction} ({load_trend_pct:+.1f}%)")
+        if latest_monotony is not None:
+            ramp_parts.append(f"Monotony={latest_monotony:.1f}")
+        if ramp_parts:
+            brief_lines.append(f"  {' | '.join(ramp_parts)}")
+
+        # Efficiency trend direction
+        if eff["weeks"] and eff.get("trend_pct") is not None:
+            pct = eff["trend_pct"]
+            if pct > 3:
+                eff_dir = f"Improving (+{pct:.1f}%)"
+            elif pct < -3:
+                eff_dir = f"Declining ({pct:.1f}%)"
+            else:
+                eff_dir = f"Stable ({pct:+.1f}%)"
+            brief_lines.append(f"  Efficiency: {eff_dir}")
+
+        # Active risk flags
+        from intervals_mcp_server.risk_flags import get_active_flags
+        active_flags = get_active_flags()
+        if active_flags:
+            flag_strs = [f"{f['flag']}({f['severity']})" for f in active_flags[:3]]
+            brief_lines.append(f"  Risk flags: {', '.join(flag_strs)}")
+        else:
+            brief_lines.append("  Risk flags: none")
+
+        # Top standout effort
+        if standouts:
+            s = standouts[0]
+            brief_lines.append(f"  Standout: {s['date']} {s['name']} — {s['metric']}={s['value']} (z={s['z_score']:+.1f})")
+
+        return "\n".join(brief_lines)
+
+    # Full mode continues below...
     if standouts:
         lines.extend(_format_standouts(standouts))
         lines.append("")

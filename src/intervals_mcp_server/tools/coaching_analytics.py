@@ -90,7 +90,7 @@ async def get_training_load_summary(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> str:
-    """CTL/ATL/TSB trend with weekly snapshots. Prefer get_training_insights for a fuller picture.
+    """DEPRECATED: Use get_training_insights(detail='brief') for load + efficiency + wellness combined.
 
     Returns fitness, fatigue, and form values over the date range, plus weekly
     training stress totals. Use this only when you need JUST the load summary
@@ -157,7 +157,7 @@ async def get_training_load_summary(
                 parts.append(f"TSB:{t}")
             lines.append(f"  {wk}: {', '.join(parts)}")
 
-    return "\n".join(lines)
+    return "[Note: prefer get_training_insights(detail='brief') for a more complete picture]\n\n" + "\n".join(lines)
 
 
 @mcp.tool()
@@ -235,7 +235,7 @@ async def get_zone_distribution(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> str:
-    """Time-in-zone distribution with polarization assessment. Included in get_week_in_review.
+    """DEPRECATED: Use get_week_in_review for zone data in weekly context, or get_training_insights for full analysis.
 
     Summarizes time spent in each power and HR zone across all activities.
     Use this for a dedicated zone deep-dive; get_week_in_review includes a
@@ -318,7 +318,7 @@ async def get_zone_distribution(
     if not power_zones and not hr_zones:
         lines.append("  No zone data available in activities for this range.")
 
-    return "\n".join(lines)
+    return "[Note: prefer get_week_in_review or get_training_insights for zone data in context]\n\n" + "\n".join(lines)
 
 
 @mcp.tool()
@@ -638,7 +638,7 @@ async def get_power_profile_assessment(
     athlete_id: str | None = None,
     api_key: str | None = None,
 ) -> str:
-    """Power curve comparison (28d vs 90d). Prefer get_power_progression for richer analysis with W/kg and profile.
+    """DEPRECATED: Use get_power_progression for the same data with trend analysis.
 
     Analyzes peak power at key durations (5s, 1min, 5min, 20min, 60min).
     Use this for a quick comparison; get_power_progression adds rider profile
@@ -730,4 +730,4 @@ async def get_power_profile_assessment(
                 wkg = round(recent_w / weight, 2)
                 lines.append(f"  {label}: {wkg} W/kg")
 
-    return "\n".join(lines)
+    return "[Note: prefer get_power_progression for the same data with trend analysis]\n\n" + "\n".join(lines)

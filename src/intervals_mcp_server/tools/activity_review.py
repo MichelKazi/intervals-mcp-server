@@ -13,6 +13,7 @@ from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 from intervals_mcp_server.resource_store import athlete_profile
+from intervals_mcp_server.tool_warnings import collect_warnings
 from intervals_mcp_server.tools.activities import (
     COACH_TICK_LABELS,
     COACH_TICK_VALUES,
@@ -630,5 +631,140 @@ async def get_week_in_review(
     if unreviewed:
         lines.append("")
         lines.append(f"Unreviewed: {len(unreviewed)} activities need coach tick")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def get_coaching_brief(
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """START HERE for every session. Single-call orientation: athlete state, today's plan, recent activity, and warnings.
+
+    Returns ≤40 lines combining athlete context, today's workout, yesterday's key activity,
+    fitness status, unreviewed count, and actionable warnings (unlinked reports, risk flags).
+    Replaces separate calls to get_athlete_context + get_daily_summary.
+
+    Args:
+        athlete_id: The Intervals.icu athlete ID (optional)
+        api_key: The Intervals.icu API key (optional)
+    """
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    wellness = await _fetch_wellness_range(athlete_id_to_use, yesterday, today, api_key)
+    activities = await _fetch_activities_range(athlete_id_to_use, yesterday, today, api_key)
+    events = await _fetch_events_range(athlete_id_to_use, today, tomorrow, api_key)
+
+    lines = [f"Coaching Brief ({today}):"]
+
+    # Athlete state from latest wellness
+    today_wellness = None
+    for w in wellness:
+        if w.get("id", "")[:10] == today:
+            today_wellness = w
+            break
+    if not today_wellness and wellness:
+        today_wellness = wellness[-1]
+
+    if today_wellness:
+        athlete_profile.update_from_wellness(today_wellness)
+        ctl = today_wellness.get("ctl")
+        atl = today_wellness.get("atl")
+        ftp = athlete_profile.ftp or today_wellness.get("sportSettings", {}).get("ftp")
+        weight = today_wellness.get("weight") or athlete_profile.weight
+
+        status_parts = []
+        if ctl is not None and atl is not None:
+            tsb = round(ctl - atl, 1)
+            form = "Fresh" if tsb > 5 else "Neutral" if tsb > -10 else "Fatigued" if tsb > -25 else "Very Fatigued"
+            status_parts.append(f"CTL:{ctl} ATL:{atl} TSB:{tsb}({form})")
+        if ftp:
+            status_parts.append(f"FTP:{ftp}w")
+        if weight:
+            status_parts.append(f"{weight}kg")
+
+        rhr = today_wellness.get("restingHR")
+        hrv = today_wellness.get("hrv")
+        if rhr:
+            status_parts.append(f"RHR:{rhr}")
+        if hrv:
+            status_parts.append(f"HRV:{hrv}")
+
+        if status_parts:
+            lines.append(f"  {' | '.join(status_parts)}")
+
+        # Subjective
+        subj_parts = []
+        for key, label in [("soreness", "Sore"), ("fatigue", "Fatigue"), ("mood", "Mood")]:
+            val = today_wellness.get(key)
+            if val is not None:
+                subj_parts.append(f"{label}:{val}")
+        sleep_secs = today_wellness.get("sleepSecs")
+        if sleep_secs:
+            subj_parts.append(f"Sleep:{round(sleep_secs / 3600, 1)}h")
+        if subj_parts:
+            lines.append(f"  {' | '.join(subj_parts)}")
+
+    # Yesterday's key activity (most recent, highest load)
+    yesterday_acts = [
+        a for a in activities
+        if (a.get("start_date_local") or a.get("startTime", ""))[:10] == yesterday
+        and not _is_strava_restricted(a)
+    ]
+    if yesterday_acts:
+        key_act = max(yesterday_acts, key=lambda a: a.get("icu_training_load") or 0)
+        name = key_act.get("name", "Unnamed")
+        atype = key_act.get("type", "")
+        dur = key_act.get("moving_time") or key_act.get("elapsed_time")
+        load = key_act.get("icu_training_load")
+        tick = key_act.get("coach_tick")
+        parts = [f"{name} ({atype})"]
+        if dur:
+            parts.append(_seconds_to_hms(dur))
+        if load:
+            parts.append(f"Load:{load:.0f}")
+        if tick:
+            parts.append(f"Coach:{COACH_TICK_LABELS.get(tick, '?')}")
+        else:
+            parts.append("UNREVIEWED")
+        lines.append(f"  Yesterday: {' | '.join(parts)}")
+        if len(yesterday_acts) > 1:
+            lines.append(f"  (+{len(yesterday_acts) - 1} more)")
+
+    # Today's plan
+    planned = [e for e in events if e.get("category") == "WORKOUT"]
+    if planned:
+        for event in planned[:2]:
+            name = event.get("name", "Unnamed")
+            etype = event.get("type", "")
+            dur = event.get("moving_time") or event.get("duration")
+            load = event.get("icu_training_load")
+            parts = [f"{name} ({etype})"]
+            if dur:
+                parts.append(_seconds_to_hms(dur))
+            if load:
+                parts.append(f"Target:{load:.0f}")
+            lines.append(f"  Today: {' | '.join(parts)}")
+    else:
+        lines.append("  Today: Rest day / no planned workout")
+
+    # Unreviewed count (last 7 days)
+    week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    week_acts = await _fetch_activities_range(athlete_id_to_use, week_ago, today, api_key)
+    unreviewed = [a for a in week_acts if not a.get("coach_tick") and a.get("name")]
+    if unreviewed:
+        lines.append(f"  Unreviewed: {len(unreviewed)} activities this week")
+
+    # Warnings (the key value-add)
+    warnings_block = await collect_warnings()
+    if warnings_block:
+        lines.append(warnings_block)
 
     return "\n".join(lines)

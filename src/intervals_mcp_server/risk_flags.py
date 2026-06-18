@@ -35,6 +35,30 @@ def raise_risk_flag(
     supabase_upsert("risk_flags", row, on_conflict="athlete_id,flag_type,detected_date")
 
 
+def get_active_flags() -> list[dict[str, Any]]:
+    """Return all active (unresolved) risk flags for the current athlete."""
+    client = get_supabase()
+    if client is None:
+        return []
+
+    config = get_config()
+    try:
+        result = (
+            client.table("risk_flags")
+            .select("flag_type,severity,context,source_tool,detected_at")
+            .eq("athlete_id", config.athlete_id)
+            .is_("resolved_at", "null")
+            .execute()
+        )
+        return [
+            {"flag": r["flag_type"], "severity": r["severity"], "context": r.get("context", {})}
+            for r in (result.data or [])
+        ]
+    except Exception as e:
+        logger.warning("Failed to fetch active risk flags: %s", e)
+        return []
+
+
 def resolve_risk_flag(flag_type: str) -> None:
     """Resolve an active risk flag (set resolved_at)."""
     client = get_supabase()

@@ -91,6 +91,9 @@ def test_make_intervals_request_bad_json(monkeypatch, caplog):
             trainerroad_password="",
             trainerroad_cookie="",
             trainerroad_member_id="",
+            supabase_url="",
+            supabase_service_role_key="",
+            second_brain_mcp_url="",
         ),
     )
 

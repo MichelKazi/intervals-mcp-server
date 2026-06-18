@@ -41,6 +41,7 @@ async def get_recovery_patterns(
     athlete_id: str | None = None,
     api_key: str | None = None,
     days: int = 60,
+    detail: str = "full",
 ) -> str:
     """Use when asking "what predicts my good days?" or about sleep/HRV/recovery impact on performance.
 
@@ -49,10 +50,13 @@ async def get_recovery_patterns(
     signals are most predictive for THIS athlete specifically, and their "good day" vs
     "bad day" wellness profile.
 
+    Set detail='brief' for a compact summary (≤10 lines).
+
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
         api_key: The Intervals.icu API key (optional)
         days: Lookback period in days (optional, defaults to 60)
+        detail: "full" (default) for verbose output, "brief" for compact ≤4 line summary
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -92,6 +96,56 @@ async def get_recovery_patterns(
             "wellness and activity data). Need at least 8 to detect patterns. "
             "Log wellness data consistently for better insights."
         )
+
+    # Brief mode - compact summary
+    if detail == "brief":
+        brief_lines = ["Recovery Patterns (brief):"]
+
+        correlations = patterns.get("correlations", [])
+        good_bad = patterns.get("patterns", [])
+
+        # Strongest predictor metric + correlation
+        if correlations:
+            top_c = correlations[0]
+            w_label = _label_for(top_c["wellness_metric"])
+            brief_lines.append(f"  Strongest predictor: {w_label} (r={top_c['correlation']:+.3f}, {top_c['strength']})")
+        else:
+            brief_lines.append("  Strongest predictor: no significant correlations found")
+
+        # Good-day profile summary
+        if good_bad:
+            top = good_bad[0]
+            top_label = _label_for(top["metric"])
+            if top["metric"] == "sleep_secs":
+                good_fmt = f"{top['good_day_avg']/3600:.1f}h"
+                bad_fmt = f"{top['bad_day_avg']/3600:.1f}h"
+            else:
+                good_fmt = f"{top['good_day_avg']:.1f}"
+                bad_fmt = f"{top['bad_day_avg']:.1f}"
+            brief_lines.append(f"  Good-day profile: {top_label} good={good_fmt} vs bad={bad_fmt} (d={top['effect_size']:+.2f})")
+        else:
+            brief_lines.append("  Good-day profile: insufficient contrast")
+
+        # Key takeaway
+        if good_bad:
+            top = good_bad[0]
+            top_label = _label_for(top["metric"])
+            if top["metric"] == "sleep_secs":
+                diff_mins = abs(top["good_day_avg"] - top["bad_day_avg"]) / 60
+                brief_lines.append(f"  Takeaway: ~{diff_mins:.0f}min more sleep separates good and bad days")
+            elif top["metric"] == "hrv":
+                diff = abs(top["good_day_avg"] - top["bad_day_avg"])
+                brief_lines.append(f"  Takeaway: ~{diff:.0f}ms HRV difference between good and bad days")
+            else:
+                brief_lines.append(f"  Takeaway: {top_label} is your strongest performance lever")
+        elif correlations:
+            top_c = correlations[0]
+            w_label = _label_for(top_c["wellness_metric"])
+            brief_lines.append(f"  Takeaway: {w_label} is your strongest signal")
+        else:
+            brief_lines.append("  Takeaway: no clear patterns yet, keep logging daily")
+
+        return "\n".join(brief_lines)
 
     lines = [f"Recovery Pattern Analysis ({days}-day lookback, {patterns['sample_size']} paired days):"]
 

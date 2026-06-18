@@ -29,6 +29,7 @@ async def get_aerobic_development(
     athlete_id: str | None = None,
     api_key: str | None = None,
     weeks: int = 12,
+    detail: str = "full",
 ) -> str:
     """Use for aerobic base assessment, cardiac drift questions, or endurance progress tracking.
 
@@ -39,10 +40,13 @@ async def get_aerobic_development(
     Key insight: improving drift at longer durations = aerobic base developing.
     Drifting >5% on Z2 rides = base needs more work.
 
+    Set detail='brief' for a compact summary (≤10 lines).
+
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
         api_key: The Intervals.icu API key (optional)
         weeks: Lookback period in weeks (optional, defaults to 12)
+        detail: "full" (default) for verbose output, "brief" for compact ≤5 line summary
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -70,6 +74,40 @@ async def get_aerobic_development(
             f"Insufficient decoupling data ({dev['activities_with_drift']} activities with drift data). "
             "Need at least 5 rides/runs over 30 minutes with HR data."
         )
+
+    # Brief mode - compact summary
+    if detail == "brief":
+        brief_lines = ["Aerobic Development (brief):"]
+
+        # Drift threshold
+        threshold = dev.get("drift_threshold")
+        if threshold:
+            brief_lines.append(f"  Drift threshold: {threshold}")
+        else:
+            brief_lines.append("  Drift threshold: none (good base)")
+
+        # Trend direction
+        trend = dev.get("trend")
+        if trend:
+            brief_lines.append(f"  Trend: {trend['direction']} ({trend['improvement_pct']:+.1f}%)")
+        else:
+            brief_lines.append("  Trend: insufficient data")
+
+        # Concerning rides count
+        concerning = dev.get("concerning_rides", [])
+        brief_lines.append(f"  Concerning rides: {len(concerning)}")
+
+        # Top recommendation
+        if trend and trend["direction"] == "improving":
+            brief_lines.append("  Rec: current approach working, maintain Z2 volume")
+        elif threshold:
+            brief_lines.append(f"  Rec: build longer steady rides past {threshold}")
+        elif concerning:
+            brief_lines.append("  Rec: address easy-ride drift with lower targets")
+        else:
+            brief_lines.append("  Rec: aerobic base solid, continue as planned")
+
+        return "\n".join(brief_lines)
 
     lines = [f"Aerobic Development Analysis ({weeks}-week lookback, {dev['activities_analyzed']} activities):"]
 

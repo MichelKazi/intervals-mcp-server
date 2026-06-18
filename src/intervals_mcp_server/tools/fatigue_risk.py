@@ -17,6 +17,7 @@ config = get_config()
 async def get_fatigue_risk(
     athlete_id: str | None = None,
     api_key: str | None = None,
+    detail: str = "full",
 ) -> str:
     """Use when concerned about overtraining, injury risk, or rapid load increase.
 
@@ -24,9 +25,12 @@ async def get_fatigue_risk(
     Risk bands: <0.8 undertrained, 0.8-1.3 sweet spot, 1.3-1.5 caution, >1.5 danger.
     Detects load spikes (single-day jumps > 0.3 ACWR) in the last 7 days.
 
+    Set detail='brief' for a compact summary (≤10 lines).
+
     Args:
         athlete_id: The Intervals.icu athlete ID (optional)
         api_key: The Intervals.icu API key (optional)
+        detail: "full" (default) for verbose output, "brief" for compact ≤5 line summary
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -51,6 +55,42 @@ async def get_fatigue_risk(
 
     if risk["current_acwr"] is None:
         return "Insufficient data to compute ACWR (need at least 14 days of activity history)."
+
+    # Brief mode - compact summary
+    if detail == "brief":
+        brief_lines = ["Fatigue Risk (brief):"]
+
+        # Current ACWR + risk band
+        brief_lines.append(f"  ACWR: {risk['current_acwr']} ({risk['risk_band']})")
+
+        # Spike count last 7d
+        spikes = risk.get("spikes", [])
+        brief_lines.append(f"  Spikes (7d): {len(spikes)}")
+
+        # Active flags
+        from intervals_mcp_server.risk_flags import get_active_flags
+        active_flags = [f for f in get_active_flags() if f["flag"] in ("ACWR_SPIKE", "HIGH_MONOTONY", "RAMP_RATE", "LOAD_COLLAPSE")]
+        if active_flags:
+            flag_strs = [f"{f['flag']}({f['severity']})" for f in active_flags]
+            brief_lines.append(f"  Flags: {', '.join(flag_strs)}")
+        else:
+            brief_lines.append("  Flags: none")
+
+        # Top recommendation
+        band = risk["risk_band"]
+        if band == "danger":
+            brief_lines.append("  Rec: significant deload needed, reduce volume 30%")
+        elif band == "caution":
+            brief_lines.append("  Rec: moderate today, avoid adding volume")
+        elif band == "undertrained":
+            brief_lines.append("  Rec: safe to increase load gradually")
+        else:
+            brief_lines.append("  Rec: load well managed, continue as planned")
+
+        # Still write risk flags even in brief mode
+        _write_fatigue_risk_flags(risk, af, analytics, weeks=8)
+
+        return "\n".join(brief_lines)
 
     lines = ["Fatigue Risk Assessment (ACWR):"]
     lines.append("")

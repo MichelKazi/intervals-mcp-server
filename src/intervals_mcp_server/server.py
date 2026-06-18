@@ -52,6 +52,7 @@ from intervals_mcp_server.tools.activity_management import (  # noqa: E402
     update_activity,
 )
 from intervals_mcp_server.tools.activity_review import (  # noqa: E402
+    get_coaching_brief,
     get_daily_summary,
     get_latest_activity,
     get_week_in_review,
@@ -127,6 +128,7 @@ __all__ = [
     "create_manual_activity",
     "get_latest_activity",
     "review_activity",
+    "get_coaching_brief",
     "get_daily_summary",
     "get_week_in_review",
     "get_athlete",
