@@ -2,6 +2,7 @@
 
 import json
 import logging
+from json import dumps as json_dumps
 from typing import Any
 
 from intervals_mcp_server.supabase_client import get_supabase
@@ -115,7 +116,7 @@ def search_library(
 
         # Axis 1: Training purpose
         if zone_focus:
-            query = query.contains("zone_focus", [zone_focus])
+            query = query.filter("zone_focus", "cs", json_dumps([zone_focus]))
         if adaptation_target:
             query = query.eq("adaptation_target", adaptation_target)
         if interval_pattern:
@@ -144,7 +145,7 @@ def search_library(
             query = query.lte("work_duration_avg", work_duration_max)
         if tags:
             for tag in tags:
-                query = query.contains("tags", [tag])
+                query = query.filter("tags", "cs", json_dumps([tag]))
 
         # Equipment/platform
         if sport_type:
