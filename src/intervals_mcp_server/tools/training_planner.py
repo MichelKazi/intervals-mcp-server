@@ -150,6 +150,7 @@ def _search_zone_pool(
     duration_max_secs: int,
     race_specific: bool,
     indoor_only: bool,
+    duration_min: int = 2700,
 ) -> list[dict]:
     """Search for workouts appropriate to a zone, with intensity guardrails."""
     intensity_ceiling = ZONE_INTENSITY_CEILING.get(zone)
@@ -157,7 +158,7 @@ def _search_zone_pool(
     pool = search_library(
         adaptation_target=adaptation,
         duration_max=duration_max_secs,
-        duration_min=2700,
+        duration_min=duration_min,
         tss_min=tss_floor,
         tss_max=tss_ceiling,
         intensity_max=intensity_ceiling,
@@ -281,10 +282,8 @@ async def build_training_block(
     zone_rotation = _assign_zones_to_days(hard_days_per_week, target_zones)
 
     duration_max_secs = max_duration_minutes * 60
-    hard_budget_per_day = baseline_tss * 0.6 / max(hard_days_per_week, 1)
+    base_hard_budget = baseline_tss * 0.6 / max(hard_days_per_week, 1)
     easy_total_per_week = baseline_tss * 0.4
-    tss_floor = hard_budget_per_day * 0.4
-    tss_ceiling = hard_budget_per_day * 1.6
 
     lines = []
     lines.append(f"=== Training Block: {weeks} weeks ({recovery_pattern} pattern) ===")
@@ -293,9 +292,9 @@ async def build_training_block(
         f"Targets: {', '.join(target_zones)}"
     )
     lines.append(
-        f"TSS budget: ~{hard_budget_per_day:.0f}/hard day × {hard_days_per_week} + "
+        f"TSS budget (Week 1): ~{base_hard_budget:.0f}/hard day × {hard_days_per_week} + "
         f"~{easy_total_per_week:.0f} easy/recovery = "
-        f"~{hard_budget_per_day * hard_days_per_week + easy_total_per_week:.0f} total"
+        f"~{base_hard_budget * hard_days_per_week + easy_total_per_week:.0f} total"
     )
 
     if constraints_applied:
@@ -303,15 +302,6 @@ async def build_training_block(
         lines.append("Constraints applied:")
         for c in constraints_applied:
             lines.append(f"  - {c}")
-
-    zone_workout_pools: dict[str, list[dict]] = {}
-    for zone in target_zones:
-        adaptation = ZONE_TO_ADAPTATION.get(zone)
-        pool = _search_zone_pool(
-            zone, adaptation, tss_floor, tss_ceiling,
-            duration_max_secs, race_specific, indoor_only,
-        )
-        zone_workout_pools[zone] = pool
 
     for week_idx, week_target in enumerate(week_targets):
         week_num = week_idx + 1
@@ -327,15 +317,28 @@ async def build_training_block(
             lines.append("  No structured intensity this week. Focus on sleep and adaptation.")
             continue
 
+        week_hard_budget = week_tss * 0.6 / max(hard_days_per_week, 1)
+        week_tss_floor = week_hard_budget * 0.7
+        week_tss_ceiling = week_hard_budget * 1.3
+        week_duration_min = 2700 + (week_idx * 300)
+
+        lines.append(
+            f"  Per-session target: ~{week_hard_budget:.0f} TSS "
+            f"(range {week_tss_floor:.0f}-{week_tss_ceiling:.0f})"
+        )
+
         for day_idx, zone in enumerate(zone_rotation):
             day_num = day_idx + 1
             lines.append(f"  Hard Day {day_num} ({zone}):")
 
-            pool = zone_workout_pools.get(zone, [])
-            offset = week_idx * 3
-            results = pool[offset:offset + 3]
-            if not results:
-                results = pool[:3]
+            adaptation = ZONE_TO_ADAPTATION.get(zone)
+            pool = _search_zone_pool(
+                zone, adaptation, week_tss_floor, week_tss_ceiling,
+                duration_max_secs, race_specific, indoor_only,
+                duration_min=week_duration_min,
+            )
+            pool.sort(key=lambda w: abs(w.get("tss", 0) - week_hard_budget))
+            results = pool[:3]
 
             if not results:
                 lines.append(
