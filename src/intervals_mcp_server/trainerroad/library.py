@@ -155,7 +155,7 @@ def search_library(
         if name_search:
             query = query.ilike("name", f"%{name_search}%")
 
-        query = query.order("tss", desc=False).limit(limit)
+        query = query.order("tss", desc=True).limit(limit)
         result = query.execute()
         return result.data or []
     except Exception as e:

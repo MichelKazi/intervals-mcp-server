@@ -104,14 +104,11 @@ def _build_workout_reasoning(
     week_type: str,
 ) -> str:
     pattern = workout.get("interval_pattern", "")
-    pattern_desc = PATTERN_DESCRIPTIONS.get(pattern, "")
     zone_desc = ZONE_REASONING.get(zone, zone)
 
-    parts = []
-    if pattern_desc:
-        parts.append(f"{pattern_desc.capitalize()}.")
-    else:
-        parts.append(f"{zone.replace('-', ' ').title()} work — {zone_desc}.")
+    parts = [f"{zone.replace('-', ' ').title()} work — {zone_desc}."]
+    if pattern:
+        parts.append(f"Structure: {pattern.replace('_', ' ')} intervals.")
 
     if zone_delta:
         delta = zone_delta.get("personal_delta")
@@ -248,6 +245,29 @@ async def build_training_block(
         for c in constraints_applied:
             lines.append(f"  - {c}")
 
+    zone_workout_pools: dict[str, list[dict]] = {}
+    for zone in target_zones:
+        adaptation = ZONE_TO_ADAPTATION.get(zone)
+        tss_floor = baseline_tss / (hard_days_per_week * 2.5)
+        pool = search_library(
+            adaptation_target=adaptation,
+            duration_max=duration_max_secs,
+            duration_min=2700,
+            tss_min=tss_floor,
+            race_specific=race_specific if race_specific else None,
+            indoor_only=indoor_only if indoor_only else None,
+            limit=12,
+        )
+        if not pool:
+            pool = search_library(
+                adaptation_target=adaptation,
+                duration_max=duration_max_secs,
+                race_specific=race_specific if race_specific else None,
+                indoor_only=indoor_only if indoor_only else None,
+                limit=12,
+            )
+        zone_workout_pools[zone] = pool
+
     for week_idx, week_target in enumerate(week_targets):
         week_num = week_idx + 1
         week_type = week_target["type"]
@@ -266,14 +286,11 @@ async def build_training_block(
             day_num = day_idx + 1
             lines.append(f"  Hard Day {day_num} ({zone}):")
 
-            adaptation = ZONE_TO_ADAPTATION.get(zone)
-            results = search_library(
-                adaptation_target=adaptation,
-                duration_max=duration_max_secs,
-                race_specific=race_specific if race_specific else None,
-                indoor_only=indoor_only if indoor_only else None,
-                limit=3,
-            )
+            pool = zone_workout_pools.get(zone, [])
+            offset = week_idx * 3
+            results = pool[offset:offset + 3]
+            if not results:
+                results = pool[:3]
 
             if not results:
                 lines.append(
