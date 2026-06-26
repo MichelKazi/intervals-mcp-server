@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getDashboard, getEvents, callMcp } from './api';
+import { getDashboard, getEvents, callMcp, deleteEvent } from './api';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -55,5 +55,14 @@ describe('api', () => {
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body as string);
     expect(body).toEqual({ weeks: 4 });
+  });
+
+  it('deleteEvent resolves without throwing on 204 No Content', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 204,
+      headers: { get: () => null },
+    });
+    await expect(deleteEvent(42)).resolves.toBeUndefined();
   });
 });

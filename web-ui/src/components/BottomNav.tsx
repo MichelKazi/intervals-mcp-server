@@ -83,7 +83,7 @@ export default function BottomNav() {
     >
       {TABS.map(tab => {
         const isActive = tab.path === '/'
-          ? pathname === '/' || pathname === '/activities'
+          ? pathname === '/'
           : pathname.startsWith(tab.path);
         return (
           <Link

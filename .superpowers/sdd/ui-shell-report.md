@@ -93,6 +93,8 @@ getWellness(oldest: string, newest: string): Promise<WellnessDay[]>
 getCoachingState(zone?: string): Promise<unknown>
 callMcp(tool: string, args?: Record<string, unknown>): Promise<unknown>
 // Note: callMcp routes to POST /api/mcp/{tool} with args as the bare request body
+getMcpTools(): Promise<unknown[]>
+// GET /api/mcp/tools — returns the list of available MCP tool descriptors
 ```
 
 Errors: all non-2xx responses throw `Error` with message from `{message}` field or HTTP status text.
@@ -128,7 +130,8 @@ All screens use CSS vars from `src/theme/tokens.css`. Key vars:
 --border      /* dividers #243040 */
 --accent      /* amber CTA #f0a500 */
 --z1..--z7    /* zone colors: blue/green/yellow/orange/red/purple/magenta */
---sp-1..--sp-8 /* spacing: 4/8/12/16/24/32 px */
+--sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px
+/* NOTE: --sp-5 and --sp-7 are NOT defined in tokens.css */
 --radius-sm, --radius, --radius-lg  /* 4/8/16 px */
 --shadow-1, --shadow-2, --shadow-3  /* three elevation levels */
 --font        /* system font stack */
@@ -179,3 +182,23 @@ cd web-ui && npm test -- --run
 - No Inter/Roboto — system font only (enforced by --font token)
 - Dark theme only — use CSS var tokens, never hardcoded colors
 - No meaning by color alone — use text labels + icons alongside color
+
+---
+
+## Fix wave
+
+Applied after code-review pass. 21 tests pass, build clean.
+
+| # | File | Fix |
+|---|------|-----|
+| 1 | `src/lib/api.ts` | 204/empty-body guard in `apiFetch`: returns `undefined as T` before calling `res.json()` when status is 204 or content-length is 0. Prevents "Unexpected end of JSON input" on `deleteEvent`. |
+| 2 | `src/components/BottomNav.tsx` | Home tab `isActive` now uses `pathname === '/'` only. Removed `/activities` special-case that caused both Home and Activities to show active simultaneously. |
+| 3 | `src/components/WorkoutChart.tsx` | Added `Enter`/`Space` handling in `handleKey`. Both keys call `setSelectedIdx(idx)` (with `preventDefault`). |
+| 4 | `src/components/WorkoutChart.tsx` | Roving tabindex: each bar now gets `tabIndex={idx === (selectedIdx ?? 0) ? 0 : -1}`. Only one bar is a tab stop at a time. |
+| 5 | `src/lib/api.ts` | Added `getMcpTools(): Promise<unknown[]>` — GET /api/mcp/tools. |
+| 6 | `src/components/WorkoutChart.tsx` | Chart container: `overflow: 'hidden'` → `overflowX: 'auto', overflowY: 'hidden'`. Dense workouts scroll instead of clipping. |
+| 7 | `src/components/WorkoutChart.tsx` | Watts display now uses `formatWatts()` from `lib/format` instead of inline `Math.round(...)+'w'`. |
+
+New tests added:
+- `WorkoutChart.test.tsx`: Enter selects bar + updates readout; Space selects bar + updates readout; only one bar has tabIndex 0 at a time.
+- `api.test.ts`: 204 response resolves without throwing (mocked fetch returning status 204 with no body).

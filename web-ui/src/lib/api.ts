@@ -17,6 +17,9 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { message?: string }).message ?? res.statusText);
   }
+  if (res.status === 204 || res.headers?.get('content-length') === '0') {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
 }
 
@@ -102,4 +105,8 @@ export function getWellness(oldest: string, newest: string): Promise<WellnessDay
 
 export function callMcp(tool: string, args?: Record<string, unknown>): Promise<unknown> {
   return apiFetch(`/api/mcp/${tool}`, { method: 'POST', body: JSON.stringify(args ?? {}) });
+}
+
+export function getMcpTools(): Promise<unknown[]> {
+  return apiFetch('/api/mcp/tools');
 }

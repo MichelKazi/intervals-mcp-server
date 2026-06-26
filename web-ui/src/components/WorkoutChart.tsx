@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import type { WorkoutStep, IntervalLap } from '../lib/types';
-import { zoneColor, zoneName, formatDuration } from '../lib/format';
+import { zoneColor, zoneName, formatDuration, formatWatts } from '../lib/format';
 
 interface WorkoutChartProps {
   steps?: WorkoutStep[];
@@ -64,6 +64,9 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
       const newIdx = Math.max(idx - 1, 0);
       setSelectedIdx(newIdx);
       barRefs.current[newIdx]?.focus();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setSelectedIdx(idx);
     }
   }, [bars.length]);
 
@@ -84,7 +87,8 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
           background: 'var(--surface)',
           borderRadius: 'var(--radius)',
           padding: 'var(--sp-2)',
-          overflow: 'hidden',
+          overflowX: 'auto',
+          overflowY: 'hidden',
         }}
         role="group"
         aria-label="Workout intensity chart"
@@ -98,7 +102,7 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
               ref={el => { barRefs.current[idx] = el; }}
               data-testid="workout-bar"
               role="button"
-              tabIndex={0}
+              tabIndex={idx === (selectedIdx ?? 0) ? 0 : -1}
               aria-label={`${bar.pctFtp.toFixed(0)}% FTP, ${formatDuration(bar.durationSecs)}, ${zoneName(bar.pctFtp)}`}
               aria-pressed={isSelected}
               onClick={() => setSelectedIdx(idx)}
@@ -149,7 +153,7 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
           <div>
             <div style={{ color: 'var(--text-dim)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Intensity</div>
             <div style={{ color: 'var(--text)' }}>
-              {selected.watts ? `${Math.round(selected.watts)}w` : `${selected.pctFtp.toFixed(0)}%`}
+              {selected.watts ? formatWatts(selected.watts) : `${selected.pctFtp.toFixed(0)}%`}
             </div>
           </div>
           <div>
