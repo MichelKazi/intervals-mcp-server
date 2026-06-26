@@ -1,8 +1,11 @@
 import importlib.metadata
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.requests import Request
 
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.services.errors import ServiceError
@@ -46,6 +49,25 @@ def create_app() -> FastAPI:
 
     from intervals_mcp_server.web.routes import mcp_bridge
     app.include_router(mcp_bridge.router)
+
+    # Mount built frontend SPA when dist is present.
+    # parents[3] = repo root  (app.py -> web -> intervals_mcp_server -> src -> repo root)
+    _dist = Path(__file__).resolve().parents[3] / "web-ui" / "dist"
+    if _dist.is_dir():
+        app.mount("/assets", StaticFiles(directory=_dist / "assets"), name="assets")
+
+        # Use a 404 handler for SPA fallback so it never shadows /api/* routes.
+        # Any path that reaches a genuine 404 (no API route matched) is served
+        # as index.html unless it starts with "api/", in which case the 404 is real.
+        @app.exception_handler(404)
+        async def _spa_fallback(request: Request, _exc: HTTPException):
+            path = request.url.path.lstrip("/")
+            if path.startswith("api/"):
+                return JSONResponse(status_code=404, content={"detail": "Not Found"})
+            candidate = _dist / path
+            if path and candidate.is_file():
+                return FileResponse(candidate)
+            return FileResponse(_dist / "index.html")
 
     return app
 

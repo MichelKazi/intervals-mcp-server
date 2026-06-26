@@ -186,3 +186,6 @@ CLAUDE.md
 
 # subagent-driven-development scratch
 .superpowers/
+
+# web-ui source lib is NOT the python build lib
+!web-ui/src/lib/
