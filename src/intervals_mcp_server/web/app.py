@@ -1,4 +1,5 @@
 import importlib.metadata
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -51,9 +52,17 @@ def create_app() -> FastAPI:
     app.include_router(mcp_bridge.router)
 
     # Mount built frontend SPA when dist is present.
-    # parents[3] = repo root  (app.py -> web -> intervals_mcp_server -> src -> repo root)
-    _dist = Path(__file__).resolve().parents[3] / "web-ui" / "dist"
-    if _dist.is_dir():
+    # The package may be pip-installed (site-packages), so __file__-relative paths
+    # don't reach the repo. Check, in order: WEB_UI_DIST env override, the working
+    # directory (Docker copies dist to /app/web-ui/dist with WORKDIR /app), then the
+    # source-tree-relative path (editable installs / local dev).
+    _candidates = [
+        Path(os.environ["WEB_UI_DIST"]) if os.environ.get("WEB_UI_DIST") else None,
+        Path.cwd() / "web-ui" / "dist",
+        Path(__file__).resolve().parents[3] / "web-ui" / "dist",
+    ]
+    _dist = next((p for p in _candidates if p and p.is_dir()), None)
+    if _dist is not None:
         app.mount("/assets", StaticFiles(directory=_dist / "assets"), name="assets")
 
         # Use a 404 handler for SPA fallback so it never shadows /api/* routes.
