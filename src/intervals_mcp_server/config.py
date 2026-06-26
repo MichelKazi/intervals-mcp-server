@@ -36,6 +36,8 @@ class Config:
     second_brain_mcp_url: str
     directeur_url: str
     directeur_api_key: str
+    web_api_token: str = ""
+    web_allowed_origin: str = "*"
 
 
 _config_instance: Config | None = None  # pylint: disable=invalid-name
@@ -64,6 +66,8 @@ def load_config() -> Config:
     second_brain_mcp_url = os.getenv("SECOND_BRAIN_MCP_URL", "")
     directeur_url = os.getenv("DIRECTEUR_URL", "")
     directeur_api_key = os.getenv("DIRECTEUR_API_KEY", "")
+    web_api_token = os.getenv("WEB_API_TOKEN", "")
+    web_allowed_origin = os.getenv("WEB_ALLOWED_ORIGIN", "*")
 
     # Validate athlete_id if provided (empty string is allowed)
     if athlete_id:
@@ -83,6 +87,8 @@ def load_config() -> Config:
         second_brain_mcp_url=second_brain_mcp_url,
         directeur_url=directeur_url,
         directeur_api_key=directeur_api_key,
+        web_api_token=web_api_token,
+        web_allowed_origin=web_allowed_origin,
     )
 
 

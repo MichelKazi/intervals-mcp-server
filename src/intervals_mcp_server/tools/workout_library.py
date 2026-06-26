@@ -6,6 +6,7 @@ from typing import Any
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.mcp_instance import mcp
+from intervals_mcp_server.services.library import _alternative_bands, _build_workout_doc
 from intervals_mcp_server.trainerroad.library import (
     get_library_stats,
     get_workout_intervals,
@@ -337,18 +338,6 @@ async def create_custom_workout(
     return "\n".join(lines)
 
 
-ZONE_TO_ADAPTATION = {
-    "threshold": "threshold_power",
-    "vo2max": "vo2max",
-    "sweet-spot": "threshold_power",
-    "anaerobic": "anaerobic_capacity",
-    "endurance": "aerobic_base",
-    "tempo": "tempo_endurance",
-    "sprint": "sprint_power",
-    "recovery": "recovery",
-}
-
-
 @mcp.tool()
 async def find_workout_alternatives(
     tr_workout_id: str,
@@ -408,64 +397,19 @@ async def find_workout_alternatives(
     ref_tss = ref.get("tss") or 0
     ref_duration = ref.get("duration_secs") or 0
     ref_zones = ref.get("zone_focus") or []
-    ref_adaptation = ref.get("adaptation_target")
-    ref_intensity_max = ref.get("intensity_max") or 0
 
+    bands = _alternative_bands(ref, adjustment, target_zone, max_duration_minutes)
+    search_adaptation = bands["search_adaptation"]
     adjustment = adjustment or "similar"
-
-    if target_zone:
-        search_adaptation = ZONE_TO_ADAPTATION.get(target_zone, ref_adaptation)
-    else:
-        search_adaptation = ref_adaptation
-
-    tss_min = None
-    tss_max = None
-    duration_min_secs = None
-    duration_max_secs = None
-    intensity_min = None
-    intensity_max = None
-
-    if adjustment == "shorter":
-        duration_max_secs = int(ref_duration * 0.8)
-        duration_min_secs = int(ref_duration * 0.4)
-        tss_min = ref_tss * 0.5
-        tss_max = ref_tss * 0.9
-    elif adjustment == "longer":
-        duration_min_secs = int(ref_duration * 1.1)
-        duration_max_secs = int(ref_duration * 1.8)
-        tss_min = ref_tss * 1.0
-        tss_max = ref_tss * 1.8
-    elif adjustment == "easier":
-        duration_min_secs = int(ref_duration * 0.7)
-        duration_max_secs = int(ref_duration * 1.1)
-        tss_max = ref_tss * 0.85
-        tss_min = ref_tss * 0.4
-    elif adjustment == "harder":
-        duration_min_secs = int(ref_duration * 0.9)
-        duration_max_secs = int(ref_duration * 1.3)
-        tss_min = ref_tss * 1.1
-        tss_max = ref_tss * 1.8
-    else:  # similar
-        duration_min_secs = int(ref_duration * 0.85)
-        duration_max_secs = int(ref_duration * 1.15)
-        tss_min = ref_tss * 0.85
-        tss_max = ref_tss * 1.15
-
-    if max_duration_minutes:
-        cap = max_duration_minutes * 60
-        if duration_max_secs is None or cap < duration_max_secs:
-            duration_max_secs = cap
-        if duration_min_secs and duration_min_secs > cap:
-            duration_min_secs = int(cap * 0.5)
 
     results = search_library(
         adaptation_target=search_adaptation,
-        duration_min=duration_min_secs,
-        duration_max=duration_max_secs,
-        tss_min=tss_min,
-        tss_max=tss_max,
-        intensity_min=intensity_min,
-        intensity_max=intensity_max,
+        duration_min=bands["duration_min_secs"],
+        duration_max=bands["duration_max_secs"],
+        tss_min=bands["tss_min"],
+        tss_max=bands["tss_max"],
+        intensity_min=bands["intensity_min"],
+        intensity_max=bands["intensity_max"],
         indoor_only=indoor_only,
         limit=limit + 1,
     )
@@ -475,8 +419,8 @@ async def find_workout_alternatives(
     if not results:
         results = search_library(
             adaptation_target=search_adaptation,
-            duration_max=duration_max_secs,
-            tss_max=tss_max,
+            duration_max=bands["duration_max_secs"],
+            tss_max=bands["tss_max"],
             indoor_only=indoor_only,
             limit=limit + 1,
         )
@@ -506,61 +450,3 @@ async def find_workout_alternatives(
     return "\n".join(lines)
 
 
-def _build_workout_doc(steps: list[dict[str, Any]], description: str | None = None) -> dict:
-    """Convert simplified step dicts into intervals.icu workout_doc format."""
-    doc_steps = []
-    for step in steps:
-        doc_steps.append(_convert_step(step))
-
-    doc: dict[str, Any] = {"steps": doc_steps}
-    if description:
-        doc["description"] = description
-    return doc
-
-
-def _convert_step(step: dict[str, Any]) -> dict[str, Any]:
-    """Convert a single simplified step to workout_doc step format."""
-    result: dict[str, Any] = {}
-
-    # Repeat block
-    if "reps" in step:
-        result["reps"] = step["reps"]
-        if "steps" in step:
-            result["steps"] = [_convert_step(s) for s in step["steps"]]
-        return result
-
-    # Duration/distance
-    if "duration" in step:
-        result["duration"] = step["duration"]
-    if "distance" in step:
-        result["distance"] = step["distance"]
-
-    # Warmup/cooldown flags
-    if step.get("warmup"):
-        result["warmup"] = True
-    if step.get("cooldown"):
-        result["cooldown"] = True
-
-    # Ramp
-    if step.get("ramp") and "power_start" in step and "power_end" in step:
-        result["ramp"] = True
-        units = step.get("units", "%ftp")
-        result["power"] = {"start": step["power_start"], "end": step["power_end"], "units": units}
-    elif "power" in step:
-        units = step.get("units", "%ftp")
-        result["power"] = {"value": step["power"], "units": units}
-
-    # HR target
-    if "hr" in step:
-        hr_units = step.get("units", "%lthr")
-        result["hr"] = {"value": step["hr"], "units": hr_units}
-
-    # Cadence
-    if "cadence" in step:
-        result["cadence"] = {"value": step["cadence"], "units": "cadence"}
-
-    # Text
-    if "text" in step:
-        result["text"] = step["text"]
-
-    return result
