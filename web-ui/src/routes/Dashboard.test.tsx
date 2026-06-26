@@ -9,10 +9,12 @@ import type { Dashboard as DashboardData } from '../lib/types';
 
 vi.mock('../lib/api', () => ({
   getDashboard: vi.fn(),
+  getWellness: vi.fn(),
 }));
 
-import { getDashboard } from '../lib/api';
+import { getDashboard, getWellness } from '../lib/api';
 const mockGetDashboard = vi.mocked(getDashboard);
+const mockGetWellness = vi.mocked(getWellness);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,8 +87,15 @@ const SAMPLE_DATA: DashboardData = {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
+const SAMPLE_WELLNESS = [
+  { id: '2026-06-01', ctl: 48, atl: 50 },
+  { id: '2026-06-26', ctl: 50, atl: 50 },
+];
+
 beforeEach(() => {
   mockGetDashboard.mockClear();
+  // Default: resolve with minimal wellness data so FitnessSection renders without errors
+  mockGetWellness.mockResolvedValue(SAMPLE_WELLNESS);
 });
 
 describe('Dashboard', () => {

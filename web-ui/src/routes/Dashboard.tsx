@@ -4,7 +4,9 @@ import AppShell from '../components/AppShell';
 import Skeleton from '../components/Skeleton';
 import ReadinessBadge from '../components/dashboard/ReadinessBadge';
 import WorkoutChart from '../components/WorkoutChart';
-import { getDashboard } from '../lib/api';
+import FitnessRings from '../components/fitness/FitnessRings';
+import FitnessTrend from '../components/fitness/FitnessTrend';
+import { getDashboard, getWellness } from '../lib/api';
 import { formatDate, formatDuration, formatDistance, DEFAULT_FTP } from '../lib/format';
 import type { PlannedEvent, Activity } from '../lib/types';
 
@@ -218,6 +220,88 @@ function LatestActivityCard({ activity }: LatestActivityCardProps) {
   );
 }
 
+// ─── Fitness section ──────────────────────────────────────────────────────
+
+function FitnessSection() {
+  // Compute date range: last 42 days
+  const today = new Date();
+  const newest = today.toISOString().slice(0, 10);
+  const pastDate = new Date(today);
+  pastDate.setDate(pastDate.getDate() - 42);
+  const oldest = pastDate.toISOString().slice(0, 10);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['wellness', oldest, newest],
+    queryFn: () => getWellness(oldest, newest),
+  });
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          margin: 'var(--sp-4)',
+          padding: 'var(--sp-4)',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+        }}
+        aria-busy="true"
+      >
+        <Skeleton width="30%" height={11} style={{ marginBottom: 'var(--sp-3)' }} />
+        <div style={{ display: 'flex', gap: 'var(--sp-4)', justifyContent: 'center' }}>
+          <Skeleton width={80} height={80} style={{ borderRadius: '50%' }} />
+          <Skeleton width={80} height={80} style={{ borderRadius: '50%' }} />
+          <Skeleton width={80} height={80} style={{ borderRadius: '50%' }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !data || data.length === 0) {
+    // Hide quietly on error or no data
+    return null;
+  }
+
+  // Latest day with values
+  const latest = [...data].reverse().find(d => d.ctl != null && d.atl != null);
+  if (!latest) return null;
+
+  const fitness = latest.ctl ?? 0;
+  const fatigue = latest.atl ?? 0;
+  const form = fitness - fatigue;
+
+  return (
+    <section
+      aria-label="Fitness summary"
+      style={{
+        margin: 'var(--sp-4)',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        paddingTop: 'var(--sp-3)',
+        paddingBottom: 'var(--sp-4)',
+      }}
+    >
+      <p
+        style={{
+          margin: '0 0 var(--sp-1) var(--sp-4)',
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--accent)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}
+      >
+        Fitness
+      </p>
+      <FitnessRings fitness={fitness} fatigue={fatigue} form={form} />
+      <div style={{ padding: '0 var(--sp-4) var(--sp-2)' }}>
+        <FitnessTrend series={data} />
+      </div>
+    </section>
+  );
+}
+
 // ─── Loading skeleton ─────────────────────────────────────────────────────
 
 function DashboardSkeleton() {
@@ -305,6 +389,8 @@ export default function Dashboard() {
           }
 
           {data.readiness && <ReadinessBadge readiness={data.readiness} />}
+
+          <FitnessSection />
 
           {data.latest_activity && <LatestActivityCard activity={data.latest_activity} />}
         </>
