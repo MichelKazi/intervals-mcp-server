@@ -23,7 +23,7 @@ export function tsbBand(form: number): TsbBand {
   if (form > 25)   return { label: 'Transition',    color: 'var(--z2)' };
   if (form > 5)    return { label: 'Fresh',         color: 'var(--z2)' };
   if (form >= -10) return { label: 'Neutral',       color: 'var(--z3)' };
-  if (form >= -30) return { label: 'Optimal training', color: 'var(--accent)' };
+  if (form >= -30) return { label: 'Optimal training', color: 'var(--brand)' };
   return           { label: 'High risk',            color: 'var(--z5)' };
 }
 

@@ -30,14 +30,7 @@ export default function ResultList({ workouts, isLoading, onSelect }: ResultList
             key={i}
             role="status"
             aria-label="Loading"
-            style={{
-              height: 68,
-              background: 'var(--surface-2)',
-              borderRadius: 'var(--radius)',
-              marginBottom: 'var(--sp-2)',
-              opacity: 0.5,
-              animation: 'pulse 1.5s ease-in-out infinite',
-            }}
+            className="mb-2 h-[68px] animate-pulse rounded-md bg-muted opacity-50"
           />
         ))}
       </div>
@@ -46,7 +39,7 @@ export default function ResultList({ workouts, isLoading, onSelect }: ResultList
 
   if (workouts.length === 0) {
     return (
-      <p style={{ color: 'var(--text-dim)', padding: 'var(--sp-4)', textAlign: 'center' }}>
+      <p className="p-4 text-center text-muted-foreground">
         No workouts match — adjust filters.
       </p>
     );
@@ -59,48 +52,26 @@ export default function ResultList({ workouts, isLoading, onSelect }: ResultList
           key={w.tr_workout_id ?? idx}
           type="button"
           onClick={() => onSelect(w)}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--sp-1)',
-            width: '100%',
-            minHeight: 44,
-            padding: 'var(--sp-3)',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            marginBottom: 'var(--sp-2)',
-            cursor: 'pointer',
-            textAlign: 'left',
-            color: 'var(--text)',
-            fontFamily: 'var(--font)',
-          }}
+          className="mb-2 flex min-h-[44px] w-full cursor-pointer flex-col gap-1 rounded-md border border-border bg-card p-3 text-left text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--sp-2)' }}>
-            <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>{w.name}</span>
-            <span style={{ fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
+          <div className="flex items-start justify-between gap-2">
+            <span className="flex-1 text-sm font-semibold">{w.name}</span>
+            <span className="whitespace-nowrap text-xs text-muted-foreground">
               {w.duration_secs ? formatDuration(w.duration_secs) : '—'}
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="flex flex-wrap items-center gap-2">
             {w.tss != null && (
-              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{Math.round(w.tss)} TSS</span>
+              <span className="text-xs text-muted-foreground">{Math.round(w.tss)} TSS</span>
             )}
             {w.interval_count != null && w.interval_count > 0 && (
-              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{w.interval_count} intervals</span>
+              <span className="text-xs text-muted-foreground">{w.interval_count} intervals</span>
             )}
             {(w.zone_focus ?? []).map(z => (
               <span
                 key={z}
-                style={{
-                  fontSize: 11,
-                  padding: '2px 6px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: ZONE_COLORS[z] ?? 'var(--surface-2)',
-                  color: '#fff',
-                  fontWeight: 600,
-                  textTransform: 'capitalize',
-                }}
+                className="rounded-sm px-1.5 py-0.5 text-[11px] font-semibold capitalize text-white"
+                style={{ background: ZONE_COLORS[z] ?? 'var(--surface-2)' }}
               >
                 {zoneLabel(z)}
               </span>

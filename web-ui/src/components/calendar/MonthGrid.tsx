@@ -107,7 +107,7 @@ export default function MonthGrid({
               onClick={() => onSelectDay(iso)}
               style={{
                 background: isSelected ? 'var(--surface-2)' : isHighlight ? 'rgba(240,165,0,0.15)' : 'transparent',
-                border: isHighlight ? '2px solid var(--accent)' : '1px solid transparent',
+                border: isHighlight ? '2px solid var(--brand)' : '1px solid transparent',
                 cursor: 'pointer',
                 minHeight: 52,
                 minWidth: 0,
@@ -134,9 +134,9 @@ export default function MonthGrid({
                   borderRadius: '50%',
                   fontSize: 13,
                   fontWeight: isToday ? 700 : 400,
-                  color: isToday ? 'var(--bg)' : isSelected ? 'var(--accent)' : 'var(--text)',
-                  background: isToday ? 'var(--accent)' : 'transparent',
-                  border: isToday ? 'none' : isSelected ? '2px solid var(--accent)' : '2px solid transparent',
+                  color: isToday ? 'var(--bg)' : isSelected ? 'var(--brand)' : 'var(--text)',
+                  background: isToday ? 'var(--brand)' : 'transparent',
+                  border: isToday ? 'none' : isSelected ? '2px solid var(--brand)' : '2px solid transparent',
                   flexShrink: 0,
                 }}
               >

@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils';
+
 interface FilterChipProps {
   label: string;
   active: boolean;
@@ -6,26 +8,24 @@ interface FilterChipProps {
 }
 
 export default function FilterChip({ label, active, color, onToggle }: FilterChipProps) {
+  // Active background/border is a runtime zone color — must stay inline.
+  const activeColor = color ?? 'var(--brand)';
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-pressed={active}
-      style={{
-        minHeight: 44,
-        minWidth: 44,
-        padding: '0 var(--sp-3)',
-        background: active ? (color ?? 'var(--accent)') : 'var(--surface-2)',
-        color: active ? '#fff' : 'var(--text)',
-        border: `1px solid ${active ? (color ?? 'var(--accent)') : 'var(--border)'}`,
-        borderRadius: 'var(--radius)',
-        fontSize: 13,
-        fontFamily: 'var(--font)',
-        cursor: 'pointer',
-        whiteSpace: 'nowrap',
-        fontWeight: active ? 600 : 400,
-        transition: 'background 0.15s, border-color 0.15s',
-      }}
+      className={cn(
+        'min-h-[44px] min-w-[44px] cursor-pointer whitespace-nowrap rounded-md border px-3 text-[13px] transition-colors',
+        active
+          ? 'font-semibold text-white'
+          : 'border-border bg-muted font-normal text-foreground',
+      )}
+      style={
+        active
+          ? { background: activeColor, borderColor: activeColor }
+          : undefined
+      }
     >
       {label}
     </button>

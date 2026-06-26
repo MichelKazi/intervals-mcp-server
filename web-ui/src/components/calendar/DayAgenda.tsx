@@ -137,7 +137,7 @@ export default function DayAgenda({ date, events, onEventLongPress, draggingId }
                       padding: '2px 6px',
                       borderRadius: 'var(--radius-sm)',
                       background: done ? 'rgba(82,199,127,0.15)' : 'rgba(240,165,0,0.12)',
-                      color: done ? 'var(--z2)' : 'var(--accent)',
+                      color: done ? 'var(--z2)' : 'var(--brand)',
                     }}
                   >
                     {done ? '✓ done' : 'planned'}

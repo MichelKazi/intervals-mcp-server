@@ -6,6 +6,8 @@ import ReadinessBadge from '../components/dashboard/ReadinessBadge';
 import WorkoutChart from '../components/WorkoutChart';
 import FitnessRings from '../components/fitness/FitnessRings';
 import FitnessTrend from '../components/fitness/FitnessTrend';
+import { Card } from '../components/ui/card';
+import { Button } from '../components/ui/button';
 import { getDashboard, getWellness } from '../lib/api';
 import { formatDate, formatDuration, formatDistance, DEFAULT_FTP } from '../lib/format';
 import type { PlannedEvent, Activity } from '../lib/types';
@@ -33,75 +35,51 @@ function NextWorkoutCard({ event }: NextWorkoutCardProps) {
           navigate(`/workout/${event.id}`);
         }
       }}
-      style={{
-        margin: 'var(--sp-4)',
-        padding: 'var(--sp-4)',
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        boxShadow: 'var(--shadow-2)',
-        cursor: 'pointer',
-        outline: 'none',
-        userSelect: 'none',
-      }}
-      onFocus={(e) => { e.currentTarget.style.outline = '2px solid var(--accent)'; }}
-      onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
+      className="m-4 block cursor-pointer select-none rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {/* Header row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--sp-2)' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: '0 0 var(--sp-1)', fontSize: 11, color: 'var(--accent)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Next Workout
-          </p>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {event.name}
-          </h2>
-        </div>
-        <svg
-          width="20" height="20" viewBox="0 0 24 24"
-          fill="none" stroke="var(--text-dim)" strokeWidth="2"
-          aria-hidden="true"
-          style={{ flexShrink: 0, marginLeft: 'var(--sp-2)', marginTop: 2 }}
-        >
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
-      </div>
-
-      {/* Meta row */}
-      <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap', marginBottom: steps ? 'var(--sp-4)' : 0 }}>
-        {(event.start_date_local || event.start_date) && (
-          <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>{formatDate(event.start_date_local || event.start_date!)}</span>
-        )}
-        {(event.type || event.sport_type) && (
-          <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>{event.type || event.sport_type}</span>
-        )}
-        {event.moving_time != null && event.moving_time > 0 && (
-          <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>
-            {formatDuration(event.moving_time)}
-          </span>
-        )}
-        {event.icu_training_load != null && (
-          <span
-            style={{
-              fontSize: 13,
-              color: 'var(--accent)',
-              fontWeight: 600,
-              background: 'rgba(240,165,0,0.12)',
-              padding: '1px 6px',
-              borderRadius: 'var(--radius-sm)',
-            }}
+        <div className="mb-2 flex items-start justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-primary">
+              Next Workout
+            </p>
+            <h2 className="m-0 truncate text-xl font-bold leading-tight text-foreground">
+              {event.name}
+            </h2>
+          </div>
+          <svg
+            width="20" height="20" viewBox="0 0 24 24"
+            fill="none" stroke="var(--text-dim)" strokeWidth="2"
+            aria-hidden="true"
+            className="ml-2 mt-0.5 shrink-0"
           >
-            {Math.round(event.icu_training_load)} TSS
-          </span>
-        )}
-      </div>
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </div>
+
+        {/* Meta row */}
+        <div className={`flex flex-wrap gap-3 ${steps ? 'mb-4' : ''}`}>
+          {(event.start_date_local || event.start_date) && (
+            <span className="text-[13px] text-muted-foreground">{formatDate(event.start_date_local || event.start_date!)}</span>
+          )}
+          {(event.type || event.sport_type) && (
+            <span className="text-[13px] text-muted-foreground">{event.type || event.sport_type}</span>
+          )}
+          {event.moving_time != null && event.moving_time > 0 && (
+            <span className="text-[13px] text-muted-foreground">
+              {formatDuration(event.moving_time)}
+            </span>
+          )}
+          {event.icu_training_load != null && (
+            <span className="rounded-sm bg-primary/10 px-1.5 py-px text-[13px] font-semibold text-primary">
+              {Math.round(event.icu_training_load)} TSS
+            </span>
+          )}
+        </div>
 
       {/* Workout chart preview */}
       {steps && steps.length > 0 && (
-        <div
-          style={{ pointerEvents: 'none', opacity: 0.9 }}
-          aria-hidden="true"
-        >
+        <div className="pointer-events-none opacity-90" aria-hidden="true">
           <WorkoutChart steps={steps} ftp={ftp} />
         </div>
       )}
@@ -113,43 +91,16 @@ function NextWorkoutCard({ event }: NextWorkoutCardProps) {
 
 function NoNextWorkout() {
   return (
-    <div
-      style={{
-        margin: 'var(--sp-4)',
-        padding: 'var(--sp-6)',
-        background: 'var(--surface)',
-        border: '1px dashed var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 'var(--sp-3)',
-        textAlign: 'center',
-      }}
-    >
+    <div className="m-4 flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-card p-6 text-center">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" aria-hidden="true">
         <circle cx="12" cy="12" r="10" />
         <line x1="12" y1="8" x2="12" y2="12" />
         <line x1="12" y1="16" x2="12.01" y2="16" />
       </svg>
-      <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: 15 }}>No upcoming workout</p>
-      <Link
-        to="/library"
-        style={{
-          color: 'var(--accent)',
-          textDecoration: 'none',
-          fontSize: 14,
-          fontWeight: 600,
-          padding: 'var(--sp-2) var(--sp-4)',
-          border: '1px solid var(--accent)',
-          borderRadius: 'var(--radius)',
-          minHeight: 44,
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
-        Browse library
-      </Link>
+      <p className="m-0 text-[15px] text-muted-foreground">No upcoming workout</p>
+      <Button asChild variant="outline" size="touch" className="border-primary text-primary">
+        <Link to="/library">Browse library</Link>
+      </Button>
     </div>
   );
 }
@@ -175,45 +126,31 @@ function LatestActivityCard({ activity }: LatestActivityCardProps) {
           navigate(`/workout/${activity.id}`);
         }
       }}
-      style={{
-        margin: 'var(--sp-4)',
-        padding: 'var(--sp-3) var(--sp-4)',
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--sp-3)',
-        minHeight: 44,
-        outline: 'none',
-      }}
-      onFocus={(e) => { e.currentTarget.style.outline = '2px solid var(--accent)'; }}
-      onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
+      className="m-4 flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-card-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Last Activity
-        </p>
-        <p style={{ margin: '0 0 var(--sp-1)', fontSize: 15, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {activity.name}
-        </p>
-        <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-          {(activity.type || activity.sport_type) && (
-            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{activity.type || activity.sport_type}</span>
-          )}
-          {activity.moving_time != null && (
-            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{formatDuration(activity.moving_time)}</span>
-          )}
-          {activity.distance != null && (
-            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{formatDistance(activity.distance)}</span>
-          )}
-          {activity.icu_training_load != null && (
-            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{Math.round(activity.icu_training_load)} TSS</span>
-          )}
+      <div className="min-w-0 flex-1">
+          <p className="mb-0.5 text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
+            Last Activity
+          </p>
+          <p className="mb-1 truncate text-[15px] font-semibold text-foreground">
+            {activity.name}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {(activity.type || activity.sport_type) && (
+              <span className="text-xs text-muted-foreground">{activity.type || activity.sport_type}</span>
+            )}
+            {activity.moving_time != null && (
+              <span className="text-xs text-muted-foreground">{formatDuration(activity.moving_time)}</span>
+            )}
+            {activity.distance != null && (
+              <span className="text-xs text-muted-foreground">{formatDistance(activity.distance)}</span>
+            )}
+            {activity.icu_training_load != null && (
+              <span className="text-xs text-muted-foreground">{Math.round(activity.icu_training_load)} TSS</span>
+            )}
+          </div>
         </div>
-      </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" aria-hidden="true" className="shrink-0">
         <polyline points="9 18 15 12 9 6" />
       </svg>
     </article>
@@ -237,23 +174,14 @@ function FitnessSection() {
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          margin: 'var(--sp-4)',
-          padding: 'var(--sp-4)',
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-lg)',
-        }}
-        aria-busy="true"
-      >
+      <Card className="m-4 rounded-2xl border-border bg-card p-4" aria-busy="true">
         <Skeleton width="30%" height={11} style={{ marginBottom: 'var(--sp-3)' }} />
-        <div style={{ display: 'flex', gap: 'var(--sp-4)', justifyContent: 'center' }}>
+        <div className="flex justify-center gap-4">
           <Skeleton width={80} height={80} style={{ borderRadius: '50%' }} />
           <Skeleton width={80} height={80} style={{ borderRadius: '50%' }} />
           <Skeleton width={80} height={80} style={{ borderRadius: '50%' }} />
         </div>
-      </div>
+      </Card>
     );
   }
 
@@ -273,29 +201,13 @@ function FitnessSection() {
   return (
     <section
       aria-label="Fitness summary"
-      style={{
-        margin: 'var(--sp-4)',
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        paddingTop: 'var(--sp-3)',
-        paddingBottom: 'var(--sp-4)',
-      }}
+      className="m-4 rounded-2xl border border-border bg-card pb-4 pt-3"
     >
-      <p
-        style={{
-          margin: '0 0 var(--sp-1) var(--sp-4)',
-          fontSize: 11,
-          fontWeight: 600,
-          color: 'var(--accent)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-        }}
-      >
+      <p className="mb-1 ml-4 text-[11px] font-semibold uppercase tracking-[0.06em] text-primary">
         Fitness
       </p>
       <FitnessRings fitness={fitness} fatigue={fatigue} form={form} />
-      <div style={{ padding: '0 var(--sp-4) var(--sp-2)' }}>
+      <div className="px-4 pb-2">
         <FitnessTrend series={data} />
       </div>
     </section>
@@ -306,12 +218,12 @@ function FitnessSection() {
 
 function DashboardSkeleton() {
   return (
-    <div aria-busy="true" aria-label="Loading dashboard" style={{ padding: 'var(--sp-4)' }}>
+    <div aria-busy="true" aria-label="Loading dashboard" className="p-4">
       {/* Hero card skeleton */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 'var(--sp-4)', marginBottom: 'var(--sp-4)' }}>
+      <div className="mb-4 rounded-2xl border border-border bg-card p-4">
         <Skeleton width="40%" height={11} style={{ marginBottom: 'var(--sp-2)' }} />
         <Skeleton width="70%" height={24} style={{ marginBottom: 'var(--sp-3)' }} />
-        <div style={{ display: 'flex', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)' }}>
+        <div className="mb-4 flex gap-2">
           <Skeleton width={80} height={16} />
           <Skeleton width={60} height={16} />
           <Skeleton width={50} height={16} />
@@ -319,14 +231,14 @@ function DashboardSkeleton() {
         <Skeleton width="100%" height={100} />
       </div>
       {/* Readiness skeleton */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 'var(--sp-3) var(--sp-4)', marginBottom: 'var(--sp-4)', display: 'flex', gap: 'var(--sp-3)' }}>
+      <div className="mb-4 flex gap-3 rounded-lg border border-border bg-card px-4 py-3">
         <Skeleton width={70} height={24} />
         <Skeleton width="60%" height={24} />
       </div>
       {/* Latest activity skeleton */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 'var(--sp-3) var(--sp-4)' }}>
+      <div className="rounded-lg border border-border bg-card px-4 py-3">
         <Skeleton width="50%" height={15} style={{ marginBottom: 'var(--sp-2)' }} />
-        <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+        <div className="flex gap-2">
           <Skeleton width={60} height={12} />
           <Skeleton width={50} height={12} />
         </div>
@@ -348,36 +260,13 @@ export default function Dashboard() {
       {isLoading && <DashboardSkeleton />}
 
       {isError && (
-        <div
-          style={{
-            margin: 'var(--sp-4)',
-            padding: 'var(--sp-6)',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            textAlign: 'center',
-          }}
-        >
-          <p style={{ color: 'var(--text-dim)', marginBottom: 'var(--sp-4)' }}>
+        <div className="m-4 rounded-lg border border-border bg-card p-6 text-center">
+          <p className="mb-4 text-muted-foreground">
             {error instanceof Error ? error.message : 'Could not load dashboard. Check your connection.'}
           </p>
-          <button
-            onClick={() => refetch()}
-            style={{
-              background: 'var(--accent)',
-              color: '#000',
-              border: 'none',
-              borderRadius: 'var(--radius)',
-              padding: 'var(--sp-2) var(--sp-4)',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-              minHeight: 44,
-              minWidth: 80,
-            }}
-          >
+          <Button onClick={() => refetch()} size="touch" className="min-w-[80px]">
             Retry
-          </button>
+          </Button>
         </div>
       )}
 

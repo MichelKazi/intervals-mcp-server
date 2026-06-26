@@ -115,7 +115,7 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
                 display: 'flex',
                 alignItems: 'flex-end',
                 cursor: 'pointer',
-                outline: isSelected ? '2px solid var(--accent)' : 'none',
+                outline: isSelected ? '2px solid var(--brand)' : 'none',
                 borderRadius: 'var(--radius-sm)',
               }}
             >

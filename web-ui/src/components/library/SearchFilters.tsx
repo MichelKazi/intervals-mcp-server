@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import FilterChip from './FilterChip';
+import { Input } from '../ui/input';
 
 const ZONE_OPTIONS = [
   { label: 'Endurance', value: 'endurance', color: 'var(--z2)' },
@@ -46,35 +47,19 @@ export default function SearchFilters({
   const [showMore, setShowMore] = useState(false);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+    <div className="flex flex-col gap-3">
       {/* Search input */}
-      <input
+      <Input
         type="search"
         placeholder="Search workouts…"
         value={nameSearch}
         onChange={e => onNameSearch(e.target.value)}
         aria-label="Search workouts"
-        style={{
-          width: '100%',
-          minHeight: 44,
-          padding: '0 var(--sp-3)',
-          background: 'var(--surface-2)',
-          color: 'var(--text)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          fontSize: 15,
-          fontFamily: 'var(--font)',
-          outline: 'none',
-          boxSizing: 'border-box',
-        }}
+        className="min-h-[44px] text-[15px]"
       />
 
       {/* Zone chips */}
-      <div
-        role="group"
-        aria-label="Filter by zone"
-        style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-2)' }}
-      >
+      <div role="group" aria-label="Filter by zone" className="flex flex-wrap gap-2">
         {ZONE_OPTIONS.map(z => (
           <FilterChip
             key={z.value}
@@ -90,46 +75,23 @@ export default function SearchFilters({
       <button
         type="button"
         onClick={() => setShowMore(v => !v)}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'var(--accent)',
-          fontFamily: 'var(--font)',
-          fontSize: 13,
-          cursor: 'pointer',
-          padding: 0,
-          textAlign: 'left',
-          minHeight: 44,
-        }}
+        className="min-h-[44px] cursor-pointer border-none bg-transparent p-0 text-left text-[13px] text-primary"
       >
         {showMore ? '▲ Fewer filters' : '▼ More filters'}
       </button>
 
       {showMore && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+        <div className="flex flex-col gap-3">
           {/* Duration max */}
           <div>
-            <label
-              htmlFor="duration-max"
-              style={{ fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 'var(--sp-1)' }}
-            >
+            <label htmlFor="duration-max" className="mb-1 block text-xs text-muted-foreground">
               Max duration
             </label>
             <select
               id="duration-max"
               value={durationMax ?? ''}
               onChange={e => onDurationMax(e.target.value ? Number(e.target.value) : undefined)}
-              style={{
-                minHeight: 44,
-                padding: '0 var(--sp-3)',
-                background: 'var(--surface-2)',
-                color: 'var(--text)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                fontSize: 14,
-                fontFamily: 'var(--font)',
-                cursor: 'pointer',
-              }}
+              className="min-h-[44px] cursor-pointer rounded-md border border-input bg-muted px-3 text-sm text-foreground"
             >
               <option value="">Any</option>
               {DURATION_OPTIONS.map(d => (
@@ -142,10 +104,8 @@ export default function SearchFilters({
 
           {/* TSS max chips */}
           <div>
-            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 'var(--sp-1)' }}>
-              Max TSS
-            </div>
-            <div style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
+            <div className="mb-1 text-xs text-muted-foreground">Max TSS</div>
+            <div className="flex flex-wrap gap-2">
               {TSS_OPTIONS.map(t => (
                 <FilterChip
                   key={t.value}

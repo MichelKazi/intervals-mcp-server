@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChevronLeft } from 'lucide-react';
 import BottomNav from './BottomNav';
 
 interface AppShellProps {
@@ -12,47 +13,21 @@ export default function AppShell({ title, showBack, children }: AppShellProps) {
   const navigate = useNavigate();
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'var(--font)' }}>
+    <div className="min-h-screen bg-background text-foreground font-sans">
       <header
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 'calc(56px + env(safe-area-inset-top))',
-          background: 'var(--surface)',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'flex-end',
-          padding: '0 var(--sp-4)',
-          paddingBottom: 'var(--sp-2)',
-          zIndex: 100,
-        }}
+        className="fixed inset-x-0 top-0 z-[100] flex items-end border-b border-border bg-card px-4 pb-2 pt-safe"
+        style={{ height: 'calc(56px + env(safe-area-inset-top))' }}
       >
         {showBack && (
           <button
             onClick={() => navigate(-1)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text)',
-              cursor: 'pointer',
-              padding: 'var(--sp-2)',
-              minWidth: 44,
-              minHeight: 44,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: 'var(--sp-2)',
-            }}
+            className="mr-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Go back"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
+            <ChevronLeft className="h-5 w-5" strokeWidth={2} />
           </button>
         )}
-        <h1 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>{title}</h1>
+        <h1 className="m-0 flex-1 text-[17px] font-semibold">{title}</h1>
       </header>
       <main
         style={{

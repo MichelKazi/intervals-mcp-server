@@ -5,6 +5,7 @@ import SearchFilters from '../components/library/SearchFilters';
 import ResultList from '../components/library/ResultList';
 import WorkoutPreviewSheet from '../components/library/WorkoutPreviewSheet';
 import CustomWorkoutForm from '../components/library/CustomWorkoutForm';
+import { Button } from '../components/ui/button';
 import { searchLibrary } from '../lib/api';
 import type { LibraryWorkout } from '../lib/types';
 
@@ -62,51 +63,32 @@ export default function LibraryAdd() {
         <div
           role="status"
           aria-live="polite"
+          className="fixed inset-x-4 z-[150] rounded-md px-4 py-3 text-center text-sm font-semibold text-white shadow-lg"
           style={{
-            position: 'fixed',
             top: 'calc(64px + env(safe-area-inset-top))',
-            left: 'var(--sp-4)',
-            right: 'var(--sp-4)',
             background: 'var(--z2)',
-            color: '#fff',
-            padding: 'var(--sp-3) var(--sp-4)',
-            borderRadius: 'var(--radius)',
-            zIndex: 150,
-            fontWeight: 600,
-            fontSize: 14,
-            textAlign: 'center',
-            boxShadow: 'var(--shadow-2)',
           }}
         >
           Scheduled!
         </div>
       )}
 
-      <div style={{ padding: 'var(--sp-4)' }}>
+      <div className="p-4">
         {/* Header row */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--sp-3)' }}>
-          <button
+        <div className="mb-3 flex justify-end">
+          <Button
             type="button"
             onClick={() => setShowCustomForm(true)}
-            style={{
-              minHeight: 44,
-              padding: '0 var(--sp-4)',
-              background: 'var(--surface-2)',
-              color: 'var(--accent)',
-              border: `1px solid var(--accent)`,
-              borderRadius: 'var(--radius)',
-              fontSize: 14,
-              fontFamily: 'var(--font)',
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
+            variant="outline"
+            size="touch"
+            className="border-primary bg-muted text-primary"
           >
             Build custom
-          </button>
+          </Button>
         </div>
 
         {/* Filters */}
-        <div style={{ marginBottom: 'var(--sp-4)' }}>
+        <div className="mb-4">
           <SearchFilters
             nameSearch={nameSearch}
             onNameSearch={setNameSearch}
@@ -121,36 +103,13 @@ export default function LibraryAdd() {
 
         {/* Results */}
         {isError ? (
-          <div
-            role="alert"
-            style={{
-              padding: 'var(--sp-4)',
-              color: 'var(--error, #e55)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--sp-3)',
-              alignItems: 'flex-start',
-            }}
-          >
+          <div role="alert" className="flex flex-col items-start gap-3 p-4 text-destructive">
             <span>
               {error instanceof Error ? error.message : 'Could not load workouts. Check your connection.'}
             </span>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              style={{
-                minHeight: 44,
-                padding: '0 var(--sp-4)',
-                background: 'var(--surface-2)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                fontSize: 14,
-                fontFamily: 'var(--font)',
-                cursor: 'pointer',
-              }}
-            >
+            <Button type="button" onClick={() => refetch()} variant="outline" size="touch">
               Retry
-            </button>
+            </Button>
           </div>
         ) : (
           <ResultList

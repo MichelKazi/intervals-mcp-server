@@ -221,7 +221,7 @@ export default function Calendar() {
             onClick={() => navigate('/library')}
             aria-label="Add workout"
             style={{
-              background: 'var(--accent)',
+              background: 'var(--brand)',
               border: 'none',
               color: 'var(--bg)',
               cursor: 'pointer',
@@ -273,7 +273,7 @@ export default function Calendar() {
             <button
               onClick={() => refetch()}
               style={{
-                background: 'var(--accent)',
+                background: 'var(--brand)',
                 border: 'none',
                 color: 'var(--bg)',
                 padding: 'var(--sp-2) var(--sp-4)',

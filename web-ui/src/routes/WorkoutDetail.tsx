@@ -7,6 +7,9 @@ import MetricStrip from '../components/workout/MetricStrip';
 import LapList from '../components/workout/LapList';
 import ActionRow from '../components/workout/ActionRow';
 import AlternativesSheet from '../components/workout/AlternativesSheet';
+import Skeleton from '../components/Skeleton';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import {
   getEvent,
   getActivity,
@@ -30,38 +33,33 @@ import { formatDate, formatDuration, DEFAULT_FTP } from '../lib/format';
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
-function SkeletonBar({ width = '100%', height = 16 }: { width?: string | number; height?: number }) {
+function LoadingSkeleton() {
   return (
-    <div
-      style={{
-        width,
-        height,
-        background: 'var(--surface-2)',
-        borderRadius: 'var(--radius-sm)',
-        animation: 'skeleton-pulse 1.4s ease-in-out infinite',
-      }}
-    />
+    <div className="flex flex-col gap-4 p-4">
+      {/* Chart placeholder */}
+      <Skeleton height={220} />
+      {/* Metric strip */}
+      <div className="flex justify-around gap-4">
+        <Skeleton width={60} height={36} />
+        <Skeleton width={60} height={36} />
+        <Skeleton width={60} height={36} />
+      </div>
+      {/* Action row */}
+      <div className="flex gap-2">
+        <Skeleton height={44} />
+        <Skeleton height={44} />
+      </div>
+    </div>
   );
 }
 
-function LoadingSkeleton() {
+// ── Section heading (shared) ────────────────────────────────────────────────
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ padding: 'var(--sp-4)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
-      <style>{`@keyframes skeleton-pulse { 0%,100%{opacity:.6} 50%{opacity:.3} }`}</style>
-      {/* Chart placeholder */}
-      <SkeletonBar height={220} />
-      {/* Metric strip */}
-      <div style={{ display: 'flex', gap: 'var(--sp-4)', justifyContent: 'space-around' }}>
-        <SkeletonBar width={60} height={36} />
-        <SkeletonBar width={60} height={36} />
-        <SkeletonBar width={60} height={36} />
-      </div>
-      {/* Action row */}
-      <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-        <SkeletonBar height={44} />
-        <SkeletonBar height={44} />
-      </div>
-    </div>
+    <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+      {children}
+    </h2>
   );
 }
 
@@ -100,112 +98,48 @@ function EditForm({ event, onClose, onSaved }: EditFormProps) {
   }
 
   return (
-    <form
-      onSubmit={handleSave}
-      style={{
-        margin: '0 var(--sp-4) var(--sp-4)',
-        background: 'var(--surface)',
-        borderRadius: 'var(--radius)',
-        padding: 'var(--sp-4)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--sp-3)',
-      }}
-    >
-      <h2
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: 'var(--text-dim)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          margin: 0,
-        }}
-      >
+    <form onSubmit={handleSave} className="mx-4 mb-4 flex flex-col gap-3 rounded-md bg-card p-4">
+      <h2 className="m-0 text-[13px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
         Edit workout
       </h2>
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-1)' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Name</span>
-        <input
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">Name</span>
+        <Input
           data-testid="edit-name-input"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          style={{
-            background: 'var(--surface-2)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            color: 'var(--text)',
-            padding: 'var(--sp-2) var(--sp-3)',
-            fontSize: 15,
-            minHeight: 44,
-            fontFamily: 'var(--font)',
-          }}
+          className="min-h-[44px] text-[15px]"
         />
       </label>
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-1)' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Date</span>
-        <input
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">Date</span>
+        <Input
           data-testid="edit-date-input"
           type="date"
           value={dateStr}
           onChange={(e) => setDateStr(e.target.value)}
-          style={{
-            background: 'var(--surface-2)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            color: 'var(--text)',
-            padding: 'var(--sp-2) var(--sp-3)',
-            fontSize: 15,
-            minHeight: 44,
-            colorScheme: 'dark',
-            fontFamily: 'var(--font)',
-          }}
+          className="min-h-[44px] text-[15px] [color-scheme:dark]"
         />
       </label>
 
-      {error && (
-        <div style={{ fontSize: 13, color: '#e84040' }}>{error}</div>
-      )}
+      {error && <div className="text-[13px]" style={{ color: 'var(--z5)' }}>{error}</div>}
 
-      <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-        <button
-          type="submit"
-          disabled={saving}
-          style={{
-            flex: 1,
-            minHeight: 44,
-            background: 'var(--accent)',
-            border: 'none',
-            borderRadius: 'var(--radius)',
-            color: '#000',
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontFamily: 'var(--font)',
-          }}
-        >
+      <div className="flex gap-2">
+        <Button type="submit" disabled={saving} size="touch" className="flex-1">
           {saving ? 'Saving…' : 'Save'}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={onClose}
-          style={{
-            flex: 1,
-            minHeight: 44,
-            background: 'var(--surface-2)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            color: 'var(--text)',
-            fontSize: 14,
-            cursor: 'pointer',
-            fontFamily: 'var(--font)',
-          }}
+          variant="outline"
+          size="touch"
+          className="flex-1 bg-muted"
         >
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -219,50 +153,16 @@ function Description({ text }: { text: string }) {
   const isLong = text.length > PREVIEW_LEN;
 
   return (
-    <div style={{ margin: '0 var(--sp-4) var(--sp-4)' }}>
-      <h2
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: 'var(--text-dim)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          margin: '0 0 var(--sp-2)',
-        }}
-      >
-        Description
-      </h2>
-      <div
-        style={{
-          background: 'var(--surface)',
-          borderRadius: 'var(--radius)',
-          padding: 'var(--sp-3) var(--sp-4)',
-        }}
-      >
-        <p
-          style={{
-            fontSize: 13,
-            color: 'var(--text-dim)',
-            lineHeight: 1.5,
-            margin: 0,
-            whiteSpace: 'pre-wrap',
-          }}
-        >
+    <div className="mx-4 mb-4">
+      <SectionHeading>Description</SectionHeading>
+      <div className="rounded-md bg-card px-4 py-3">
+        <p className="m-0 whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">
           {isLong && !expanded ? text.slice(0, PREVIEW_LEN) + '…' : text}
         </p>
         {isLong && (
           <button
             onClick={() => setExpanded((e) => !e)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--accent)',
-              fontSize: 13,
-              cursor: 'pointer',
-              padding: 'var(--sp-2) 0 0',
-              fontFamily: 'var(--font)',
-              minHeight: 44,
-            }}
+            className="min-h-[44px] cursor-pointer border-none bg-transparent pt-2 text-[13px] text-primary"
           >
             {expanded ? 'Show less' : 'Show more'}
           </button>
@@ -281,23 +181,6 @@ const VERDICT_META: Record<ComplianceVerdict, { label: string; color: string }> 
   unknown: { label: 'Unknown', color: 'var(--text-dim)' },
 };
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <h2
-      style={{
-        fontSize: 13,
-        fontWeight: 600,
-        color: 'var(--text-dim)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-        margin: '0 0 var(--sp-2)',
-      }}
-    >
-      {children}
-    </h2>
-  );
-}
-
 function ComplianceRow({
   label,
   planned,
@@ -310,24 +193,12 @@ function ComplianceRow({
   pct: number | null;
 }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        gap: 'var(--sp-3)',
-        padding: 'var(--sp-2) 0',
-        borderBottom: '1px solid var(--border)',
-        fontSize: 14,
-      }}
-    >
-      <span style={{ color: 'var(--text-dim)', minWidth: 80 }}>{label}</span>
-      <span style={{ color: 'var(--text)', textAlign: 'right', flex: 1 }}>
-        {planned} <span style={{ color: 'var(--text-dim)' }}>→</span> {actual}
+    <div className="flex items-baseline justify-between gap-3 border-b border-border py-2 text-sm">
+      <span className="min-w-[80px] text-muted-foreground">{label}</span>
+      <span className="flex-1 text-right text-foreground">
+        {planned} <span className="text-muted-foreground">→</span> {actual}
         {pct !== null && (
-          <span style={{ color: 'var(--text-dim)', marginLeft: 'var(--sp-2)' }}>
-            ({pct}%)
-          </span>
+          <span className="ml-2 text-muted-foreground">({pct}%)</span>
         )}
       </span>
     </div>
@@ -352,11 +223,11 @@ function ActivityPicker({ onPick, pairing }: ActivityPickerProps) {
   });
 
   if (isLoading) {
-    return <SkeletonBar height={44} />;
+    return <Skeleton height={44} />;
   }
   if (isError) {
     return (
-      <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0 }}>
+      <p className="m-0 text-[13px] text-muted-foreground">
         Could not load recent activities.
       </p>
     );
@@ -364,41 +235,24 @@ function ActivityPicker({ onPick, pairing }: ActivityPickerProps) {
   const activities = data ?? [];
   if (activities.length === 0) {
     return (
-      <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0 }}>
+      <p className="m-0 text-[13px] text-muted-foreground">
         No linkable activities found.
       </p>
     );
   }
 
   return (
-    <div
-      data-testid="activity-picker"
-      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-1)' }}
-    >
+    <div data-testid="activity-picker" className="flex flex-col gap-1">
       {activities.map((a) => (
         <button
           key={String(a.id)}
           data-testid="activity-option"
           disabled={pairing}
           onClick={() => onPick(a.id)}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            gap: 2,
-            minHeight: 44,
-            textAlign: 'left',
-            background: 'var(--surface-2)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            color: 'var(--text)',
-            padding: 'var(--sp-2) var(--sp-3)',
-            cursor: pairing ? 'default' : 'pointer',
-            fontFamily: 'var(--font)',
-          }}
+          className="flex min-h-[44px] cursor-pointer flex-col items-start gap-0.5 rounded-md border border-border bg-muted px-3 py-2 text-left text-foreground disabled:cursor-default"
         >
-          <span style={{ fontSize: 14 }}>{a.name}</span>
-          <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+          <span className="text-sm">{a.name}</span>
+          <span className="text-xs text-muted-foreground">
             {formatDate(a.start_date_local)}
             {a.icu_training_load != null && ` · ${a.icu_training_load} TSS`}
           </span>
@@ -456,19 +310,13 @@ function ComplianceSection({ eventId, onChanged }: ComplianceSectionProps) {
   }
 
   return (
-    <div data-testid="compliance-section" style={{ margin: '0 var(--sp-4) var(--sp-4)' }}>
+    <div data-testid="compliance-section" className="mx-4 mb-4">
       <SectionHeading>Compliance</SectionHeading>
-      <div
-        style={{
-          background: 'var(--surface)',
-          borderRadius: 'var(--radius)',
-          padding: 'var(--sp-3) var(--sp-4)',
-        }}
-      >
-        {isLoading && <SkeletonBar height={48} />}
+      <div className="rounded-md bg-card px-4 py-3">
+        {isLoading && <Skeleton height={48} />}
 
         {!isLoading && isError && (
-          <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0 }}>
+          <p className="m-0 text-[13px] text-muted-foreground">
             Compliance data unavailable.
           </p>
         )}
@@ -476,23 +324,20 @@ function ComplianceSection({ eventId, onChanged }: ComplianceSectionProps) {
         {!isLoading && !isError && compliance && (
           <>
             {compliance.paired && compliance.actual ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
                   <span
                     data-testid="verdict-badge"
+                    className="rounded-sm px-2.5 py-1 text-xs font-bold"
                     style={{
                       background: VERDICT_META[compliance.compliance.verdict].color,
                       color: '#0a0e14',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      padding: '4px 10px',
-                      borderRadius: 'var(--radius-sm)',
                     }}
                   >
                     {VERDICT_META[compliance.compliance.verdict].label}
                   </span>
                   {compliance.compliance.load_pct !== null && (
-                    <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>
+                    <span className="text-[13px] text-muted-foreground">
                       {compliance.compliance.load_pct}% of planned
                     </span>
                   )}
@@ -523,25 +368,14 @@ function ComplianceSection({ eventId, onChanged }: ComplianceSectionProps) {
                   data-testid="unlink-btn"
                   onClick={handleUnlink}
                   disabled={mutating}
-                  style={{
-                    alignSelf: 'flex-start',
-                    minHeight: 44,
-                    marginTop: 'var(--sp-1)',
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--accent)',
-                    fontSize: 13,
-                    cursor: mutating ? 'default' : 'pointer',
-                    fontFamily: 'var(--font)',
-                    padding: 'var(--sp-2) 0',
-                  }}
+                  className="mt-1 min-h-[44px] cursor-pointer self-start border-none bg-transparent py-2 text-[13px] text-primary disabled:cursor-default"
                 >
                   {mutating ? 'Working…' : 'Unlink'}
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
-                <p style={{ fontSize: 14, color: 'var(--text-dim)', margin: 0 }}>
+              <div className="flex flex-col gap-3">
+                <p className="m-0 text-sm text-muted-foreground">
                   {compliance.paired
                     ? 'Linked activity is unavailable.'
                     : 'Not linked to an activity yet.'}
@@ -550,18 +384,7 @@ function ComplianceSection({ eventId, onChanged }: ComplianceSectionProps) {
                   <button
                     data-testid="link-activity-btn"
                     onClick={() => setPickerOpen(true)}
-                    style={{
-                      alignSelf: 'flex-start',
-                      minHeight: 44,
-                      background: 'var(--surface-2)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius)',
-                      color: 'var(--text)',
-                      fontSize: 14,
-                      padding: 'var(--sp-2) var(--sp-4)',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font)',
-                    }}
+                    className="min-h-[44px] cursor-pointer self-start rounded-md border border-border bg-muted px-4 py-2 text-sm text-foreground"
                   >
                     Link activity…
                   </button>
@@ -571,17 +394,7 @@ function ComplianceSection({ eventId, onChanged }: ComplianceSectionProps) {
                     data-testid="unlink-btn"
                     onClick={handleUnlink}
                     disabled={mutating}
-                    style={{
-                      alignSelf: 'flex-start',
-                      minHeight: 44,
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--accent)',
-                      fontSize: 13,
-                      cursor: mutating ? 'default' : 'pointer',
-                      fontFamily: 'var(--font)',
-                      padding: 'var(--sp-2) 0',
-                    }}
+                    className="min-h-[44px] cursor-pointer self-start border-none bg-transparent py-2 text-[13px] text-primary disabled:cursor-default"
                   >
                     {mutating ? 'Working…' : 'Unlink'}
                   </button>
@@ -593,7 +406,7 @@ function ComplianceSection({ eventId, onChanged }: ComplianceSectionProps) {
             )}
 
             {actionError && (
-              <p style={{ fontSize: 13, color: '#e84040', margin: 'var(--sp-2) 0 0' }}>
+              <p className="m-0 mt-2 text-[13px]" style={{ color: 'var(--z5)' }}>
                 {actionError}
               </p>
             )}
@@ -707,29 +520,16 @@ export default function WorkoutDetail() {
       {eventLoading && <LoadingSkeleton />}
 
       {!eventLoading && eventError && (
-        <div style={{ padding: 'var(--sp-4)', color: 'var(--text-dim)', textAlign: 'center' }}>
+        <div className="p-4 text-center text-muted-foreground">
           <p>Could not load workout.</p>
-          <button
-            onClick={() => refetchEvent()}
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              color: 'var(--text)',
-              padding: 'var(--sp-2) var(--sp-4)',
-              cursor: 'pointer',
-              fontSize: 14,
-              minHeight: 44,
-              fontFamily: 'var(--font)',
-            }}
-          >
+          <Button onClick={() => refetchEvent()} variant="outline" size="touch" className="bg-card">
             Retry
-          </button>
+          </Button>
         </div>
       )}
 
       {!eventLoading && !eventError && !event && (
-        <div style={{ padding: 'var(--sp-4)', color: 'var(--text-dim)' }}>
+        <div className="p-4 text-muted-foreground">
           Workout details unavailable.
         </div>
       )}
@@ -737,24 +537,12 @@ export default function WorkoutDetail() {
       {!eventLoading && event && (
         <>
           {/* Date line */}
-          <div
-            style={{
-              padding: 'var(--sp-2) var(--sp-4) 0',
-              fontSize: 12,
-              color: 'var(--text-dim)',
-            }}
-          >
+          <div className="px-4 pt-2 text-xs text-muted-foreground">
             {formatDate(event.start_date_local)}
           </div>
 
           {/* Chart hero — ~40vh, visually dominant */}
-          <div
-            data-testid="chart-container"
-            style={{
-              padding: 'var(--sp-4)',
-              paddingBottom: 'var(--sp-2)',
-            }}
-          >
+          <div data-testid="chart-container" className="px-4 pb-2 pt-4">
             {chartSteps || chartLaps ? (
               <WorkoutChart
                 steps={chartSteps}
@@ -762,18 +550,7 @@ export default function WorkoutDetail() {
                 ftp={ftp}
               />
             ) : (
-              <div
-                style={{
-                  height: 220,
-                  background: 'var(--surface)',
-                  borderRadius: 'var(--radius)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--text-dim)',
-                  fontSize: 13,
-                }}
-              >
+              <div className="flex h-[220px] items-center justify-center rounded-md bg-card text-[13px] text-muted-foreground">
                 No workout data
               </div>
             )}

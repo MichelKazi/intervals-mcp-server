@@ -1,3 +1,98 @@
-*, *::before, *::after { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
-#root { min-height: 100vh; }
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── shadcn semantic slots (HSL channel values, no hsl() wrapper) ─────── */
+    --background: 220 31% 7%;          /* #0a0e14 deep blue-black */
+    --foreground: 210 40% 93%;         /* #e6edf3 */
+
+    --card: 217 29% 11%;               /* #131a24 */
+    --card-foreground: 210 40% 93%;
+
+    --popover: 213 27% 15%;            /* #1c2531 */
+    --popover-foreground: 210 40% 93%;
+
+    --primary: 38 100% 47%;            /* #f0a500 amber — our brand */
+    --primary-foreground: 220 31% 7%;  /* near-black text on amber */
+
+    --secondary: 213 27% 15%;          /* #1c2531 surface-2 */
+    --secondary-foreground: 210 40% 93%;
+
+    --muted: 213 27% 15%;              /* surface-2 inset fills */
+    --muted-foreground: 211 12% 60%;   /* #8b98a5 */
+
+    --accent: 213 27% 15%;             /* hover surface (NOT brand) */
+    --accent-foreground: 210 40% 93%;
+
+    --destructive: 0 78% 58%;          /* #e84040 zone-5 red */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 213 25% 19%;             /* #243040 */
+    --input: 213 25% 19%;
+    --ring: 38 100% 47%;               /* amber focus ring — 9.29:1 on bg (AAA) */
+    --radius: 0.5rem;                  /* 8px */
+
+    /* ── Legacy CSS var names — kept for SVG attributes + backward compat ─── */
+    --bg: #0a0e14;
+    --surface: #131a24;
+    --surface-2: #1c2531;
+    --text: #e6edf3;
+    --text-dim: #8b98a5;
+    --brand: #f0a500;                  /* renamed from --accent (shadcn's --accent is a hover surface) */
+    --brand-dim: #b87c00;
+    --z1: #4a9eff;
+    --z2: #52c77f;
+    --z3: #f5c842;
+    --z4: #f5842a;
+    --z5: #e84040;
+    --z6: #c040e8;
+    --z7: #ff3399;
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-6: 24px;
+    --sp-8: 32px;
+    --radius-sm: 4px;
+    --radius-lg: 16px;
+    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-3: 0 8px 32px rgba(0, 0, 0, 0.65);
+    --font: -apple-system, 'SF Pro Text', system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', monospace;
+  }
+}
+
+/* Global reset — kept deliberate and narrow (Tailwind preflight is disabled). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Shimmer skeleton — combined with the Tailwind animate-shimmer keyframe. */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+}

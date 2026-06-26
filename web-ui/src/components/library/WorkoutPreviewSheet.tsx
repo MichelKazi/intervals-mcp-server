@@ -3,6 +3,10 @@ import type { LibraryWorkout, WorkoutStep } from '../../lib/types';
 import { formatDuration } from '../../lib/format';
 import WorkoutChart from '../WorkoutChart';
 import { createCustomWorkout, createEvent, getAlternatives } from '../../lib/api';
+import { Sheet, SheetContent, SheetTitle } from '../ui/sheet';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { cn } from '@/lib/utils';
 
 const ZONE_COLORS: Record<string, string> = {
   endurance: 'var(--z2)',
@@ -43,11 +47,10 @@ interface WorkoutPreviewSheetProps {
 
 interface PreviewInnerProps {
   workout: LibraryWorkout;
-  onClose: () => void;
   onScheduled: () => void;
 }
 
-function PreviewInner({ workout, onClose, onScheduled }: PreviewInnerProps) {
+function PreviewInner({ workout, onScheduled }: PreviewInnerProps) {
   const [scheduleDate, setScheduleDate] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
@@ -106,278 +109,175 @@ function PreviewInner({ workout, onClose, onScheduled }: PreviewInnerProps) {
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={workout.name}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 200,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-end',
-      }}
-    >
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'rgba(0,0,0,0.6)',
-        }}
-      />
+    <>
+      {/* Drag handle */}
+      <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
 
-      {/* Sheet */}
-      <div
-        style={{
-          position: 'relative',
-          background: 'var(--surface)',
-          borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
-          padding: 'var(--sp-4)',
-          paddingBottom: 'calc(var(--sp-8) + env(safe-area-inset-bottom))',
-          maxHeight: '85vh',
-          overflowY: 'auto',
-          boxShadow: 'var(--shadow-3)',
-        }}
-      >
-        {/* Close / drag handle */}
-        <div
-          style={{
-            width: 40,
-            height: 4,
-            borderRadius: 2,
-            background: 'var(--border)',
-            margin: '0 auto var(--sp-4)',
-          }}
-        />
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close preview"
-          style={{
-            position: 'absolute',
-            top: 'var(--sp-4)',
-            right: 'var(--sp-4)',
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-dim)',
-            cursor: 'pointer',
-            fontSize: 20,
-            minWidth: 44,
-            minHeight: 44,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          ✕
-        </button>
+      {/* Name */}
+      <SheetTitle className="mb-3 text-lg font-bold">{workout.name}</SheetTitle>
 
-        {/* Name */}
-        <h2 style={{ margin: '0 0 var(--sp-3)', fontSize: 18, fontWeight: 700 }}>{workout.name}</h2>
-
-        {/* Stats row */}
-        <div style={{ display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap', marginBottom: 'var(--sp-3)' }}>
-          {workout.duration_secs != null && (
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Duration</div>
-              <div style={{ fontWeight: 600 }}>{formatDuration(workout.duration_secs)}</div>
-            </div>
-          )}
-          {workout.tss != null && (
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>TSS</div>
-              <div style={{ fontWeight: 600 }}>{Math.round(workout.tss)}</div>
-            </div>
-          )}
-          {workout.interval_count != null && (
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Intervals</div>
-              <div style={{ fontWeight: 600 }}>{workout.interval_count}</div>
-            </div>
-          )}
-          {workout.intensity_min != null && workout.intensity_max != null && (
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Intensity</div>
-              <div style={{ fontWeight: 600 }}>{workout.intensity_min}–{workout.intensity_max}%</div>
-            </div>
-          )}
-        </div>
-
-        {/* Zone chips */}
-        {(workout.zone_focus ?? []).length > 0 && (
-          <div style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginBottom: 'var(--sp-3)' }}>
-            {(workout.zone_focus ?? []).map(z => (
-              <span
-                key={z}
-                style={{
-                  fontSize: 12,
-                  padding: '4px 10px',
-                  borderRadius: 'var(--radius)',
-                  background: ZONE_COLORS[z] ?? 'var(--surface-2)',
-                  color: '#fff',
-                  fontWeight: 600,
-                  textTransform: 'capitalize',
-                }}
-              >
-                {zoneLabel(z)}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Description */}
-        {workout.description && (
-          <p style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 'var(--sp-4)', lineHeight: 1.5 }}>
-            {workout.description}
-          </p>
-        )}
-
-        {/* Workout chart */}
-        {steps && (
-          <div style={{ marginBottom: 'var(--sp-4)' }}>
-            <WorkoutChart steps={steps} />
-          </div>
-        )}
-
-        {/* Schedule */}
-        <div style={{ marginBottom: 'var(--sp-4)' }}>
-          <label
-            htmlFor="schedule-date"
-            style={{ fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 'var(--sp-2)' }}
-          >
-            Schedule date
-          </label>
-          <div style={{ display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              id="schedule-date"
-              type="date"
-              value={scheduleDate}
-              onChange={e => { setScheduleDate(e.target.value); setStatus('idle'); }}
-              style={{
-                minHeight: 44,
-                padding: '0 var(--sp-3)',
-                background: 'var(--surface-2)',
-                color: 'var(--text)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                fontSize: 14,
-                fontFamily: 'var(--font)',
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleAddToCalendar}
-              disabled={!scheduleDate || status === 'loading' || status === 'success'}
-              style={{
-                minHeight: 44,
-                padding: '0 var(--sp-4)',
-                background: 'var(--accent)',
-                color: '#000',
-                border: 'none',
-                borderRadius: 'var(--radius)',
-                fontSize: 14,
-                fontWeight: 600,
-                fontFamily: 'var(--font)',
-                cursor: scheduleDate ? 'pointer' : 'not-allowed',
-                opacity: scheduleDate ? 1 : 0.5,
-              }}
-            >
-              {status === 'loading' ? 'Adding…' : status === 'success' ? 'Added!' : 'Add to calendar'}
-            </button>
-          </div>
-          {status === 'error' && (
-            <p style={{ color: 'var(--z5)', fontSize: 13, marginTop: 'var(--sp-2)' }}>{errorMsg}</p>
-          )}
-        </div>
-
-        {/* Alternatives */}
-        {workout.tr_workout_id && (
+      {/* Stats row */}
+      <div className="mb-3 flex flex-wrap gap-4">
+        {workout.duration_secs != null && (
           <div>
-            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 'var(--sp-2)' }}>
-              Find alternatives
-            </div>
-            <div style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', marginBottom: 'var(--sp-3)' }}>
-              {ALT_ADJUSTMENTS.map(({ label, value }) => (
-                <button
-                  key={value}
-                  type="button"
-                  data-adjustment={value}
-                  onClick={() => handleAltChip(value)}
-                  aria-pressed={altAdjustment === value}
-                  style={{
-                    minHeight: 44,
-                    padding: '0 var(--sp-3)',
-                    background: altAdjustment === value ? 'var(--accent)' : 'var(--surface-2)',
-                    color: altAdjustment === value ? '#000' : 'var(--text)',
-                    border: `1px solid ${altAdjustment === value ? 'var(--accent)' : 'var(--border)'}`,
-                    borderRadius: 'var(--radius)',
-                    fontSize: 13,
-                    fontFamily: 'var(--font)',
-                    cursor: 'pointer',
-                    fontWeight: altAdjustment === value ? 600 : 400,
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-              {altResults && (
-                <button
-                  type="button"
-                  onClick={() => { setAltAdjustment(null); setAltResults(null); }}
-                  style={{
-                    minHeight: 44,
-                    padding: '0 var(--sp-3)',
-                    background: 'none',
-                    color: 'var(--accent)',
-                    border: 'none',
-                    fontSize: 13,
-                    fontFamily: 'var(--font)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  ← Back to results
-                </button>
-              )}
-            </div>
-
-            {altLoading && (
-              <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>Loading alternatives…</p>
-            )}
-            {altResults && !altLoading && altResults.length === 0 && (
-              <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>No alternatives found.</p>
-            )}
-            {altResults && !altLoading && altResults.length > 0 && (
-              <div>
-                {altResults.map((w, idx) => (
-                  <div
-                    key={w.tr_workout_id ?? idx}
-                    style={{
-                      padding: 'var(--sp-3)',
-                      background: 'var(--surface-2)',
-                      borderRadius: 'var(--radius)',
-                      marginBottom: 'var(--sp-2)',
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{w.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-                      {w.duration_secs ? formatDuration(w.duration_secs) : '—'}
-                      {w.tss != null ? ` · ${Math.round(w.tss)} TSS` : ''}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground">Duration</div>
+            <div className="font-semibold">{formatDuration(workout.duration_secs)}</div>
+          </div>
+        )}
+        {workout.tss != null && (
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground">TSS</div>
+            <div className="font-semibold">{Math.round(workout.tss)}</div>
+          </div>
+        )}
+        {workout.interval_count != null && (
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground">Intervals</div>
+            <div className="font-semibold">{workout.interval_count}</div>
+          </div>
+        )}
+        {workout.intensity_min != null && workout.intensity_max != null && (
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground">Intensity</div>
+            <div className="font-semibold">{workout.intensity_min}–{workout.intensity_max}%</div>
           </div>
         )}
       </div>
-    </div>
+
+      {/* Zone chips */}
+      {(workout.zone_focus ?? []).length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {(workout.zone_focus ?? []).map(z => (
+            <span
+              key={z}
+              className="rounded-md px-2.5 py-1 text-xs font-semibold capitalize text-white"
+              style={{ background: ZONE_COLORS[z] ?? 'var(--surface-2)' }}
+            >
+              {zoneLabel(z)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Description */}
+      {workout.description && (
+        <p className="mb-4 text-[13px] leading-relaxed text-muted-foreground">
+          {workout.description}
+        </p>
+      )}
+
+      {/* Workout chart */}
+      {steps && (
+        <div className="mb-4">
+          <WorkoutChart steps={steps} />
+        </div>
+      )}
+
+      {/* Schedule */}
+      <div className="mb-4">
+        <label htmlFor="schedule-date" className="mb-2 block text-xs text-muted-foreground">
+          Schedule date
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            id="schedule-date"
+            type="date"
+            value={scheduleDate}
+            onChange={e => { setScheduleDate(e.target.value); setStatus('idle'); }}
+            className="min-h-[44px] w-auto [color-scheme:dark]"
+          />
+          <Button
+            type="button"
+            onClick={handleAddToCalendar}
+            disabled={!scheduleDate || status === 'loading' || status === 'success'}
+            size="touch"
+          >
+            {status === 'loading' ? 'Adding…' : status === 'success' ? 'Added!' : 'Add to calendar'}
+          </Button>
+        </div>
+        {status === 'error' && (
+          <p className="mt-2 text-[13px]" style={{ color: 'var(--z5)' }}>{errorMsg}</p>
+        )}
+      </div>
+
+      {/* Alternatives */}
+      {workout.tr_workout_id && (
+        <div>
+          <div className="mb-2 text-xs text-muted-foreground">Find alternatives</div>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {ALT_ADJUSTMENTS.map(({ label, value }) => (
+              <button
+                key={value}
+                type="button"
+                data-adjustment={value}
+                onClick={() => handleAltChip(value)}
+                aria-pressed={altAdjustment === value}
+                className={cn(
+                  'min-h-[44px] cursor-pointer rounded-md border px-3 text-[13px]',
+                  altAdjustment === value
+                    ? 'border-primary bg-primary font-semibold text-primary-foreground'
+                    : 'border-border bg-muted font-normal text-foreground',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+            {altResults && (
+              <button
+                type="button"
+                onClick={() => { setAltAdjustment(null); setAltResults(null); }}
+                className="min-h-[44px] cursor-pointer border-none bg-transparent text-[13px] text-primary"
+              >
+                ← Back to results
+              </button>
+            )}
+          </div>
+
+          {altLoading && (
+            <p className="text-[13px] text-muted-foreground">Loading alternatives…</p>
+          )}
+          {altResults && !altLoading && altResults.length === 0 && (
+            <p className="text-[13px] text-muted-foreground">No alternatives found.</p>
+          )}
+          {altResults && !altLoading && altResults.length > 0 && (
+            <div>
+              {altResults.map((w, idx) => (
+                <div
+                  key={w.tr_workout_id ?? idx}
+                  className="mb-2 rounded-md bg-muted p-3"
+                >
+                  <div className="text-sm font-semibold">{w.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {w.duration_secs ? formatDuration(w.duration_secs) : '—'}
+                    {w.tss != null ? ` · ${Math.round(w.tss)} TSS` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 
 export default function WorkoutPreviewSheet({ workout, onClose, onScheduled }: WorkoutPreviewSheetProps) {
-  if (!workout) return null;
-  return <PreviewInner workout={workout} onClose={onClose} onScheduled={onScheduled} />;
+  return (
+    <Sheet open={!!workout} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent
+        side="bottom"
+        aria-label={workout?.name}
+        className="max-h-[85vh] overflow-y-auto p-4"
+        style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
+      >
+        {workout && (
+          <PreviewInner
+            key={workout.tr_workout_id ?? workout.name}
+            workout={workout}
+            onScheduled={onScheduled}
+          />
+        )}
+      </SheetContent>
+    </Sheet>
+  );
 }

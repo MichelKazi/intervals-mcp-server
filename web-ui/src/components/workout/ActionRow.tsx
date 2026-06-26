@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { markEventDone, moveEvent } from '../../lib/api';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 
 interface ActionRowProps {
   eventId: string | number;
@@ -8,25 +10,6 @@ interface ActionRowProps {
   onFindAlternatives?: () => void;
   onEditClick?: () => void;
 }
-
-const btnStyle: React.CSSProperties = {
-  flex: 1,
-  minHeight: 44,
-  minWidth: 44,
-  padding: 'var(--sp-2) var(--sp-3)',
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  color: 'var(--text)',
-  fontSize: 13,
-  fontWeight: 500,
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 'var(--sp-1)',
-  fontFamily: 'var(--font)',
-};
 
 export default function ActionRow({
   eventId,
@@ -63,70 +46,63 @@ export default function ActionRow({
   }
 
   return (
-    <div style={{ margin: '0 var(--sp-4) var(--sp-4)' }}>
-      <div style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
-        <button
+    <div className="mx-4 mb-4">
+      <div className="flex flex-wrap gap-2">
+        <Button
           data-testid="mark-done-btn"
-          style={{ ...btnStyle, color: 'var(--accent)', borderColor: 'var(--accent-dim)' }}
+          variant="outline"
+          size="touch"
+          className="flex-1 border-[color:var(--brand-dim)] text-primary"
           onClick={handleMarkDone}
           disabled={marking}
           aria-busy={marking}
         >
           {marking ? '…' : '✓ Mark done'}
-        </button>
+        </Button>
 
-        <button
+        <Button
           data-testid="reschedule-btn"
-          style={btnStyle}
+          variant="outline"
+          size="touch"
+          className="flex-1 bg-card"
           onClick={() => setShowReschedule((s) => !s)}
         >
           Reschedule
-        </button>
+        </Button>
 
-        <button
+        <Button
           data-testid="alternatives-btn"
-          style={btnStyle}
+          variant="outline"
+          size="touch"
+          className="flex-1 bg-card"
           onClick={onFindAlternatives}
         >
           Alternatives
-        </button>
+        </Button>
 
-        <button
+        <Button
           data-testid="edit-btn"
-          style={btnStyle}
+          variant="outline"
+          size="touch"
+          className="flex-1 bg-card"
           onClick={onEditClick}
         >
           Edit
-        </button>
+        </Button>
       </div>
 
       {showReschedule && (
-        <div style={{ marginTop: 'var(--sp-3)' }}>
-          <label
-            htmlFor="reschedule-date"
-            style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 'var(--sp-1)' }}
-          >
+        <div className="mt-3">
+          <label htmlFor="reschedule-date" className="mb-1 block text-[13px] text-muted-foreground">
             New date
           </label>
-          <input
+          <Input
             id="reschedule-date"
             data-testid="reschedule-date-input"
             type="date"
             disabled={rescheduling}
             onChange={handleReschedule}
-            style={{
-              background: 'var(--surface-2)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              color: 'var(--text)',
-              padding: 'var(--sp-2) var(--sp-3)',
-              fontSize: 15,
-              minHeight: 44,
-              width: '100%',
-              boxSizing: 'border-box',
-              colorScheme: 'dark',
-              fontFamily: 'var(--font)',
-            }}
+            className="min-h-[44px] w-full text-[15px] [color-scheme:dark]"
           />
         </div>
       )}

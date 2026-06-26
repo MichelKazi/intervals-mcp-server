@@ -1,6 +1,16 @@
+import type { ReactNode } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 
-const TABS = [
+import { cn } from '@/lib/utils';
+
+interface Tab {
+  path: string;
+  label: string;
+  filledIcon: ReactNode;
+  outlineIcon: ReactNode;
+}
+
+const TABS: Tab[] = [
   {
     path: '/',
     label: 'Home',
@@ -68,44 +78,25 @@ export default function BottomNav() {
 
   return (
     <nav
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        background: 'var(--surface)',
-        borderTop: '1px solid var(--border)',
-        display: 'flex',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        zIndex: 100,
-      }}
+      className="fixed inset-x-0 bottom-0 z-[100] flex border-t border-border bg-card pb-safe"
       aria-label="Main navigation"
     >
       {TABS.map(tab => {
-        const isActive = tab.path === '/'
-          ? pathname === '/'
-          : pathname.startsWith(tab.path);
+        const isActive =
+          tab.path === '/' ? pathname === '/' : pathname.startsWith(tab.path);
         return (
           <Link
             key={tab.path}
             to={tab.path}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: 44,
-              padding: '6px 0',
-              textDecoration: 'none',
-              color: isActive ? 'var(--accent)' : 'var(--text-dim)',
-              gap: 2,
-            }}
+            className={cn(
+              'flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 py-1.5 no-underline',
+              isActive ? 'text-primary' : 'text-muted-foreground',
+            )}
             aria-label={tab.label}
             aria-current={isActive ? 'page' : undefined}
           >
             {isActive ? tab.filledIcon : tab.outlineIcon}
-            <span style={{ fontSize: 10, lineHeight: 1 }}>{tab.label}</span>
+            <span className="text-[10px] leading-none">{tab.label}</span>
           </Link>
         );
       })}
