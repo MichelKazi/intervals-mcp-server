@@ -356,6 +356,49 @@ Then monitor the log file in real-time using PowerShell:
 Get-Content C:\path\to\intervals-mcp-server\mcp-server.log -Wait
 ```
 
+## Web API
+
+The server ships a JSON HTTP API (and PWA backend) alongside the MCP interface. It is a superset of the MCP tools — every tool is reachable over HTTP, plus dedicated REST endpoints for activities, events, the workout library, coaching state, and wellness data.
+
+### Run locally
+
+```bash
+# with auto-reload during development
+uv run uvicorn intervals_mcp_server.web.app:app --reload
+
+# or via the module entrypoint
+uv run python -m intervals_mcp_server.web
+```
+
+Defaults to port 8000. Set `PORT` to override.
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `WEB_API_TOKEN` | _(unset)_ | Optional bearer token. If unset or empty, the API is unauthenticated. |
+| `WEB_ALLOWED_ORIGIN` | `*` | CORS origin header. Set to your frontend origin in production. |
+
+### Endpoint groups
+
+- `GET /api/health` — liveness check, no auth required
+- `GET /api/activities`, `/api/activities/{activity_id}[/intervals\|streams]` — activities
+- `GET /api/events`, `POST /api/events`, `/api/events/{event_id}` — calendar events
+- `GET /api/library/search`, `/api/library/alternatives`, `/api/library/{tr_workout_id}` — TR workout library
+- `POST /api/workouts/custom` — build and schedule a custom workout
+- `GET /api/coaching/state`, `/api/wellness`, `/api/dashboard` — coaching and wellness
+
+### MCP parity bridge
+
+Every MCP tool is also callable over HTTP:
+
+```
+GET  /api/mcp/tools                  → list all tool names + schemas
+POST /api/mcp/{tool_name}            → call a tool with JSON body arguments
+```
+
+This lets a browser or PWA call any coaching tool without a stdio transport.
+
 ## License
 
 The GNU General Public License v3.0
