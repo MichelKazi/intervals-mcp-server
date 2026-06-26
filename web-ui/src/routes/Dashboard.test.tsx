@@ -3,30 +3,27 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Dashboard from './Dashboard';
-import type { Dashboard as DashboardData } from '../lib/types';
+import type { Dashboard as DashboardData, Activity } from '../lib/types';
 
 // ─── Mock the API module ──────────────────────────────────────────────────────
 
 vi.mock('../lib/api', () => ({
   getDashboard: vi.fn(),
   getWellness: vi.fn(),
+  getActivities: vi.fn(),
 }));
 
-import { getDashboard, getWellness } from '../lib/api';
+import { getDashboard, getWellness, getActivities } from '../lib/api';
 const mockGetDashboard = vi.mocked(getDashboard);
 const mockGetWellness = vi.mocked(getWellness);
+const mockGetActivities = vi.mocked(getActivities);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeClient() {
-  return new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-    },
-  });
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
 
-/** Capture the current location so we can assert navigation. */
 function LocationCapture({ onLocation }: { onLocation: (p: string) => void }) {
   const loc = useLocation();
   onLocation(loc.pathname);
@@ -42,10 +39,8 @@ function renderDashboard() {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route
-            path="/workout/:id"
-            element={<LocationCapture onLocation={(p) => { capturedPath = p; }} />}
-          />
+          <Route path="/workout/:id" element={<LocationCapture onLocation={(p) => { capturedPath = p; }} />} />
+          <Route path="/calendar" element={<div data-testid="calendar-page" />} />
           <Route path="/library" element={<div data-testid="library-page" />} />
         </Routes>
       </MemoryRouter>
@@ -68,140 +63,125 @@ const SAMPLE_DATA: DashboardData = {
     icu_ftp: 280,
     workout_doc: undefined,
   },
-  latest_activity: {
-    id: 99,
-    name: 'Morning Endurance',
-    type: 'Ride',
-    category: 'WORKOUT',
-    start_date_local: '2026-06-25T07:00:00',
-    end_date_local: '2026-06-25T08:30:00',
-    moving_time: 5400,
-    distance: 45000,
-    icu_training_load: 70,
-  },
+  latest_activity: null,
   readiness: {
     verdict: 'green',
     reasoning: 'HRV is elevated and fatigue is low.',
   },
 };
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
-
 const SAMPLE_WELLNESS = [
-  { id: '2026-06-01', ctl: 48, atl: 50 },
-  { id: '2026-06-26', ctl: 50, atl: 50 },
+  { id: '2026-06-01', ctl: 48, atl: 50, hrv: 40, restingHR: 52, sleepScore: 70, readiness: 75 },
+  { id: '2026-06-26', ctl: 55, atl: 50, hrv: 36, restingHR: 50, sleepScore: 79, readiness: 84 },
+];
+
+const SAMPLE_ACTIVITIES: Activity[] = [
+  {
+    id: 'i1', name: 'Morning Endurance', type: 'Ride', category: 'WORKOUT',
+    start_date_local: '2026-06-25T07:00:00', end_date_local: '2026-06-25T08:30:00',
+    moving_time: 5400, distance: 45000, icu_training_load: 70,
+  },
+  {
+    id: 'i2', name: 'STRAVA hidden', type: 'Ride', category: 'WORKOUT',
+    start_date_local: '2026-06-24T07:00:00', end_date_local: '2026-06-24T08:00:00',
+    moving_time: 3000, icu_training_load: 40, source: 'STRAVA',
+  } as Activity,
 ];
 
 beforeEach(() => {
   mockGetDashboard.mockClear();
-  // Default: resolve with minimal wellness data so FitnessSection renders without errors
   mockGetWellness.mockResolvedValue(SAMPLE_WELLNESS);
+  mockGetActivities.mockResolvedValue(SAMPLE_ACTIVITIES);
 });
 
 describe('Dashboard', () => {
-  it('(a) renders next-workout hero with name and duration when data is present', async () => {
+  it('(a) renders the readiness card with a verdict word', async () => {
     mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
-
     renderDashboard();
+    await waitFor(() => expect(screen.getByLabelText('Readiness')).toBeInTheDocument());
+    expect(screen.getByText('READY')).toBeInTheDocument();
+  });
 
+  it('(b) renders next-workout card with name and duration', async () => {
+    mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
+    renderDashboard();
     await waitFor(() => expect(screen.getByText('Threshold Intervals')).toBeInTheDocument());
-
-    // Name visible
-    expect(screen.getByText('Threshold Intervals')).toBeInTheDocument();
-    // Duration: 3600s = "1h00m" (canonical formatDuration)
     expect(screen.getByText(/1h00m/)).toBeInTheDocument();
   });
 
-  it('(b) hero card click navigates to /workout/:id', async () => {
+  it('(c) next-workout card click navigates to /workout/:id', async () => {
     mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
-
     const { getPath } = renderDashboard();
-
     const hero = await screen.findByRole('button', { name: /Next workout: Threshold Intervals/i });
     fireEvent.click(hero);
-
     expect(getPath()).toBe('/workout/42');
   });
 
-  it('(c) loading state shows skeleton (aria-busy container)', () => {
-    // Never resolves during this test
+  it('(d) loading state shows skeleton', () => {
     mockGetDashboard.mockReturnValueOnce(new Promise(() => {}));
-
     renderDashboard();
-
     expect(screen.getByLabelText('Loading dashboard')).toBeInTheDocument();
   });
 
-  it('(d) null next_workout shows empty state message', async () => {
-    mockGetDashboard.mockResolvedValueOnce({
-      ...SAMPLE_DATA,
-      next_workout: null,
-    });
-
+  it('(e) null next_workout shows rest-day empty state', async () => {
+    mockGetDashboard.mockResolvedValueOnce({ ...SAMPLE_DATA, next_workout: null });
     renderDashboard();
-
-    await waitFor(() => expect(screen.getByText('No upcoming workout')).toBeInTheDocument());
-    // Browse library link
-    expect(screen.getByRole('link', { name: /Browse library/i })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Rest day.')).toBeInTheDocument());
+    expect(screen.getByText('Recovery is training.')).toBeInTheDocument();
   });
 
-  it('(e) readiness badge shows verdict text (not just color)', async () => {
-    mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
-
-    renderDashboard();
-
-    // Should show the text label "Ready", not just green color
-    await waitFor(() => expect(screen.getByText('Ready')).toBeInTheDocument());
-  });
-
-  it('readiness badge shows "Rest" for red verdict', async () => {
+  it('readiness shows "REST" for red verdict', async () => {
     mockGetDashboard.mockResolvedValueOnce({
       ...SAMPLE_DATA,
       readiness: { verdict: 'red', reasoning: 'Fatigue is very high.' },
     });
-
     renderDashboard();
-
-    await waitFor(() => expect(screen.getByText('Rest')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('REST')).toBeInTheDocument());
   });
 
-  it('readiness badge shows "Moderate" for yellow verdict', async () => {
+  it('readiness shows "MODERATE" for yellow verdict', async () => {
     mockGetDashboard.mockResolvedValueOnce({
       ...SAMPLE_DATA,
       readiness: { verdict: 'yellow', reasoning: 'Mild fatigue detected.' },
     });
-
     renderDashboard();
-
-    await waitFor(() => expect(screen.getByText('Moderate')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('MODERATE')).toBeInTheDocument());
   });
 
-  it('latest activity is omitted when null', async () => {
-    mockGetDashboard.mockResolvedValueOnce({
-      ...SAMPLE_DATA,
-      latest_activity: null,
-    });
-
-    renderDashboard();
-
-    await waitFor(() => expect(screen.getByText('Threshold Intervals')).toBeInTheDocument());
-    expect(screen.queryByText('Last Activity')).not.toBeInTheDocument();
-  });
-
-  it('latest activity name is shown when present', async () => {
+  it('readiness card opens contributor breakdown on tap', async () => {
     mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
-
     renderDashboard();
+    const card = await screen.findByLabelText('Readiness');
+    fireEvent.click(card);
+    await waitFor(() => expect(screen.getByText('Contributors')).toBeInTheDocument());
+    expect(screen.getByText('HRV')).toBeInTheDocument();
+    expect(screen.getByText('Sleep')).toBeInTheDocument();
+  });
 
+  it('recent list renders accessible activities and filters STRAVA', async () => {
+    mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
+    renderDashboard();
     await waitFor(() => expect(screen.getByText('Morning Endurance')).toBeInTheDocument());
+    expect(screen.queryByText('STRAVA hidden')).not.toBeInTheDocument();
+  });
+
+  it('recent empty state shows when no activities', async () => {
+    mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
+    mockGetActivities.mockResolvedValueOnce([]);
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('Nothing logged yet. Ride something.')).toBeInTheDocument());
   });
 
   it('shows error message and retry button on fetch failure', async () => {
     mockGetDashboard.mockRejectedValueOnce(new Error('Network error'));
-
     renderDashboard();
-
     await waitFor(() => expect(screen.getByText(/Network error/i)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+  });
+
+  it('load-match strip shows planned TSS', async () => {
+    mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText(/TSS planned/i)).toBeInTheDocument());
   });
 });
