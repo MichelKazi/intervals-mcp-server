@@ -1,5 +1,5 @@
 import type { PlannedEvent } from '../../lib/types';
-import SportGlyph from './SportGlyph';
+import SportIcon, { sportColor } from './SportIcon';
 
 interface MonthGridProps {
   year: number;
@@ -20,17 +20,6 @@ function toIso(year: number, month: number, day: number): string {
   const mm = String(month + 1).padStart(2, '0');
   const dd = String(day).padStart(2, '0');
   return `${year}-${mm}-${dd}`;
-}
-
-/** Sport-type to color token */
-function sportColor(type: string): string {
-  const t = (type ?? '').toLowerCase();
-  if (t.includes('ride') || t.includes('bike') || t.includes('cycling') || t.includes('virtual') || t.includes('ebike')) return 'var(--z5)';
-  if (t.includes('run') || t.includes('jog') || t.includes('trail')) return 'var(--z6)';
-  if (t.includes('swim') || t.includes('pool') || t.includes('open_water')) return 'var(--z2)';
-  if (t.includes('strength') || t.includes('weight') || t.includes('gym') || t.includes('lift')) return 'var(--z4)';
-  if (t.includes('walk') || t.includes('hike')) return 'var(--z3)';
-  return 'var(--text-dim)';
 }
 
 export default function MonthGrid({
@@ -156,7 +145,7 @@ export default function MonthGrid({
                       }}
                       style={{ touchAction: 'none', lineHeight: 0 }}
                     >
-                      <SportGlyph type={ev.type} size={14} color={sportColor(ev.type)} />
+                      <SportIcon type={ev.type} size={14} color={sportColor(ev.type)} />
                     </span>
                   ))}
                   {overflow > 0 && (

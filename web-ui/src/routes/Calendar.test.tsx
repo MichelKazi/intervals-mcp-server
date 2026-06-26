@@ -8,12 +8,14 @@ import type { PlannedEvent } from '../lib/types';
 // Mock the api module — no network calls in tests
 vi.mock('../lib/api', () => ({
   getEvents: vi.fn(),
+  getActivities: vi.fn(),
   moveEvent: vi.fn(),
 }));
 
-import { getEvents, moveEvent } from '../lib/api';
+import { getEvents, getActivities, moveEvent } from '../lib/api';
 
 const mockGetEvents = vi.mocked(getEvents);
+const mockGetActivities = vi.mocked(getActivities);
 const mockMoveEvent = vi.mocked(moveEvent);
 
 const june26: PlannedEvent = {
@@ -59,23 +61,25 @@ function renderCalendar() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Clear localStorage view preference so week is default
+  try { localStorage.clear(); } catch { /* ignore */ }
   mockGetEvents.mockResolvedValue([june26, june27]);
+  mockGetActivities.mockResolvedValue([]);
   mockMoveEvent.mockResolvedValue({ ...june26, start_date_local: '2026-06-28T09:00:00' });
 });
 
 describe('Calendar screen', () => {
-  it('(a) renders month grid with day numbers', async () => {
+  it('(a) renders week view with day number cells', async () => {
     renderCalendar();
-    // Wait for the grid to render with day buttons
+    // Week view: should have day buttons with data-date; 17 weeks × 7 = 119 cells
     await waitFor(() => {
-      const dayButtons = screen.getAllByRole('button', { name: /2026-06-\d\d/ });
+      const dayButtons = screen.getAllByRole('button').filter(b => b.getAttribute('data-date'));
+      // 17 weeks of 7 days each = 119 day cells (generous range)
       expect(dayButtons.length).toBeGreaterThanOrEqual(28);
     });
 
-    // Day numbers 1–30 should be visible somewhere
-    expect(screen.getByText('1')).toBeDefined();
-    expect(screen.getByText('15')).toBeDefined();
-    expect(screen.getByText('30')).toBeDefined();
+    // Today's date numbers should be visible
+    expect(screen.getAllByText('26').length).toBeGreaterThanOrEqual(1);
   });
 
   it('(b) a day with events shows a sport glyph (SVG, not just a dot)', async () => {
@@ -92,25 +96,26 @@ describe('Calendar screen', () => {
     const svgs = glyphIndicators[0].querySelectorAll('svg');
     expect(svgs.length).toBeGreaterThanOrEqual(1);
 
-    // The SVG should have a sport attribute indicating the sport type
+    // The SVG should have a data-sport attribute indicating the sport type
     const svg = svgs[0];
     expect(svg.getAttribute('data-sport')).toBeTruthy();
-    expect(svg.getAttribute('data-sport')).not.toBe(''); // must be a named sport, not empty
+    expect(svg.getAttribute('data-sport')).not.toBe('');
   });
 
-  it('(c) selecting a day shows its agenda list', async () => {
+  it('(c) selecting a day opens the sheet with its agenda list', async () => {
     renderCalendar();
 
-    // Wait for grid to render
+    // Wait for grid to render — look for June 26 cell
     await waitFor(() => {
-      screen.getAllByRole('button', { name: /2026-06-26/ });
+      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
+      expect(cells.length).toBeGreaterThanOrEqual(1);
     });
 
     // Click on June 26
-    const june26Button = screen.getByRole('button', { name: /2026-06-26/ });
-    fireEvent.click(june26Button);
+    const june26Cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
+    fireEvent.click(june26Cells[0]);
 
-    // Agenda should show the event for June 26
+    // Sheet should show the event for June 26
     await waitFor(() => {
       const rows = screen.getAllByTestId('agenda-event-row');
       expect(rows.length).toBeGreaterThanOrEqual(1);
@@ -124,17 +129,18 @@ describe('Calendar screen', () => {
 
     // Wait for grid to render
     await waitFor(() => {
-      screen.getAllByRole('button', { name: /2026-06-26/ });
+      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
+      expect(cells.length).toBeGreaterThanOrEqual(1);
     });
 
-    // Select June 26 to load the agenda
-    const june26Button = screen.getByRole('button', { name: /2026-06-26/ });
-    fireEvent.click(june26Button);
+    // Select June 26 to open the sheet
+    const june26Cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
+    fireEvent.click(june26Cells[0]);
 
-    // Wait for agenda to render
+    // Wait for sheet to open with agenda rows
     await waitFor(() => screen.getAllByTestId('agenda-event-row'));
 
-    // Click the event row button (it's inside the li)
+    // Click the event row button
     const eventButton = screen.getByRole('button', { name: /Threshold Intervals/ });
     fireEvent.click(eventButton);
 
@@ -144,24 +150,95 @@ describe('Calendar screen', () => {
     });
   });
 
-  it('renders header with month name and navigation buttons', async () => {
+  it('renders header with month name and add/view controls', async () => {
     renderCalendar();
-    // Header renders immediately (no async needed)
+    // Header renders immediately
     expect(screen.getByText(/June 2026/)).toBeDefined();
-    expect(screen.getByRole('button', { name: /previous month/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: /next month/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /add workout/i })).toBeDefined();
+    // View toggle tabs present
+    expect(screen.getByRole('tab', { name: /week/i })).toBeDefined();
+    expect(screen.getByRole('tab', { name: /month/i })).toBeDefined();
   });
 
-  it('renders empty month with no event indicators when API returns []', async () => {
+  it('renders empty week with no event indicators when API returns []', async () => {
     mockGetEvents.mockResolvedValue([]);
     renderCalendar();
-    // Wait for grid to render (no skeleton)
+    // Wait for grid to render
     await waitFor(() => {
-      screen.getAllByRole('button', { name: /2026-06-\d\d/ });
+      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date'));
+      expect(cells.length).toBeGreaterThanOrEqual(7);
     });
 
     // No glyph indicators
     expect(screen.queryAllByTestId('sport-glyph-indicator')).toHaveLength(0);
+  });
+
+  it('month view toggle switches to month grid', async () => {
+    renderCalendar();
+
+    // Wait for week view to load first
+    await waitFor(() => {
+      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date'));
+      expect(cells.length).toBeGreaterThanOrEqual(7);
+    });
+
+    // Switch to month view
+    const monthTab = screen.getByRole('tab', { name: /month/i });
+    fireEvent.click(monthTab);
+
+    // Month grid should appear with prev/next navigation buttons
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /previous month/i })).toBeDefined();
+    }, { timeout: 3000 });
+
+    // Day cells in current month should be 28-42
+    await waitFor(() => {
+      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date')?.startsWith('2026-06'));
+      expect(cells.length).toBeGreaterThanOrEqual(28);
+      expect(cells.length).toBeLessThanOrEqual(42);
+    }, { timeout: 3000 });
+  });
+
+  it('filters out Strava-restricted activities', async () => {
+    const restrictedAct = {
+      id: 200,
+      name: null as unknown as string, // null name = restricted
+      type: 'Ride',
+      category: 'ACTIVITY',
+      start_date_local: '2026-06-26T10:00:00',
+      end_date_local: '2026-06-26T11:00:00',
+      source: 'STRAVA',
+    } as PlannedEvent;
+
+    const goodAct = {
+      id: 201,
+      name: 'Zwift Ride',
+      type: 'VirtualRide',
+      category: 'ACTIVITY',
+      start_date_local: '2026-06-26T10:00:00',
+      end_date_local: '2026-06-26T11:00:00',
+      source: 'OAUTH_CLIENT',
+    } as PlannedEvent;
+
+    mockGetEvents.mockResolvedValue([june26]);
+    mockGetActivities.mockResolvedValue([restrictedAct, goodAct] as PlannedEvent[]);
+
+    renderCalendar();
+
+    // Open June 26 sheet
+    await waitFor(() => {
+      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
+      expect(cells.length).toBeGreaterThanOrEqual(1);
+    });
+
+    const june26Cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
+    fireEvent.click(june26Cells[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Zwift Ride')).toBeDefined();
+    });
+
+    // Restricted activity with null name should NOT appear
+    expect(screen.queryByText('null')).toBeNull();
   });
 });
