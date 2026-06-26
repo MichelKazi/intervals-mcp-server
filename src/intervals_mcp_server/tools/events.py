@@ -47,19 +47,25 @@ async def manage_events(
     end_date: str | None = None,
     data: dict[str, Any] | None = None,
 ) -> str:
-    """Manage calendar events on Intervals.icu (list, get, delete, bulk operations, tags, plans).
+    """Manage calendar events on Intervals.icu (list, get, delete, bulk operations, tags, plans, time-off, auto-link).
 
     Args:
-        action: One of: list, get, delete, delete_range, tags, bulk_create, apply_plan, duplicate, mark_done
+        action: One of: list, get, delete, delete_range, tags, bulk_create, apply_plan,
+                duplicate, mark_done, create_time_off, list_time_off, auto_link
         athlete_id: The Intervals.icu athlete ID (optional)
         api_key: The Intervals.icu API key (optional)
         event_id: Required for get, delete, mark_done
-        start_date: Start date YYYY-MM-DD for list, delete_range, duplicate (optional for list)
-        end_date: End date YYYY-MM-DD for list, delete_range, duplicate
+        start_date: Start date YYYY-MM-DD for list, delete_range, duplicate, list_time_off,
+                    auto_link range (optional for list/list_time_off)
+        end_date: End date YYYY-MM-DD for list, delete_range, duplicate, list_time_off,
+                  auto_link range
         data: Extra data depending on action:
               - bulk_create: list of event dicts
               - apply_plan: {"folder_id": int, "start_date": "YYYY-MM-DD"}
               - duplicate: {"target_start": "YYYY-MM-DD"}
+              - create_time_off: {"start_date": "YYYY-MM-DD", "end_date"?: "YYYY-MM-DD",
+                                  "kind"?: "HOLIDAY"|"SICK"|"INJURED", "note"?: str}
+              - auto_link: {"date": "YYYY-MM-DD"} for single day, or use start_date+end_date
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -184,7 +190,79 @@ async def manage_events(
             return f"Event {event_id} marked as done. Activity created (ID: {result.get('id', 'unknown')})."
         return f"Event {event_id} marked as done."
 
-    return f"Invalid action '{action}'. Must be one of: list, get, delete, delete_range, tags, bulk_create, apply_plan, duplicate, mark_done"
+    elif action == "create_time_off":
+        from intervals_mcp_server.services.events import create_time_off
+
+        if not data and not start_date:
+            return "Error: 'data' with 'start_date' required for create_time_off"
+        d = data or {}
+        sd = d.get("start_date") or start_date
+        if not sd:
+            return "Error: 'start_date' required for create_time_off"
+        try:
+            created = await create_time_off(
+                start_date=sd,
+                end_date=d.get("end_date") or end_date,
+                kind=d.get("kind", "HOLIDAY"),
+                note=d.get("note"),
+                athlete_id=athlete_id,
+            )
+        except Exception as exc:
+            return f"Error: {exc}"
+        return f"Created time-off event (ID: {created.get('id')}, kind: {created.get('category')}, date: {sd})."
+
+    elif action == "list_time_off":
+        from intervals_mcp_server.services.events import list_time_off
+
+        s = start_date or get_default_end_date()
+        e = end_date or get_default_future_end_date()
+        try:
+            events = await list_time_off(oldest=s, newest=e, athlete_id=athlete_id)
+        except Exception as exc:
+            return f"Error: {exc}"
+        if not events:
+            return "No time-off events found."
+        return "Time-off events:\n\n" + "\n\n".join(
+            format_event_summary(ev) for ev in events if isinstance(ev, dict)
+        )
+
+    elif action == "auto_link":
+        from intervals_mcp_server.services.events import auto_link_day, auto_link_range
+
+        d = data or {}
+        single_date = d.get("date") or start_date
+        if single_date and not end_date:
+            try:
+                result = await auto_link_day(single_date, athlete_id=athlete_id)
+            except Exception as exc:
+                return f"Error: {exc}"
+            linked = result["linked"]
+            unmatched_w = result["unmatched_workouts"]
+            unmatched_a = result["unmatched_activities"]
+            parts = [f"Auto-link {single_date}: {len(linked)} paired."]
+            if linked:
+                parts.append("Linked: " + ", ".join(f"{lk['name']} → act {lk['activity_id']}" for lk in linked))
+            if unmatched_w:
+                parts.append("Unmatched workouts: " + ", ".join(w["name"] or str(w["event_id"]) for w in unmatched_w))
+            if unmatched_a:
+                parts.append("Unmatched activities: " + ", ".join(a["name"] or str(a["activity_id"]) for a in unmatched_a))
+            return "\n".join(parts)
+        oldest_r = d.get("oldest") or start_date
+        newest_r = d.get("newest") or end_date
+        if not oldest_r or not newest_r:
+            return "Error: provide 'date' (data) or start_date+end_date for auto_link"
+        try:
+            result = await auto_link_range(oldest_r, newest_r, athlete_id=athlete_id)
+        except Exception as exc:
+            return f"Error: {exc}"
+        linked = result["linked"]
+        return (
+            f"Auto-link {oldest_r} to {newest_r}: {len(linked)} paired, "
+            f"{len(result['unmatched_workouts'])} unmatched workouts, "
+            f"{len(result['unmatched_activities'])} unmatched activities."
+        )
+
+    return f"Invalid action '{action}'. Must be one of: list, get, delete, delete_range, tags, bulk_create, apply_plan, duplicate, mark_done, create_time_off, list_time_off, auto_link"
 
 
 @mcp.tool()

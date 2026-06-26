@@ -359,6 +359,206 @@ async def get_compliance(event_id: str, athlete_id: str | None = None) -> dict[s
     }
 
 
+_TIME_OFF_CATEGORIES = {"HOLIDAY", "SICK", "INJURED"}
+
+_TIME_OFF_DEFAULTS = {
+    "HOLIDAY": "Time off",
+    "SICK": "Sick",
+    "INJURED": "Injured",
+}
+
+# Sport-type compatibility for auto-linking.
+# Maps a planned event type to the set of activity types that can pair with it.
+_COMPATIBLE_SPORT_TYPES: dict[str, set[str]] = {
+    "Ride": {"Ride", "VirtualRide", "EBikeRide"},
+    "Run": {"Run", "VirtualRun", "TrailRun"},
+    "Swim": {"Swim"},
+    "Walk": {"Walk", "Hike"},
+    "Row": {"Rowing"},
+}
+
+
+async def create_time_off(
+    start_date: str,
+    end_date: str | None = None,
+    kind: str = "HOLIDAY",
+    note: str | None = None,
+    athlete_id: str | None = None,
+) -> dict[str, Any]:
+    """Create a time-off / unavailability block on the calendar.
+
+    Args:
+        start_date: Start date in YYYY-MM-DD format.
+        end_date: End date for multi-day blocks (YYYY-MM-DD). None for single day.
+        kind: Category — HOLIDAY, SICK, or INJURED.
+        note: Optional event name override.
+        athlete_id: Override athlete ID (uses config default if None).
+
+    Raises:
+        ServiceError: If kind is invalid or the upstream API fails.
+    """
+    kind = kind.upper()
+    if kind not in _TIME_OFF_CATEGORIES:
+        raise ServiceError(
+            status_code=400,
+            message=f"Invalid kind '{kind}'. Must be one of: HOLIDAY, SICK, INJURED",
+        )
+
+    body: dict[str, Any] = {
+        "category": kind,
+        "name": note or _TIME_OFF_DEFAULTS[kind],
+        "start_date_local": f"{start_date}T00:00:00",
+    }
+    if end_date:
+        body["end_date_local"] = f"{end_date}T00:00:00"
+
+    return await create_event(body, athlete_id=athlete_id)
+
+
+async def list_time_off(
+    oldest: str | None = None,
+    newest: str | None = None,
+    athlete_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return time-off events (HOLIDAY, SICK, INJURED) within a date range.
+
+    Args:
+        oldest: Start date in YYYY-MM-DD format (or None for today).
+        newest: End date in YYYY-MM-DD format (or None for 30 days ahead).
+        athlete_id: Override athlete ID (uses config default if None).
+
+    Raises:
+        ServiceError: On upstream API failure.
+    """
+    events = await list_events(oldest=oldest, newest=newest, athlete_id=athlete_id)
+    return [e for e in events if e.get("category") in _TIME_OFF_CATEGORIES]
+
+
+def _sports_compatible(event_type: str | None, activity_type: str | None) -> bool:
+    """Return True if an activity type is compatible with a planned event type."""
+    if not event_type or not activity_type:
+        return True
+    compatible = _COMPATIBLE_SPORT_TYPES.get(event_type)
+    if compatible is None:
+        # Unknown event type — match on exact equality only.
+        return event_type == activity_type
+    return activity_type in compatible
+
+
+async def auto_link_day(date: str, athlete_id: str | None = None) -> dict[str, Any]:
+    """Pair completed activities to unpaired planned workouts for a single date.
+
+    Fetches WORKOUT events with no paired_activity_id and accessible activities
+    for the given date, then matches each unpaired workout to a compatible
+    activity (same/compatible sport type). Already-paired workouts are skipped.
+    Idempotent.
+
+    Args:
+        date: Date in YYYY-MM-DD format.
+        athlete_id: Override athlete ID (uses config default if None).
+
+    Returns:
+        dict with keys: date, linked, unmatched_workouts, unmatched_activities.
+
+    Raises:
+        ServiceError: On upstream API failure.
+    """
+    from intervals_mcp_server.services.activities import list_activities
+
+    day_events = await list_events(oldest=date, newest=date, athlete_id=athlete_id)
+    unpaired_workouts = [
+        e for e in day_events
+        if e.get("category") == "WORKOUT" and not e.get("paired_activity_id")
+    ]
+
+    day_activities = await list_activities(
+        oldest=date, newest=date, limit=50, include_unnamed=True, athlete_id=athlete_id
+    )
+
+    linked: list[dict[str, Any]] = []
+    remaining_activities = list(day_activities)
+
+    for workout in unpaired_workouts:
+        match = next(
+            (
+                a for a in remaining_activities
+                if _sports_compatible(workout.get("type"), a.get("type"))
+            ),
+            None,
+        )
+        if match is None:
+            continue
+        remaining_activities.remove(match)
+        await pair_activity(str(workout["id"]), match["id"], athlete_id=athlete_id)
+        linked.append(
+            {
+                "event_id": workout["id"],
+                "activity_id": match["id"],
+                "name": workout.get("name", ""),
+            }
+        )
+
+    return {
+        "date": date,
+        "linked": linked,
+        "unmatched_workouts": [
+            {"event_id": w["id"], "name": w.get("name", "")}
+            for w in unpaired_workouts
+            if not any(lk["event_id"] == w["id"] for lk in linked)
+        ],
+        "unmatched_activities": [
+            {"activity_id": a["id"], "name": a.get("name", "")}
+            for a in remaining_activities
+        ],
+    }
+
+
+async def auto_link_range(
+    oldest: str,
+    newest: str,
+    athlete_id: str | None = None,
+) -> dict[str, Any]:
+    """Run auto_link_day across each day in a date range and aggregate results.
+
+    Caps the range at 60 days.
+
+    Args:
+        oldest: Start date in YYYY-MM-DD format.
+        newest: End date in YYYY-MM-DD format.
+        athlete_id: Override athlete ID (uses config default if None).
+
+    Raises:
+        ServiceError: If the date range exceeds 60 days or upstream fails.
+    """
+    from datetime import date as _date, timedelta
+
+    start = _date.fromisoformat(oldest)
+    end = _date.fromisoformat(newest)
+    if (end - start).days > 60:
+        raise ServiceError(status_code=400, message="Date range exceeds 60-day limit")
+
+    all_linked: list[dict[str, Any]] = []
+    all_unmatched_workouts: list[dict[str, Any]] = []
+    all_unmatched_activities: list[dict[str, Any]] = []
+
+    current = start
+    while current <= end:
+        day_str = current.isoformat()
+        result = await auto_link_day(day_str, athlete_id=athlete_id)
+        all_linked.extend(result["linked"])
+        all_unmatched_workouts.extend(result["unmatched_workouts"])
+        all_unmatched_activities.extend(result["unmatched_activities"])
+        current += timedelta(days=1)
+
+    return {
+        "oldest": oldest,
+        "newest": newest,
+        "linked": all_linked,
+        "unmatched_workouts": all_unmatched_workouts,
+        "unmatched_activities": all_unmatched_activities,
+    }
+
+
 async def mark_done(event_id: str, athlete_id: str | None = None) -> dict[str, Any]:
     """Mark an event as done.
 

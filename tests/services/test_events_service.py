@@ -584,3 +584,301 @@ async def test_compliance_event_fetch_error_raises(monkeypatch):
     with pytest.raises(ServiceError) as exc_info:
         await svc.get_compliance("missing")
     assert exc_info.value.status_code == 404
+
+
+# --- create_time_off ---
+
+SAMPLE_HOLIDAY_EVENT = {
+    "id": "to1",
+    "category": "HOLIDAY",
+    "name": "Time off",
+    "start_date_local": "2026-08-15T00:00:00",
+}
+
+
+@pytest.mark.asyncio
+async def test_create_time_off_default_kind(monkeypatch):
+    captured = {}
+
+    async def fake_request(url, **kwargs):
+        captured["method"] = kwargs.get("method")
+        captured["data"] = kwargs.get("data")
+        return SAMPLE_HOLIDAY_EVENT
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.create_time_off(start_date="2026-08-15")
+    assert captured["method"] == "POST"
+    assert captured["data"]["category"] == "HOLIDAY"
+    assert captured["data"]["name"] == "Time off"
+    assert captured["data"]["start_date_local"] == "2026-08-15T00:00:00"
+    assert result["id"] == "to1"
+
+
+@pytest.mark.asyncio
+async def test_create_time_off_sick_with_note(monkeypatch):
+    captured = {}
+
+    async def fake_request(url, **kwargs):
+        captured["data"] = kwargs.get("data")
+        return {"id": "to2", "category": "SICK", "name": "Under the weather"}
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    await svc.create_time_off(start_date="2026-08-10", kind="SICK", note="Under the weather")
+    assert captured["data"]["category"] == "SICK"
+    assert captured["data"]["name"] == "Under the weather"
+
+
+@pytest.mark.asyncio
+async def test_create_time_off_multi_day(monkeypatch):
+    captured = {}
+
+    async def fake_request(url, **kwargs):
+        captured["data"] = kwargs.get("data")
+        return SAMPLE_HOLIDAY_EVENT
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    await svc.create_time_off(start_date="2026-08-15", end_date="2026-08-20", kind="HOLIDAY")
+    assert captured["data"]["start_date_local"] == "2026-08-15T00:00:00"
+    assert captured["data"]["end_date_local"] == "2026-08-20T00:00:00"
+
+
+@pytest.mark.asyncio
+async def test_create_time_off_invalid_kind_raises():
+    from intervals_mcp_server.services import events as svc
+    with pytest.raises(ServiceError) as exc_info:
+        await svc.create_time_off(start_date="2026-08-15", kind="WORKOUT")
+    assert exc_info.value.status_code == 400
+    assert "HOLIDAY" in exc_info.value.message
+
+
+@pytest.mark.asyncio
+async def test_create_time_off_kind_case_insensitive(monkeypatch):
+    captured = {}
+
+    async def fake_request(url, **kwargs):
+        captured["data"] = kwargs.get("data")
+        return {"id": "to3", "category": "INJURED"}
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    await svc.create_time_off(start_date="2026-08-15", kind="injured")
+    assert captured["data"]["category"] == "INJURED"
+
+
+# --- list_time_off ---
+
+SAMPLE_EVENTS_MIXED = [
+    {"id": "ev1", "category": "WORKOUT", "name": "Ride"},
+    {"id": "to1", "category": "HOLIDAY", "name": "Time off"},
+    {"id": "to2", "category": "SICK", "name": "Sick"},
+    {"id": "to3", "category": "INJURED", "name": "Injured"},
+    {"id": "ev2", "category": "NOTE", "name": "A note"},
+]
+
+
+@pytest.mark.asyncio
+async def test_list_time_off_filters_categories(monkeypatch):
+    async def fake_request(url, **kwargs):
+        return SAMPLE_EVENTS_MIXED
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.list_time_off()
+    assert len(result) == 3
+    assert all(e["category"] in {"HOLIDAY", "SICK", "INJURED"} for e in result)
+
+
+@pytest.mark.asyncio
+async def test_list_time_off_empty_when_none_found(monkeypatch):
+    async def fake_request(url, **kwargs):
+        return [{"id": "ev1", "category": "WORKOUT", "name": "Ride"}]
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.list_time_off()
+    assert result == []
+
+
+# --- auto_link_day ---
+
+SAMPLE_WORKOUT_EVENT = {
+    "id": "ev10",
+    "category": "WORKOUT",
+    "type": "Ride",
+    "name": "Threshold Ride",
+    "start_date_local": "2024-06-01T00:00:00",
+    "paired_activity_id": None,
+}
+
+SAMPLE_ACCESSIBLE_ACTIVITY = {
+    "id": "act10",
+    "type": "Ride",
+    "name": "Morning Ride",
+    "source": "GARMIN",
+}
+
+
+@pytest.mark.asyncio
+async def test_auto_link_day_pairs_compatible(monkeypatch):
+    """A Ride activity pairs with a Ride workout event."""
+    call_count = {"n": 0}
+
+    async def fake_request(url, **kwargs):
+        call_count["n"] += 1
+        method = kwargs.get("method", "GET")
+        if method == "GET" and "/events" in url and "/events/" not in url:
+            return [SAMPLE_WORKOUT_EVENT]
+        if method == "GET" and "/activities" in url:
+            return [SAMPLE_ACCESSIBLE_ACTIVITY]
+        # GET for pair_activity's get_event call
+        if method == "GET" or method is None:
+            return SAMPLE_WORKOUT_EVENT
+        # PUT for pair_activity
+        if method == "PUT":
+            return {**SAMPLE_WORKOUT_EVENT, "paired_activity_id": "act10"}
+        return {}
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.services.activities.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.auto_link_day("2024-06-01")
+    assert result["date"] == "2024-06-01"
+    assert len(result["linked"]) == 1
+    assert result["linked"][0]["event_id"] == "ev10"
+    assert result["linked"][0]["activity_id"] == "act10"
+    assert result["unmatched_workouts"] == []
+
+
+@pytest.mark.asyncio
+async def test_auto_link_day_skips_already_paired(monkeypatch):
+    paired_event = {**SAMPLE_WORKOUT_EVENT, "paired_activity_id": 999}
+
+    async def fake_request(url, **kwargs):
+        method = kwargs.get("method", "GET")
+        if method == "GET" and "/events" in url and "/events/" not in url:
+            return [paired_event]
+        if method == "GET" and "/activities" in url:
+            return [SAMPLE_ACCESSIBLE_ACTIVITY]
+        return SAMPLE_WORKOUT_EVENT
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.services.activities.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.auto_link_day("2024-06-01")
+    assert result["linked"] == []
+    assert result["unmatched_activities"] == [{"activity_id": "act10", "name": "Morning Ride"}]
+
+
+@pytest.mark.asyncio
+async def test_auto_link_day_no_sport_match(monkeypatch):
+    run_activity = {**SAMPLE_ACCESSIBLE_ACTIVITY, "id": "act11", "type": "Run", "name": "Morning Run"}
+
+    async def fake_request(url, **kwargs):
+        method = kwargs.get("method", "GET")
+        if method == "GET" and "/events" in url and "/events/" not in url:
+            return [SAMPLE_WORKOUT_EVENT]  # Ride workout
+        if method == "GET" and "/activities" in url:
+            return [run_activity]  # Run activity
+        return {}
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.services.activities.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.auto_link_day("2024-06-01")
+    assert result["linked"] == []
+    assert len(result["unmatched_workouts"]) == 1
+    assert len(result["unmatched_activities"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_auto_link_day_virtual_ride_matches_ride(monkeypatch):
+    virtual_activity = {**SAMPLE_ACCESSIBLE_ACTIVITY, "id": "act12", "type": "VirtualRide"}
+
+    async def fake_request(url, **kwargs):
+        method = kwargs.get("method", "GET")
+        if method == "GET" and "/events" in url and "/events/" not in url:
+            return [SAMPLE_WORKOUT_EVENT]
+        if method == "GET" and "/activities" in url:
+            return [virtual_activity]
+        if method == "GET" or method is None:
+            return SAMPLE_WORKOUT_EVENT
+        if method == "PUT":
+            return {**SAMPLE_WORKOUT_EVENT, "paired_activity_id": "act12"}
+        return {}
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.services.activities.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.auto_link_day("2024-06-01")
+    assert len(result["linked"]) == 1
+    assert result["linked"][0]["activity_id"] == "act12"
+
+
+@pytest.mark.asyncio
+async def test_auto_link_day_empty_day(monkeypatch):
+    async def fake_request(url, **kwargs):
+        method = kwargs.get("method", "GET")
+        if method == "GET" and "/events" in url and "/events/" not in url:
+            return []
+        if method == "GET" and "/activities" in url:
+            return []
+        return {}
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.services.activities.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.auto_link_day("2024-06-01")
+    assert result["linked"] == []
+    assert result["unmatched_workouts"] == []
+    assert result["unmatched_activities"] == []
+
+
+# --- auto_link_range ---
+
+@pytest.mark.asyncio
+async def test_auto_link_range_cap_exceeded():
+    from intervals_mcp_server.services import events as svc
+    with pytest.raises(ServiceError) as exc_info:
+        await svc.auto_link_range("2024-01-01", "2024-05-01")
+    assert exc_info.value.status_code == 400
+    assert "60" in exc_info.value.message
+
+
+@pytest.mark.asyncio
+async def test_auto_link_range_aggregates(monkeypatch):
+    """Two days, each with one workout + one activity → 2 linked total."""
+
+    async def fake_request(url, **kwargs):
+        method = kwargs.get("method", "GET")
+        if method == "GET" and "/events" in url and "/events/" not in url:
+            return [SAMPLE_WORKOUT_EVENT]
+        if method == "GET" and "/activities" in url:
+            return [SAMPLE_ACCESSIBLE_ACTIVITY]
+        if method == "GET" or method is None:
+            return SAMPLE_WORKOUT_EVENT
+        if method == "PUT":
+            return {**SAMPLE_WORKOUT_EVENT, "paired_activity_id": "act10"}
+        return {}
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.services.activities.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.auto_link_range("2024-06-01", "2024-06-02")
+    assert result["oldest"] == "2024-06-01"
+    assert result["newest"] == "2024-06-02"
+    assert len(result["linked"]) == 2

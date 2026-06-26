@@ -9,11 +9,15 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 
 from intervals_mcp_server.services.events import (
+    auto_link_day,
+    auto_link_range,
     create_event,
+    create_time_off,
     delete_event,
     get_compliance,
     get_event,
     list_events,
+    list_time_off,
     mark_done,
     move_event,
     pair_activity,
@@ -23,6 +27,7 @@ from intervals_mcp_server.services.events import (
 from intervals_mcp_server.web.auth import require_token
 
 router = APIRouter(prefix="/api/events", dependencies=[Depends(require_token)])
+time_off_router = APIRouter(prefix="/api/time-off", dependencies=[Depends(require_token)])
 
 
 class EventBody(BaseModel):
@@ -41,6 +46,23 @@ class PairBody(BaseModel):
     """Body for the pair endpoint."""
 
     activity_id: int | str
+
+
+class TimeOffBody(BaseModel):
+    """Body for the create time-off endpoint."""
+
+    start_date: str
+    end_date: str | None = None
+    kind: str = "HOLIDAY"
+    note: str | None = None
+
+
+class AutoLinkBody(BaseModel):
+    """Body for the auto-link endpoint.  Accepts either a single date or a range."""
+
+    date: str | None = None
+    oldest: str | None = None
+    newest: str | None = None
 
 
 @router.get("")
@@ -111,3 +133,45 @@ async def event_unpair(event_id: str, athlete_id: str | None = Query(default=Non
 async def event_compliance(event_id: str, athlete_id: str | None = Query(default=None)):
     """Return planned-vs-actual compliance for an event."""
     return await get_compliance(event_id, athlete_id=athlete_id)
+
+
+@router.post("/auto-link")
+async def events_auto_link(
+    body: AutoLinkBody, athlete_id: str | None = Query(default=None)
+):
+    """Auto-pair completed activities to unpaired planned workouts.
+
+    Accepts either a single date (date) or a range (oldest + newest).
+    """
+    from intervals_mcp_server.services.errors import ServiceError
+
+    if body.date:
+        return await auto_link_day(body.date, athlete_id=athlete_id)
+    if body.oldest and body.newest:
+        return await auto_link_range(body.oldest, body.newest, athlete_id=athlete_id)
+    raise ServiceError(status_code=400, message="Provide 'date' or both 'oldest' and 'newest'")
+
+
+# --- /api/time-off routes ---
+
+
+@time_off_router.post("")
+async def time_off_create(body: TimeOffBody, athlete_id: str | None = Query(default=None)):
+    """Create a time-off block (HOLIDAY, SICK, or INJURED)."""
+    return await create_time_off(
+        start_date=body.start_date,
+        end_date=body.end_date,
+        kind=body.kind,
+        note=body.note,
+        athlete_id=athlete_id,
+    )
+
+
+@time_off_router.get("")
+async def time_off_list(
+    oldest: str | None = Query(default=None),
+    newest: str | None = Query(default=None),
+    athlete_id: str | None = Query(default=None),
+):
+    """List time-off events (HOLIDAY, SICK, INJURED) within a date range."""
+    return await list_time_off(oldest=oldest, newest=newest, athlete_id=athlete_id)

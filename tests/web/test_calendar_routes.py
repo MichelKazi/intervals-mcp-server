@@ -427,3 +427,156 @@ def test_compliance_service_error(monkeypatch):
     r = c.get("/api/events/missing/compliance")
     assert r.status_code == 404
     assert r.json()["error"] is True
+
+
+# --- POST /api/events/auto-link ---
+
+def test_auto_link_single_date_200(monkeypatch):
+    async def fake_auto_link_day(date, athlete_id=None):
+        return {"date": date, "linked": [], "unmatched_workouts": [], "unmatched_activities": []}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.auto_link_day", fake_auto_link_day
+    )
+    c = _client(monkeypatch)
+    r = c.post("/api/events/auto-link", json={"date": "2024-06-01"})
+    assert r.status_code == 200
+    assert r.json()["date"] == "2024-06-01"
+
+
+def test_auto_link_range_200(monkeypatch):
+    async def fake_auto_link_range(oldest, newest, athlete_id=None):
+        return {"oldest": oldest, "newest": newest, "linked": [], "unmatched_workouts": [], "unmatched_activities": []}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.auto_link_range", fake_auto_link_range
+    )
+    c = _client(monkeypatch)
+    r = c.post("/api/events/auto-link", json={"oldest": "2024-06-01", "newest": "2024-06-07"})
+    assert r.status_code == 200
+    assert r.json()["oldest"] == "2024-06-01"
+
+
+def test_auto_link_missing_params_400(monkeypatch):
+    c = _client(monkeypatch)
+    r = c.post("/api/events/auto-link", json={})
+    assert r.status_code == 400
+    assert r.json()["error"] is True
+
+
+def test_auto_link_service_error(monkeypatch):
+    async def fake_auto_link_day(date, athlete_id=None):
+        raise ServiceError(502, "upstream error")
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.auto_link_day", fake_auto_link_day
+    )
+    c = _client(monkeypatch)
+    r = c.post("/api/events/auto-link", json={"date": "2024-06-01"})
+    assert r.status_code == 502
+    assert r.json()["error"] is True
+
+
+# --- POST /api/time-off ---
+
+def test_create_time_off_200(monkeypatch):
+    async def fake_create_time_off(start_date, end_date=None, kind="HOLIDAY", note=None, athlete_id=None):
+        return {"id": "to1", "category": kind, "name": note or "Time off"}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.create_time_off", fake_create_time_off
+    )
+    c = _client(monkeypatch)
+    r = c.post("/api/time-off", json={"start_date": "2026-08-15"})
+    assert r.status_code == 200
+    assert r.json()["id"] == "to1"
+    assert r.json()["category"] == "HOLIDAY"
+
+
+def test_create_time_off_sick_with_note(monkeypatch):
+    captured = {}
+
+    async def fake_create_time_off(start_date, end_date=None, kind="HOLIDAY", note=None, athlete_id=None):
+        captured["kind"] = kind
+        captured["note"] = note
+        return {"id": "to2", "category": kind, "name": note}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.create_time_off", fake_create_time_off
+    )
+    c = _client(monkeypatch)
+    r = c.post("/api/time-off", json={"start_date": "2026-08-10", "kind": "SICK", "note": "Flu"})
+    assert r.status_code == 200
+    assert captured["kind"] == "SICK"
+    assert captured["note"] == "Flu"
+
+
+def test_create_time_off_service_error(monkeypatch):
+    async def fake_create_time_off(start_date, end_date=None, kind="HOLIDAY", note=None, athlete_id=None):
+        raise ServiceError(400, "Invalid kind")
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.create_time_off", fake_create_time_off
+    )
+    c = _client(monkeypatch)
+    r = c.post("/api/time-off", json={"start_date": "2026-08-15", "kind": "WORKOUT"})
+    assert r.status_code == 400
+    assert r.json()["error"] is True
+
+
+def test_create_time_off_requires_token(monkeypatch):
+    monkeypatch.setenv("WEB_API_TOKEN", "secret")
+    import intervals_mcp_server.config as cfg
+    cfg._config_instance = None
+    from intervals_mcp_server.web.app import create_app
+    from fastapi.testclient import TestClient
+    c = TestClient(create_app())
+    r = c.post("/api/time-off", json={"start_date": "2026-08-15"})
+    assert r.status_code == 401
+
+
+# --- GET /api/time-off ---
+
+def test_list_time_off_200(monkeypatch):
+    async def fake_list_time_off(oldest=None, newest=None, athlete_id=None):
+        return [{"id": "to1", "category": "HOLIDAY", "name": "Time off"}]
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.list_time_off", fake_list_time_off
+    )
+    c = _client(monkeypatch)
+    r = c.get("/api/time-off")
+    assert r.status_code == 200
+    data = r.json()
+    assert isinstance(data, list)
+    assert data[0]["category"] == "HOLIDAY"
+
+
+def test_list_time_off_passes_query_params(monkeypatch):
+    captured = {}
+
+    async def fake_list_time_off(oldest=None, newest=None, athlete_id=None):
+        captured["oldest"] = oldest
+        captured["newest"] = newest
+        return []
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.list_time_off", fake_list_time_off
+    )
+    c = _client(monkeypatch)
+    c.get("/api/time-off?oldest=2026-01-01&newest=2026-12-31")
+    assert captured["oldest"] == "2026-01-01"
+    assert captured["newest"] == "2026-12-31"
+
+
+def test_list_time_off_service_error(monkeypatch):
+    async def fake_list_time_off(oldest=None, newest=None, athlete_id=None):
+        raise ServiceError(502, "upstream error")
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.list_time_off", fake_list_time_off
+    )
+    c = _client(monkeypatch)
+    r = c.get("/api/time-off")
+    assert r.status_code == 502
+    assert r.json()["error"] is True
