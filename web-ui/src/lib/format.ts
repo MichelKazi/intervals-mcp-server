@@ -1,3 +1,6 @@
+/** Default FTP fallback when no athlete FTP is available. */
+export const DEFAULT_FTP = 250;
+
 /** "1h08m" or "45m" */
 export function formatDuration(secs: number): string {
   const h = Math.floor(secs / 3600);

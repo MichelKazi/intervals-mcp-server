@@ -5,7 +5,7 @@ import Skeleton from '../components/Skeleton';
 import ReadinessBadge from '../components/dashboard/ReadinessBadge';
 import WorkoutChart from '../components/WorkoutChart';
 import { getDashboard } from '../lib/api';
-import { formatDate, formatDuration, formatDistance } from '../lib/format';
+import { formatDate, formatDuration, formatDistance, DEFAULT_FTP } from '../lib/format';
 import type { PlannedEvent, Activity } from '../lib/types';
 
 // ─── Next workout hero ─────────────────────────────────────────────────────
@@ -17,7 +17,7 @@ interface NextWorkoutCardProps {
 function NextWorkoutCard({ event }: NextWorkoutCardProps) {
   const navigate = useNavigate();
   const steps = event.workout_doc?.steps;
-  const ftp = event.icu_ftp ?? 250;
+  const ftp = event.icu_ftp ?? DEFAULT_FTP;
 
   return (
     <article

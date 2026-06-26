@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 export interface DragCallbacks {
   /** Called when a long-press drag is committed to a new date. */
@@ -93,6 +93,21 @@ export function useLongPressDrag({ onMove, onTap, onDragStart, onDragEnd, dateFr
     },
     [cleanup, dateFromPoint, onDragEnd, onMove, onTap, handlePointerMove],
   );
+
+  // Unmount cleanup: clear pending timer and remove document listeners left over
+  // if the component unmounts mid-gesture (e.g. navigation during a long-press).
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+      draggingRef.current = false;
+      startPosRef.current = null;
+    };
+  }, [handlePointerMove, handlePointerUp]);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent, eventId: string | number, originDate: string) => {

@@ -183,4 +183,17 @@ describe('LibraryAdd', () => {
       expect(screen.getByText(/No workouts match — adjust filters\./i)).toBeInTheDocument();
     }, { timeout: 3000 });
   });
+  it('h. when searchLibrary rejects, shows error message not empty-filters message', async () => {
+    vi.mocked(api.searchLibrary).mockRejectedValue(new Error('Network error'));
+
+    render(<LibraryAdd />, { wrapper: makeWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    }, { timeout: 3000 });
+
+    expect(screen.getByRole('alert').textContent).toContain('Network error');
+    expect(screen.queryByText(/No workouts match — adjust filters/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+  });
 });

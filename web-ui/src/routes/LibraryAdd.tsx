@@ -36,7 +36,7 @@ export default function LibraryAdd() {
   if (durationMax) queryParams.duration_max = durationMax;
   if (tssMax) queryParams.tss_max = tssMax;
 
-  const { data: workouts = [], isFetching } = useQuery({
+  const { data: workouts = [], isFetching, isError, error, refetch } = useQuery({
     queryKey: ['library', debouncedName, zoneFilter.join(','), durationMax, tssMax],
     queryFn: () => searchLibrary(queryParams),
     staleTime: 30_000,
@@ -119,11 +119,45 @@ export default function LibraryAdd() {
         </div>
 
         {/* Results */}
-        <ResultList
-          workouts={workouts}
-          isLoading={isFetching}
-          onSelect={setSelectedWorkout}
-        />
+        {isError ? (
+          <div
+            role="alert"
+            style={{
+              padding: 'var(--sp-4)',
+              color: 'var(--error, #e55)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--sp-3)',
+              alignItems: 'flex-start',
+            }}
+          >
+            <span>
+              {error instanceof Error ? error.message : 'Could not load workouts. Check your connection.'}
+            </span>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              style={{
+                minHeight: 44,
+                padding: '0 var(--sp-4)',
+                background: 'var(--surface-2)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                fontSize: 14,
+                fontFamily: 'var(--font)',
+                cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <ResultList
+            workouts={workouts}
+            isLoading={isFetching}
+            onSelect={setSelectedWorkout}
+          />
+        )}
       </div>
 
       {/* Preview sheet */}

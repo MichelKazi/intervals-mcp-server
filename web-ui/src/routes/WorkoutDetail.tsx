@@ -15,7 +15,7 @@ import {
   updateEvent,
 } from '../lib/api';
 import type { PlannedEvent, ActivityIntervals, LibraryWorkout } from '../lib/types';
-import { formatDate } from '../lib/format';
+import { formatDate, DEFAULT_FTP } from '../lib/format';
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
@@ -340,7 +340,7 @@ export default function WorkoutDetail() {
   const laps = intervals?.icu_intervals ?? [];
   const hasSteps = (event?.workout_doc?.steps?.length ?? 0) > 0;
   const hasLaps = laps.length > 0;
-  const ftp = (event as PlannedEvent & { icu_ftp?: number })?.icu_ftp ?? 250;
+  const ftp = (event as PlannedEvent & { icu_ftp?: number })?.icu_ftp ?? DEFAULT_FTP;
 
   const title = event?.name ?? (eventLoading ? 'Loading…' : 'Workout');
 
