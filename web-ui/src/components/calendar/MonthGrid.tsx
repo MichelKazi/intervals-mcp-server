@@ -1,5 +1,6 @@
 import type { PlannedEvent } from '../../lib/types';
-import SportIcon, { sportColor } from './SportIcon';
+import { ZoneDot, type Zone } from '../viz';
+import { ftpToZone } from '../../lib/format';
 
 interface MonthGridProps {
   year: number;
@@ -20,6 +21,13 @@ function toIso(year: number, month: number, day: number): string {
   const mm = String(month + 1).padStart(2, '0');
   const dd = String(day).padStart(2, '0');
   return `${year}-${mm}-${dd}`;
+}
+
+/** Representative 1–5 zone from icu_intensity (fraction or %), else endurance. */
+function eventZone(ev: PlannedEvent): Zone {
+  const intensity = ev.icu_intensity;
+  if (intensity != null) return ftpToZone(intensity <= 2 ? intensity * 100 : intensity);
+  return 1;
 }
 
 export default function MonthGrid({
@@ -85,8 +93,11 @@ export default function MonthGrid({
           const isSelected = iso === selectedDate;
           const isHighlight = iso === highlightDate;
           const events = eventsByDate[iso] ?? [];
-          const displayEvents = events.slice(0, 2);
-          const overflow = events.length - displayEvents.length;
+          const displayEvents = events.slice(0, 3);
+          const totalTss = events.reduce(
+            (sum, ev) => sum + (ev.icu_training_load != null ? Math.round(ev.icu_training_load) : 0),
+            0,
+          );
 
           return (
             <button
@@ -132,7 +143,7 @@ export default function MonthGrid({
                 {cell.day}
               </span>
 
-              {/* Event glyphs */}
+              {/* Zone dots */}
               {events.length > 0 && (
                 <div style={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                   {displayEvents.map(ev => (
@@ -145,13 +156,15 @@ export default function MonthGrid({
                       }}
                       style={{ touchAction: 'none', lineHeight: 0 }}
                     >
-                      <SportIcon type={ev.type} size={14} color={sportColor(ev.type)} />
+                      <ZoneDot zone={eventZone(ev)} size="sm" />
                     </span>
                   ))}
-                  {overflow > 0 && (
-                    <span style={{ fontSize: 10, color: 'var(--text-dim)', lineHeight: 1 }}>+{overflow}</span>
-                  )}
                 </div>
+              )}
+
+              {/* Total TSS */}
+              {totalTss > 0 && (
+                <span className="text-[10px] text-slate-500 font-mono">{totalTss}</span>
               )}
             </button>
           );

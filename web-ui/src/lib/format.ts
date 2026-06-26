@@ -46,6 +46,18 @@ export function zoneColor(pctFtp: number): string {
   return 'var(--z7)';
 }
 
+/**
+ * Map a %FTP intensity to a 1–5 training zone matching the viz ZoneDot palette
+ * (1 endurance · 2 tempo · 3 threshold · 4 vo2max · 5 anaerobic).
+ */
+export function ftpToZone(pctFtp: number): 1 | 2 | 3 | 4 | 5 {
+  if (pctFtp <= 75) return 1;
+  if (pctFtp <= 90) return 2;
+  if (pctFtp <= 105) return 3;
+  if (pctFtp <= 120) return 4;
+  return 5;
+}
+
 /** Zone name string */
 export function zoneName(pctFtp: number): string {
   if (pctFtp < 56) return 'recovery';
