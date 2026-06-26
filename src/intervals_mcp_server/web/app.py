@@ -35,6 +35,9 @@ def create_app() -> FastAPI:
     from intervals_mcp_server.web.routes import activities as activities_routes
     app.include_router(activities_routes.router)
 
+    from intervals_mcp_server.web.routes import calendar as calendar_routes
+    app.include_router(calendar_routes.router)
+
     return app
 
 
