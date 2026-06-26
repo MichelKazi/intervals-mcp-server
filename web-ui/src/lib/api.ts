@@ -125,3 +125,12 @@ export function callMcp(tool: string, args?: Record<string, unknown>): Promise<u
 export function getMcpTools(): Promise<unknown[]> {
   return apiFetch('/api/mcp/tools');
 }
+
+// ── Coaching chat (DeepSeek via directeur, through the MCP/coaching layer) ──
+export function getCoachingBrief(): Promise<unknown> {
+  return callMcp('get_coaching_brief', {});
+}
+
+export function analyzeActivity(activityId: string | number): Promise<unknown> {
+  return callMcp('analyze_activity', { activity_id: String(activityId) });
+}
