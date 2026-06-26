@@ -322,7 +322,10 @@ async def create_custom_workout_svc(
     """Create a custom workout in the intervals.icu library, optionally scheduling it.
 
     Returns:
-        {"workout_id": str|None, "scheduled": bool, "event_id": str|int|None}
+        {"workout_id": str|None, "scheduled": bool, "event_id": str|int|None,
+         "schedule_error": str|None}
+        schedule_error is non-None only when schedule_date was provided and the
+        calendar-event POST failed; workout creation succeeded in that case.
 
     Raises:
         ServiceError on library-create failure.
@@ -357,6 +360,7 @@ async def create_custom_workout_svc(
 
     workout_id = result.get("id") if isinstance(result, dict) else None
     event_id = None
+    schedule_error: str | None = None
 
     if schedule_date:
         event_data: dict[str, Any] = {
@@ -375,9 +379,12 @@ async def create_custom_workout_svc(
 
         if isinstance(event_result, dict) and not event_result.get("error"):
             event_id = event_result.get("id")
+        elif isinstance(event_result, dict) and event_result.get("error"):
+            schedule_error = event_result.get("message", "Failed to schedule workout")
 
     return {
         "workout_id": workout_id,
         "scheduled": event_id is not None,
         "event_id": event_id,
+        "schedule_error": schedule_error,
     }

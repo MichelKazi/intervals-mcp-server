@@ -357,6 +357,7 @@ class TestCreateCustomWorkoutSvc:
         assert result["workout_id"] == "wk-99"
         assert result["scheduled"] is False
         assert result["event_id"] is None
+        assert result["schedule_error"] is None
 
     @pytest.mark.asyncio
     async def test_creates_with_schedule(self, monkeypatch):
@@ -377,6 +378,7 @@ class TestCreateCustomWorkoutSvc:
         assert result["workout_id"] == "wk-99"
         assert result["scheduled"] is True
         assert result["event_id"] == "ev-42"
+        assert result["schedule_error"] is None
 
     @pytest.mark.asyncio
     async def test_raises_service_error_on_create_failure(self, monkeypatch):
@@ -392,15 +394,15 @@ class TestCreateCustomWorkoutSvc:
         assert "bad request" in exc_info.value.message
 
     @pytest.mark.asyncio
-    async def test_schedule_failure_does_not_raise(self, monkeypatch):
-        """Schedule failure (event error) is swallowed; scheduled=False."""
+    async def test_schedule_failure_surfaces_error(self, monkeypatch):
+        """When schedule_date given and event POST fails, schedule_error contains the message."""
         call_count = {"n": 0}
 
         async def fake_request(url, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
                 return {"id": "wk-99"}
-            return {"error": True, "message": "bad"}
+            return {"error": True, "message": "boom"}
 
         monkeypatch.setattr(
             "intervals_mcp_server.services.library.make_intervals_request", fake_request
@@ -411,3 +413,5 @@ class TestCreateCustomWorkoutSvc:
         assert result["workout_id"] == "wk-99"
         assert result["scheduled"] is False
         assert result["event_id"] is None
+        assert result["schedule_error"] is not None
+        assert "boom" in result["schedule_error"]

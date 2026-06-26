@@ -275,27 +275,50 @@ async def test_delete_event_error_raises_service_error(monkeypatch):
 
 # --- move_event ---
 
+# A realistic event with workout fields that must survive the round-trip.
+REALISTIC_EVENT = {
+    "id": "ev1",
+    "name": "Kaweah",
+    "type": "Ride",
+    "start_date_local": "2024-01-15T00:00:00",
+    "category": "WORKOUT",
+    "workout_doc": {"steps": [{"duration": 300, "power": {"value": 95, "units": "%ftp"}}]},
+    "icu_training_load": 75,
+    "icu_atl": 42.5,
+}
+
+
 @pytest.mark.asyncio
-async def test_move_event_gets_then_puts_new_start_date(monkeypatch):
+async def test_move_event_preserves_workout_fields(monkeypatch):
+    """PUT payload must contain the new date AND preserve all original workout fields."""
     calls = []
 
     async def fake_request(url, **kwargs):
         calls.append({"url": url, "method": kwargs.get("method", "GET"), "data": kwargs.get("data")})
-        if kwargs.get("method", "GET") == "GET" or "method" not in kwargs:
-            return SAMPLE_EVENT
-        return {**SAMPLE_EVENT, "start_date_local": "2024-02-10T00:00:00"}
+        if "method" not in kwargs or kwargs.get("method") == "GET":
+            return REALISTIC_EVENT
+        # Simulate the API echoing back the updated event
+        return {**REALISTIC_EVENT, "start_date_local": "2024-02-10T00:00:00"}
 
     monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
 
     from intervals_mcp_server.services import events as svc
     result = await svc.move_event("ev1", "2024-02-10")
 
-    # First call should be a GET (no method or GET)
+    # GET used the singular /event/ URL
     assert "/event/ev1" in calls[0]["url"]
-    # Second call should be a PUT with new start_date_local
+
+    # PUT used the plural /events/ URL with the new date
     put_call = next(c for c in calls if c["method"] == "PUT")
-    assert put_call["data"]["start_date_local"] == "2024-02-10T00:00:00"
     assert "/events/ev1" in put_call["url"]
+    put_data = put_call["data"]
+    assert put_data["start_date_local"] == "2024-02-10T00:00:00"
+
+    # Workout fields from the fetched event must be preserved unchanged
+    assert put_data["name"] == "Kaweah"
+    assert put_data["type"] == "Ride"
+    assert put_data["workout_doc"] == REALISTIC_EVENT["workout_doc"]
+
     assert result["start_date_local"] == "2024-02-10T00:00:00"
 
 
