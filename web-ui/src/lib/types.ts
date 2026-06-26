@@ -67,6 +67,7 @@ export interface Compliance {
 export interface Readiness {
   verdict: string; // "green" | "yellow" | "red"
   reasoning: string;
+  score?: number; // 0–100 readiness score, when provided
   date?: string;
   computed_at?: string;
   confounds?: unknown[];
