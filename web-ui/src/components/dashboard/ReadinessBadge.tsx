@@ -61,7 +61,7 @@ export default function ReadinessBadge({ readiness }: ReadinessBadgeProps) {
       </section>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-xl px-6 pt-6 pb-safe">
+        <SheetContent side="bottom" className="px-6 pt-2 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
           <SheetHeader className="mb-4">
             <SheetTitle className="flex items-center gap-2 text-lg font-semibold">
               <span

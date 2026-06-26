@@ -350,18 +350,18 @@ function DaySheet({ date, items, draggingId, open, onClose, onEventLongPress }: 
 
   return (
     <Sheet open={open} onOpenChange={o => !o && onClose()}>
-      <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto pb-safe">
-        <SheetHeader className="mb-4 pr-8">
+      <SheetContent side="bottom" className="px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+        <SheetHeader className="mb-4">
           <SheetTitle>{label}</SheetTitle>
         </SheetHeader>
 
         {planned.length === 0 && completed.length === 0 && (
-          <p className="text-sm" style={{ color: 'var(--text-dim)' }}>No workouts for this day.</p>
+          <p className="text-sm text-muted-foreground">No workouts for this day.</p>
         )}
 
         {planned.length > 0 && (
           <section className="mb-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-dim)' }}>Planned</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Planned</p>
             <ul className="space-y-2" role="list">
               {planned.map(ev => {
                 const isBeingDragged = draggingId != null && String(ev.id) === String(draggingId);
@@ -384,10 +384,10 @@ function DaySheet({ date, items, draggingId, open, onClose, onEventLongPress }: 
                         <SportIcon type={ev.type} size={22} color={sportColor(ev.type)} />
                       </span>
                       <span className="flex-1 min-w-0">
-                        <span className="block truncate text-[15px] font-medium" style={{ color: 'var(--text)' }}>
+                        <span className="block truncate text-[15px] font-medium text-foreground">
                           {ev.name}
                         </span>
-                        <span className="flex gap-2 text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
+                        <span className="flex gap-2 text-xs mt-0.5 text-muted-foreground">
                           {ev.moving_time != null && <span>{formatDuration(ev.moving_time)}</span>}
                           {ev.icu_training_load != null && <span>{Math.round(ev.icu_training_load)} TSS</span>}
                         </span>
@@ -405,7 +405,7 @@ function DaySheet({ date, items, draggingId, open, onClose, onEventLongPress }: 
 
         {completed.length > 0 && (
           <section>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-dim)' }}>Completed</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Completed</p>
             <ul className="space-y-2" role="list">
               {completed.map(act => (
                 <li key={act.id} data-testid="agenda-event-row" data-event-id={act.id}>
@@ -423,10 +423,10 @@ function DaySheet({ date, items, draggingId, open, onClose, onEventLongPress }: 
                       <SportIcon type={act.type} size={22} color={sportColor(act.type)} />
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block truncate text-[15px] font-medium" style={{ color: 'var(--text)' }}>
+                      <span className="block truncate text-[15px] font-medium text-foreground">
                         {act.name}
                       </span>
-                      <span className="flex gap-2 text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
+                      <span className="flex gap-2 text-xs mt-0.5 text-muted-foreground">
                         {act.moving_time != null && <span>{formatDuration(act.moving_time)}</span>}
                         {act.distance != null && act.distance > 0 && <span>{formatDistance(act.distance)}</span>}
                         {act.icu_training_load != null && <span>{Math.round(act.icu_training_load)} TSS</span>}

@@ -175,7 +175,7 @@ function FitnessSection() {
   if (isLoading) {
     return (
       <Card className="m-4 rounded-2xl border-border bg-card p-4" aria-busy="true">
-        <Skeleton width="30%" height={11} style={{ marginBottom: 'var(--sp-3)' }} />
+        <div className="mb-3"><Skeleton width="30%" height={11} /></div>
         <div className="flex justify-center gap-4">
           <Skeleton width={80} height={80} style={{ borderRadius: '50%' }} />
           <Skeleton width={80} height={80} style={{ borderRadius: '50%' }} />
@@ -221,8 +221,8 @@ function DashboardSkeleton() {
     <div aria-busy="true" aria-label="Loading dashboard" className="p-4">
       {/* Hero card skeleton */}
       <div className="mb-4 rounded-2xl border border-border bg-card p-4">
-        <Skeleton width="40%" height={11} style={{ marginBottom: 'var(--sp-2)' }} />
-        <Skeleton width="70%" height={24} style={{ marginBottom: 'var(--sp-3)' }} />
+        <div className="mb-2"><Skeleton width="40%" height={11} /></div>
+        <div className="mb-3"><Skeleton width="70%" height={24} /></div>
         <div className="mb-4 flex gap-2">
           <Skeleton width={80} height={16} />
           <Skeleton width={60} height={16} />
@@ -237,7 +237,7 @@ function DashboardSkeleton() {
       </div>
       {/* Latest activity skeleton */}
       <div className="rounded-lg border border-border bg-card px-4 py-3">
-        <Skeleton width="50%" height={15} style={{ marginBottom: 'var(--sp-2)' }} />
+        <div className="mb-2"><Skeleton width="50%" height={15} /></div>
         <div className="flex gap-2">
           <Skeleton width={60} height={12} />
           <Skeleton width={50} height={12} />

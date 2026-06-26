@@ -2,6 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * ── Design Token System ────────────────────────────────────────────────────
+ *
+ * SPACING: 8pt grid — use Tailwind numeric scale exclusively.
+ *   tight gap:    gap-2  (8px)
+ *   section gap:  gap-4  (16px)
+ *   screen pad:   p-4    (16px)
+ *   card pad:     p-4    (16px)
+ *   list-row:     py-3   (12px top/bottom)
+ *
+ * TYPE SCALE:
+ *   Screen / hero title:  text-xl / text-2xl font-bold
+ *   Section heading:      text-xs uppercase tracking-wide font-semibold text-muted-foreground
+ *   Body:                 text-base (16px) or text-[15px]
+ *   Secondary / captions: text-sm text-muted-foreground
+ *   Labels / chips:       text-xs
+ *
+ * RADIUS:
+ *   Cards:    rounded-xl / rounded-2xl
+ *   Controls: rounded-lg (= var(--radius) = 8px)
+ *   Chips:    rounded-full
+ *
+ * ELEVATION:
+ *   Cards:   shadow-md   (0 4px 12px rgba(0,0,0,0.5))
+ *   Sheets:  shadow-2xl  (0 8px 32px rgba(0,0,0,0.65))
+ *   Nav:     shadow-sm + border-t border-border
+ *
+ * COLOR IDENTITY: amber (#f0a500) primary + deep-blue-black bg + zone palette.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
 @layer base {
   :root {
     /* ── shadcn semantic slots (HSL channel values, no hsl() wrapper) ─────── */
@@ -34,13 +64,14 @@
     --ring: 38 100% 47%;               /* amber focus ring — 9.29:1 on bg (AAA) */
     --radius: 0.5rem;                  /* 8px */
 
-    /* ── Legacy CSS var names — kept for SVG attributes + backward compat ─── */
+    /* ── Legacy CSS vars — kept for SVG color attrs + inline style compat ─── */
+    /* New code should use Tailwind classes; these remain for existing inline styles */
     --bg: #0a0e14;
     --surface: #131a24;
     --surface-2: #1c2531;
     --text: #e6edf3;
     --text-dim: #8b98a5;
-    --brand: #f0a500;                  /* renamed from --accent (shadcn's --accent is a hover surface) */
+    --brand: #f0a500;
     --brand-dim: #b87c00;
     --z1: #4a9eff;
     --z2: #52c77f;
