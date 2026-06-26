@@ -50,7 +50,6 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
 
   const bars: FlatBar[] = steps ? flattenSteps(steps, ftp) : laps ? lapsToFlatBars(laps, ftp) : [];
   const maxPct = Math.max(...bars.map(b => b.pctFtp), 100);
-  const totalDur = bars.reduce((s, b) => s + b.durationSecs, 0) || 1;
   const CHART_HEIGHT = 200;
   const MIN_BAR_HEIGHT = 4;
 
