@@ -4,6 +4,7 @@ import Dashboard from './routes/Dashboard';
 import WorkoutDetail from './routes/WorkoutDetail';
 import Calendar from './routes/Calendar';
 import LibraryAdd from './routes/LibraryAdd';
+import Activities from './routes/Activities';
 
 const queryClient = new QueryClient();
 
@@ -16,7 +17,7 @@ export default function App() {
           <Route path="/workout/:id" element={<WorkoutDetail />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/library" element={<LibraryAdd />} />
-          <Route path="/activities" element={<Dashboard />} />
+          <Route path="/activities" element={<Activities />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

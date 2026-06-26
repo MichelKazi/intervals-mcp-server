@@ -1,69 +1,106 @@
+import { useState } from 'react';
+import { ChevronRight } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '../ui/sheet';
+import { formatDate } from '../../lib/format';
 import type { Readiness } from '../../lib/types';
 
 interface ReadinessBadgeProps {
   readiness: Readiness;
 }
 
-const VERDICT_MAP: Record<string, { label: string; icon: string; bg: string; text: string }> = {
-  green:  { label: 'Ready',    icon: '✓', bg: 'rgba(82,199,127,0.15)', text: '#52c77f' },
-  yellow: { label: 'Moderate', icon: '⚠', bg: 'rgba(245,200,66,0.15)', text: '#f5c842' },
-  red:    { label: 'Rest',     icon: '✗', bg: 'rgba(232,64,64,0.15)',   text: '#e84040' },
+const VERDICT_MAP: Record<string, { label: string; icon: string; badge: string }> = {
+  green:  { label: 'Ready',    icon: '✓', badge: 'text-emerald-400 bg-emerald-400/15' },
+  yellow: { label: 'Moderate', icon: '⚠', badge: 'text-yellow-400 bg-yellow-400/15' },
+  red:    { label: 'Rest',     icon: '✗', badge: 'text-red-500 bg-red-500/15' },
 };
 
 /** Presentational badge for readiness verdict. Uses color AND text+icon for accessibility. */
 export default function ReadinessBadge({ readiness }: ReadinessBadgeProps) {
-  const { verdict, reasoning } = readiness;
+  const [open, setOpen] = useState(false);
+  const { verdict, reasoning, date, computed_at, confounds } = readiness;
   const config = VERDICT_MAP[verdict] ?? VERDICT_MAP.yellow;
 
+  const timestampStr = computed_at ?? date;
+
   return (
-    <section
-      aria-label="Readiness"
-      style={{
-        margin: 'var(--sp-4) var(--sp-4) 0',
-        padding: 'var(--sp-3) var(--sp-4)',
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 'var(--sp-3)',
-      }}
-    >
-      <span
-        aria-label={`Readiness: ${config.label}`}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 'var(--sp-1)',
-          padding: '3px var(--sp-2)',
-          borderRadius: 'var(--radius-sm)',
-          background: config.bg,
-          color: config.text,
-          fontSize: 13,
-          fontWeight: 600,
-          whiteSpace: 'nowrap',
-          flexShrink: 0,
-        }}
+    <>
+      <section
+        aria-label="Readiness"
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setOpen(true); }}
+        className="mx-4 mt-4 flex min-h-11 cursor-pointer items-start gap-3 rounded-[var(--radius)] border border-border bg-[var(--surface)] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
       >
-        <span aria-hidden="true">{config.icon}</span>
-        {config.label}
-      </span>
-      {reasoning && (
-        <p
-          style={{
-            margin: 0,
-            fontSize: 13,
-            color: 'var(--text-dim)',
-            lineHeight: 1.4,
-            overflow: 'hidden',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-          }}
+        <span
+          aria-label={`Readiness: ${config.label}`}
+          className={`inline-flex shrink-0 items-center gap-1 rounded-[var(--radius-sm)] px-2 py-[3px] text-[13px] font-semibold whitespace-nowrap ${config.badge}`}
         >
-          {reasoning}
-        </p>
-      )}
-    </section>
+          <span aria-hidden="true">{config.icon}</span>
+          {config.label}
+        </span>
+        {reasoning && (
+          <p
+            className="m-0 flex-1 overflow-hidden text-[13px] leading-[1.4] text-[var(--text-dim)]"
+            style={{
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+            }}
+          >
+            {reasoning}
+          </p>
+        )}
+        <ChevronRight className="ml-auto shrink-0 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      </section>
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-xl px-6 pt-6 pb-safe">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="flex items-center gap-2 text-lg font-semibold">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 text-sm font-semibold ${config.badge}`}
+                aria-hidden="true"
+              >
+                {config.icon} {config.label}
+              </span>
+              Readiness
+            </SheetTitle>
+            {timestampStr && (
+              <p className="text-xs text-muted-foreground">
+                {formatDate(timestampStr)}
+              </p>
+            )}
+          </SheetHeader>
+
+          {reasoning && (
+            <SheetDescription className="text-sm leading-relaxed text-foreground mb-4">
+              {reasoning}
+            </SheetDescription>
+          )}
+
+          {confounds && confounds.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Confounds
+              </p>
+              <ul className="list-disc pl-4 space-y-1">
+                {confounds.map((c, i) => (
+                  <li key={i} className="text-sm text-foreground">
+                    {String(c)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
