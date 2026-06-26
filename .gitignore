@@ -189,3 +189,6 @@ CLAUDE.md
 
 # web-ui source lib is NOT the python build lib
 !web-ui/src/lib/
+
+web-ui/playwright-report/
+web-ui/test-results/
