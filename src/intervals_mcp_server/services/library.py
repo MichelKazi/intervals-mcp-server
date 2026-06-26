@@ -27,6 +27,20 @@ ZONE_TO_ADAPTATION = {
     "recovery": "recovery",
 }
 
+# Zone keywords recognized in name_search for smart zone routing.
+# When name_search matches one of these, treat it as a zone_focus filter.
+_ZONE_KEYWORDS: dict[str, str] = {
+    "threshold": "threshold",
+    "vo2max": "vo2max",
+    "vo2": "vo2max",
+    "sweet spot": "sweet_spot",
+    "sweetspot": "sweet_spot",
+    "anaerobic": "anaerobic",
+    "endurance": "endurance",
+    "tempo": "tempo",
+    "recovery": "recovery",
+}
+
 
 def _convert_step(step: dict[str, Any]) -> dict[str, Any]:
     """Convert a single simplified step to workout_doc step format."""
@@ -185,8 +199,18 @@ async def search_library_workouts(
     duration_min_secs = duration_min_minutes * 60 if duration_min_minutes is not None else None
     duration_max_secs = duration_max_minutes * 60 if duration_max_minutes is not None else None
 
+    # Smart zone routing: if name_search exactly matches a zone keyword, treat it as a
+    # zone_focus filter instead of a name search (workouts are named after places, not zones).
+    resolved_zone = zone_focus
+    resolved_name_search = name_search
+    if name_search and not zone_focus:
+        zone_match = _ZONE_KEYWORDS.get(name_search.strip().lower())
+        if zone_match:
+            resolved_zone = zone_match
+            resolved_name_search = None
+
     return search_library(
-        zone_focus=zone_focus,
+        zone_focus=resolved_zone,
         adaptation_target=adaptation_target,
         interval_pattern=interval_pattern,
         race_specific=race_specific,
@@ -200,7 +224,7 @@ async def search_library_workouts(
         work_duration_min=work_duration_min_sec,
         work_duration_max=work_duration_max_sec,
         indoor_only=indoor_only,
-        name_search=name_search,
+        name_search=resolved_name_search,
         limit=limit,
     )
 

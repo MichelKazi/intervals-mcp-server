@@ -31,9 +31,10 @@ export default function LibraryAdd() {
   }, [nameSearch]);
 
   const queryParams: Record<string, string | number | boolean> = {};
-  if (debouncedName) queryParams.name = debouncedName;
+  if (debouncedName) queryParams.name_search = debouncedName;
   if (zoneFilter.length > 0) queryParams.zone_focus = zoneFilter.join(',');
-  if (durationMax) queryParams.duration_max = durationMax;
+  // Backend expects duration_max_minutes; SearchFilters stores seconds.
+  if (durationMax) queryParams.duration_max_minutes = Math.round(durationMax / 60);
   if (tssMax) queryParams.tss_max = tssMax;
 
   const { data: workouts = [], isFetching, isError, error, refetch } = useQuery({

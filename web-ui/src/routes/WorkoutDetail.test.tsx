@@ -159,12 +159,15 @@ describe('WorkoutDetail', () => {
 
   describe('completed activity (laps)', () => {
     beforeEach(() => {
+      // Activity IDs from intervals.icu start with "i" — the intervals query is only
+      // enabled when the id starts with "i" (or when the event fetch fails).
       vi.mocked(api.getEvent).mockResolvedValue(PLANNED_EVENT);
       vi.mocked(api.getActivityIntervals).mockResolvedValue(COMPLETED_INTERVALS);
     });
 
     it('renders lap list rows', async () => {
-      renderWorkoutDetail();
+      // Use an activity-style id (starts with "i") so the intervals query fires.
+      renderWorkoutDetail('i12345');
       await waitFor(() => screen.getAllByTestId('lap-row'));
       const rows = screen.getAllByTestId('lap-row');
       expect(rows.length).toBe(3);
@@ -173,13 +176,13 @@ describe('WorkoutDetail', () => {
     it('renders chart from laps (since no steps override applied when laps present)', async () => {
       // When laps are present but steps also exist, steps take priority in our impl.
       // This test verifies chart is present.
-      renderWorkoutDetail();
+      renderWorkoutDetail('i12345');
       await waitFor(() => screen.getByTestId('chart-container'));
       expect(screen.getByTestId('chart-container')).toBeTruthy();
     });
 
     it('renders workout chart bars (from steps when both present)', async () => {
-      renderWorkoutDetail();
+      renderWorkoutDetail('i12345');
       await waitFor(() => screen.getAllByTestId('workout-bar'));
       // 3 bars from the steps
       expect(screen.getAllByTestId('workout-bar').length).toBe(3);

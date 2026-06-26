@@ -87,7 +87,8 @@ describe('LibraryAdd', () => {
     await waitFor(() => expect(api.searchLibrary).toHaveBeenCalled(), { timeout: 2000 });
 
     const calls = vi.mocked(api.searchLibrary).mock.calls;
-    expect(calls[calls.length - 1][0]).toMatchObject({ name: 'threshold' });
+    // The frontend maps the name search to the backend's name_search param.
+    expect(calls[calls.length - 1][0]).toMatchObject({ name_search: 'threshold' });
 
     vi.useRealTimers();
   }, 10000);

@@ -301,14 +301,18 @@ export default function WorkoutDetail() {
   const eventLoading = eventDataLoading || (eventFailed && activityLoading);
   const eventError = eventFailed && activityFailed;
 
-  // Fetch intervals (for completed activities)
+  // Fetch intervals (for completed activities only).
+  // Activity ids from intervals.icu start with "i" (e.g. "i159692282").
+  // For numeric planned-event ids, skip — the endpoint returns 404 and
+  // retrying it generates spurious console errors.
+  const isActivityId = !!id && (id.startsWith('i') || eventFailed);
   const {
     data: intervals,
   } = useQuery<ActivityIntervals>({
     queryKey: ['activity-intervals', id],
     queryFn: () => getActivityIntervals(id!),
-    enabled: !!id,
-    retry: 1,
+    enabled: isActivityId,
+    retry: 0,
   });
 
   // Fetch alternatives (on demand)
