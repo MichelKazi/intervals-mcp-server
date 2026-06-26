@@ -122,6 +122,37 @@ export function callMcp(tool: string, args?: Record<string, unknown>): Promise<u
   return apiFetch(`/api/mcp/${tool}`, { method: 'POST', body: JSON.stringify(args ?? {}) });
 }
 
+// ── Analytics (structured JSON for More-tab charts) ──
+export interface PmcPoint { date: string; ctl: number; atl: number; tsb: number; rampRate?: number }
+export interface PowerProfile { durations: { secs: number; watts: number; date: string }[] }
+export interface ZoneDistribution { zones: { zone: string; seconds: number; pct: number }[]; target: unknown[] }
+export interface VolumePoint { date: string; tss: number; duration_secs: number; type: string }
+export interface WeeklyVolumePoint { week_start: string; hours: number; tss: number; sessions: number }
+
+export function getPmc(days = 90): Promise<PmcPoint[]> {
+  return apiFetch(`/api/analytics/pmc?days=${days}`);
+}
+export function getPowerProfile(): Promise<PowerProfile> {
+  return apiFetch('/api/analytics/power-profile');
+}
+export function getZoneDistribution(period = '4w'): Promise<ZoneDistribution> {
+  return apiFetch(`/api/analytics/zone-distribution?period=${period}`);
+}
+export function getVolume(days = 180): Promise<VolumePoint[]> {
+  return apiFetch(`/api/analytics/volume?days=${days}`);
+}
+export function getWeeklyVolume(weeks = 12): Promise<WeeklyVolumePoint[]> {
+  return apiFetch(`/api/analytics/weekly-volume?weeks=${weeks}`);
+}
+
+// ── Coaching chat (DeepSeek via directeur, through the MCP/coaching layer) ──
+export function getCoachingBrief(): Promise<unknown> {
+  return callMcp('get_coaching_brief', {});
+}
+export function analyzeActivity(activityId: string | number): Promise<unknown> {
+  return callMcp('analyze_activity', { activity_id: String(activityId) });
+}
+
 export function getMcpTools(): Promise<unknown[]> {
   return apiFetch('/api/mcp/tools');
 }
