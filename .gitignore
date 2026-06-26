@@ -183,3 +183,6 @@ TODO
 .claude/
 .DS_Store
 CLAUDE.md
+
+# subagent-driven-development scratch
+.superpowers/
