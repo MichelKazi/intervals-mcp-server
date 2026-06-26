@@ -2,13 +2,16 @@ import { useState } from 'react';
 import FilterChip from './FilterChip';
 import { Input } from '../ui/input';
 
+// Zone colors aligned with ZONE_COLORS in zoneColors.ts:
+// endurance=zone-1 (#3b82f6), tempo=zone-2 (#eab308), sweet_spot/threshold=zone-3 (#f97316),
+// vo2max=zone-4 (#ef4444), anaerobic=zone-5 (#a855f7)
 const ZONE_OPTIONS = [
-  { label: 'Endurance', value: 'endurance', color: 'var(--z2)' },
-  { label: 'Tempo', value: 'tempo', color: 'var(--z3)' },
-  { label: 'Sweet Spot', value: 'sweet_spot', color: 'var(--z4)' },
-  { label: 'Threshold', value: 'threshold', color: 'var(--z5)' },
-  { label: 'VO2max', value: 'vo2max', color: 'var(--z6)' },
-  { label: 'Anaerobic', value: 'anaerobic', color: 'var(--z7)' },
+  { label: 'Endurance', value: 'endurance', color: '#3b82f6' },
+  { label: 'Tempo', value: 'tempo', color: '#eab308' },
+  { label: 'Sweet Spot', value: 'sweet_spot', color: '#f97316' },
+  { label: 'Threshold', value: 'threshold', color: '#f97316' },
+  { label: 'VO2max', value: 'vo2max', color: '#ef4444' },
+  { label: 'Anaerobic', value: 'anaerobic', color: '#a855f7' },
 ];
 
 const DURATION_OPTIONS = [

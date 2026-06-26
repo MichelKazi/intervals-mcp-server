@@ -175,13 +175,13 @@ describe('LibraryAdd', () => {
     }, { timeout: 3000 });
   });
 
-  it('g. empty results shows "No workouts match — adjust filters."', async () => {
+  it('g. empty results shows "No workouts match" message', async () => {
     vi.mocked(api.searchLibrary).mockResolvedValue([]);
 
     render(<LibraryAdd />, { wrapper: makeWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText(/No workouts match — adjust filters\./i)).toBeInTheDocument();
+      expect(screen.getByText(/No workouts match\./i)).toBeInTheDocument();
     }, { timeout: 3000 });
   });
   it('h. when searchLibrary rejects, shows error message not empty-filters message', async () => {
@@ -194,7 +194,7 @@ describe('LibraryAdd', () => {
     }, { timeout: 3000 });
 
     expect(screen.getByRole('alert').textContent).toContain('Network error');
-    expect(screen.queryByText(/No workouts match — adjust filters/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No workouts match/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
   });
 });
