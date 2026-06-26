@@ -98,7 +98,7 @@ async def test_list_events_error_defaults_502(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_event_returns_dict(monkeypatch):
     async def fake_request(url, **kwargs):
-        assert "/event/ev1" in url  # singular /event/, not /events/
+        assert "/events/ev1" in url  # intervals.icu single-event GET is plural /events/{id}
         return SAMPLE_EVENT
 
     monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
@@ -110,7 +110,7 @@ async def test_get_event_returns_dict(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_event_uses_singular_event_url(monkeypatch):
+async def test_get_event_uses_plural_events_url(monkeypatch):
     captured_url = {}
 
     async def fake_request(url, **kwargs):
@@ -121,8 +121,8 @@ async def test_get_event_uses_singular_event_url(monkeypatch):
 
     from intervals_mcp_server.services import events as svc
     await svc.get_event("ev42")
-    assert "/event/ev42" in captured_url["url"]
-    assert "/events/ev42" not in captured_url["url"]
+    # intervals.icu returns 404 for /event/{id} (singular); the working path is plural.
+    assert "/athlete/i1/events/ev42" in captured_url["url"]
 
 
 @pytest.mark.asyncio
@@ -305,8 +305,8 @@ async def test_move_event_preserves_workout_fields(monkeypatch):
     from intervals_mcp_server.services import events as svc
     result = await svc.move_event("ev1", "2024-02-10")
 
-    # GET used the singular /event/ URL
-    assert "/event/ev1" in calls[0]["url"]
+    # GET used the plural /events/ URL (intervals.icu 404s on singular /event/)
+    assert "/athlete/i1/events/ev1" in calls[0]["url"]
 
     # PUT used the plural /events/ URL with the new date
     put_call = next(c for c in calls if c["method"] == "PUT")

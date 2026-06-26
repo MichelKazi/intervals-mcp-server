@@ -3,7 +3,10 @@ import type {
   LibraryWorkout, WellnessDay
 } from './types';
 
-const BASE = import.meta.env.VITE_API_BASE ?? 'https://intervals-web-api-production.up.railway.app';
+// Default to same-origin: the PWA is served by the same FastAPI app that hosts
+// /api/*, so relative requests always reach the backend that served the page.
+// Override with VITE_API_BASE only when the UI is hosted separately from the API.
+const BASE = import.meta.env.VITE_API_BASE ?? '';
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = import.meta.env.VITE_API_TOKEN;

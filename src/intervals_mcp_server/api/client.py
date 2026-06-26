@@ -212,6 +212,10 @@ async def make_intervals_request(
             client = await _get_httpx_client()
             response = await _send_request(client)
 
+        # Log every upstream call with method, path, and status so 404s from
+        # wrong endpoint paths are visible in the logs (e.g. /event vs /events).
+        log = logger.warning if response.status_code >= 400 else logger.info
+        log("intervals.icu %s %s -> %s", method, url, response.status_code)
         return _parse_response(response, full_url)
     except httpx.HTTPStatusError as e:
         return _handle_http_status_error(e)

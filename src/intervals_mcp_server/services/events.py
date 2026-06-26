@@ -71,9 +71,9 @@ async def get_event(event_id: str, athlete_id: str | None = None) -> dict[str, A
     if err:
         raise ServiceError(status_code=400, message=err)
 
-    # Note: single-event GET uses /event/{id} (singular), not /events/{id}
+    # intervals.icu single-event GET is /events/{id} (plural). /event/{id} 404s.
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/event/{event_id}",
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}",
     )
     _check_error(result)
 

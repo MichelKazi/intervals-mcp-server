@@ -1,5 +1,7 @@
 import importlib.metadata
+import logging
 import os
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -10,6 +12,8 @@ from starlette.requests import Request
 
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.services.errors import ServiceError
+
+logger = logging.getLogger("intervals_icu_mcp_server")
 
 
 def create_app() -> FastAPI:
@@ -22,6 +26,25 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def _log_requests(request: Request, call_next):
+        # Log every API request with method, path, status, and duration so
+        # broken endpoints are easy to spot in the deploy logs. Static/SPA
+        # asset noise is skipped.
+        start = time.monotonic()
+        try:
+            response = await call_next(request)
+        except Exception:
+            ms = (time.monotonic() - start) * 1000
+            logger.exception("%s %s -> 500 (%.0fms)", request.method, request.url.path, ms)
+            raise
+        ms = (time.monotonic() - start) * 1000
+        path = request.url.path
+        if path.startswith("/api/") or response.status_code >= 400:
+            log = logger.warning if response.status_code >= 400 else logger.info
+            log("%s %s -> %s (%.0fms)", request.method, path, response.status_code, ms)
+        return response
 
     @app.exception_handler(ServiceError)
     async def _svc_err(_req, exc: ServiceError):
