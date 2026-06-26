@@ -366,3 +366,221 @@ async def test_mark_done_error_raises_service_error(monkeypatch):
     with pytest.raises(ServiceError) as exc_info:
         await svc.mark_done("ev1")
     assert exc_info.value.status_code == 500
+
+
+# --- pair_activity ---
+
+@pytest.mark.asyncio
+async def test_pair_activity_preserves_fields_and_sets_id(monkeypatch):
+    """PUT must set paired_activity_id while preserving all original fields."""
+    calls = []
+
+    async def fake_request(url, **kwargs):
+        calls.append({"url": url, "method": kwargs.get("method", "GET"), "data": kwargs.get("data")})
+        if kwargs.get("method", "GET") == "GET":
+            return REALISTIC_EVENT
+        return kwargs.get("data")
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.pair_activity("ev1", 987654)
+
+    put_call = next(c for c in calls if c["method"] == "PUT")
+    assert "/athlete/i1/events/ev1" in put_call["url"]
+    put_data = put_call["data"]
+    assert put_data["paired_activity_id"] == 987654
+    # original fields preserved
+    assert put_data["name"] == "Kaweah"
+    assert put_data["workout_doc"] == REALISTIC_EVENT["workout_doc"]
+    assert put_data["icu_training_load"] == 75
+    assert result["paired_activity_id"] == 987654
+
+
+@pytest.mark.asyncio
+async def test_pair_activity_error_raises_service_error(monkeypatch):
+    async def fake_request(url, **kwargs):
+        return {"error": True, "message": "forbidden", "status_code": 403}
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    with pytest.raises(ServiceError) as exc_info:
+        await svc.pair_activity("ev1", 123)
+    assert exc_info.value.status_code == 403
+
+
+# --- unpair_activity ---
+
+@pytest.mark.asyncio
+async def test_unpair_activity_sets_null(monkeypatch):
+    calls = []
+
+    async def fake_request(url, **kwargs):
+        calls.append({"method": kwargs.get("method", "GET"), "data": kwargs.get("data")})
+        if kwargs.get("method", "GET") == "GET":
+            return {**REALISTIC_EVENT, "paired_activity_id": 555}
+        return kwargs.get("data")
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.unpair_activity("ev1")
+
+    put_call = next(c for c in calls if c["method"] == "PUT")
+    assert put_call["data"]["paired_activity_id"] is None
+    assert put_call["data"]["name"] == "Kaweah"
+    assert result["paired_activity_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_unpair_activity_error_raises_service_error(monkeypatch):
+    async def fake_request(url, **kwargs):
+        return {"error": True, "message": "not found", "status_code": 404}
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    with pytest.raises(ServiceError) as exc_info:
+        await svc.unpair_activity("ev99")
+    assert exc_info.value.status_code == 404
+
+
+# --- get_compliance ---
+
+def _patch_compliance(monkeypatch, event, activity=None, activity_raises=None):
+    """Patch get_event (via make_intervals_request) and get_activity."""
+
+    async def fake_request(url, **kwargs):
+        return event
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    async def fake_get_activity(activity_id):
+        if activity_raises is not None:
+            raise activity_raises
+        return activity
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.services.activities.get_activity", fake_get_activity
+    )
+
+
+@pytest.mark.asyncio
+async def test_compliance_on_target(monkeypatch):
+    event = {"id": "ev1", "paired_activity_id": "i9", "icu_training_load": 100, "moving_time": 3600}
+    activity = {"icu_training_load": 100, "moving_time": 3600, "icu_intensity": 85}
+    _patch_compliance(monkeypatch, event, activity)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.get_compliance("ev1")
+    assert result["paired"] is True
+    assert result["actual"]["load"] == 100
+    assert result["compliance"]["load_pct"] == 100
+    assert result["compliance"]["duration_pct"] == 100
+    assert result["compliance"]["verdict"] == "on_target"
+
+
+@pytest.mark.asyncio
+async def test_compliance_under(monkeypatch):
+    event = {"id": "ev1", "paired_activity_id": "i9", "icu_training_load": 100, "moving_time": 3600}
+    activity = {"icu_training_load": 80, "moving_time": 3000, "icu_intensity": 70}
+    _patch_compliance(monkeypatch, event, activity)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.get_compliance("ev1")
+    assert result["compliance"]["load_pct"] == 80
+    assert result["compliance"]["verdict"] == "under"
+
+
+@pytest.mark.asyncio
+async def test_compliance_over(monkeypatch):
+    event = {"id": "ev1", "paired_activity_id": "i9", "icu_training_load": 100, "moving_time": 3600}
+    activity = {"icu_training_load": 130, "moving_time": 4000, "icu_intensity": 95}
+    _patch_compliance(monkeypatch, event, activity)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.get_compliance("ev1")
+    assert result["compliance"]["load_pct"] == 130
+    assert result["compliance"]["verdict"] == "over"
+
+
+@pytest.mark.asyncio
+async def test_compliance_unknown_when_not_paired(monkeypatch):
+    event = {"id": "ev1", "paired_activity_id": None, "icu_training_load": 100, "moving_time": 3600}
+    _patch_compliance(monkeypatch, event, activity=None)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.get_compliance("ev1")
+    assert result["paired"] is False
+    assert result["actual"] is None
+    assert result["compliance"]["load_pct"] is None
+    assert result["compliance"]["verdict"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_compliance_planned_load_none_no_crash(monkeypatch):
+    event = {"id": "ev1", "paired_activity_id": "i9", "icu_training_load": None, "moving_time": 3600}
+    activity = {"icu_training_load": 90, "moving_time": 3600, "icu_intensity": 80}
+    _patch_compliance(monkeypatch, event, activity)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.get_compliance("ev1")
+    assert result["compliance"]["load_pct"] is None
+    assert result["compliance"]["verdict"] == "unknown"
+    # duration still computable
+    assert result["compliance"]["duration_pct"] == 100
+
+
+@pytest.mark.asyncio
+async def test_compliance_planned_load_zero_no_crash(monkeypatch):
+    event = {"id": "ev1", "paired_activity_id": "i9", "icu_training_load": 0, "moving_time": 3600}
+    activity = {"icu_training_load": 90, "moving_time": 3600, "icu_intensity": 80}
+    _patch_compliance(monkeypatch, event, activity)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.get_compliance("ev1")
+    assert result["compliance"]["load_pct"] is None
+    assert result["compliance"]["verdict"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_compliance_uses_load_target_fallback(monkeypatch):
+    event = {"id": "ev1", "paired_activity_id": "i9", "load_target": 100, "moving_time": 3600}
+    activity = {"icu_training_load": 100, "moving_time": 3600, "icu_intensity": 85}
+    _patch_compliance(monkeypatch, event, activity)
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.get_compliance("ev1")
+    assert result["planned"]["load"] == 100
+    assert result["compliance"]["load_pct"] == 100
+    assert result["compliance"]["verdict"] == "on_target"
+
+
+@pytest.mark.asyncio
+async def test_compliance_activity_fetch_fails_returns_unknown(monkeypatch):
+    """A Strava-restricted / inaccessible paired activity must not 500."""
+    event = {"id": "ev1", "paired_activity_id": "i9", "icu_training_load": 100, "moving_time": 3600}
+    _patch_compliance(
+        monkeypatch, event, activity_raises=ServiceError(status_code=403, message="Forbidden")
+    )
+
+    from intervals_mcp_server.services import events as svc
+    result = await svc.get_compliance("ev1")
+    assert result["paired"] is True
+    assert result["actual"] is None
+    assert result["compliance"]["load_pct"] is None
+    assert result["compliance"]["verdict"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_compliance_event_fetch_error_raises(monkeypatch):
+    async def fake_request(url, **kwargs):
+        return {"error": True, "message": "not found", "status_code": 404}
+
+    monkeypatch.setattr("intervals_mcp_server.services.events.make_intervals_request", fake_request)
+
+    from intervals_mcp_server.services import events as svc
+    with pytest.raises(ServiceError) as exc_info:
+        await svc.get_compliance("missing")
+    assert exc_info.value.status_code == 404

@@ -1,6 +1,6 @@
 import type {
   Dashboard, Activity, ActivityIntervals, Stream, PlannedEvent,
-  LibraryWorkout, WellnessDay
+  LibraryWorkout, WellnessDay, Compliance
 } from './types';
 
 // Default to same-origin: the PWA is served by the same FastAPI app that hosts
@@ -80,6 +80,18 @@ export function moveEvent(id: string | number, start_date: string): Promise<Plan
 
 export function markEventDone(id: string | number): Promise<PlannedEvent> {
   return apiFetch(`/api/events/${id}/mark-done`, { method: 'POST' });
+}
+
+export function pairActivity(eventId: string | number, activityId: string | number): Promise<PlannedEvent> {
+  return apiFetch(`/api/events/${eventId}/pair`, { method: 'POST', body: JSON.stringify({ activity_id: activityId }) });
+}
+
+export function unpairActivity(eventId: string | number): Promise<PlannedEvent> {
+  return apiFetch(`/api/events/${eventId}/unpair`, { method: 'POST' });
+}
+
+export function getCompliance(eventId: string | number): Promise<Compliance> {
+  return apiFetch(`/api/events/${eventId}/compliance`);
 }
 
 export function searchLibrary(params?: Record<string, string | number | boolean>): Promise<LibraryWorkout[]> {

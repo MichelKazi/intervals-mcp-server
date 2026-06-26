@@ -12,12 +12,47 @@ vi.mock('../lib/api', () => ({
   getActivity: vi.fn(),
   getActivityIntervals: vi.fn(),
   getAlternatives: vi.fn(),
+  getActivities: vi.fn(),
+  getCompliance: vi.fn(),
+  pairActivity: vi.fn(),
+  unpairActivity: vi.fn(),
   markEventDone: vi.fn(),
   moveEvent: vi.fn(),
   updateEvent: vi.fn(),
 }));
 
 import * as api from '../lib/api';
+import type { Compliance } from '../lib/types';
+
+const COMPLIANCE_NOT_PAIRED: Compliance = {
+  event_id: 12345,
+  paired_activity_id: null,
+  paired: false,
+  planned: { load: 75, duration: 3600 },
+  actual: null,
+  compliance: { load_pct: null, duration_pct: null, verdict: 'unknown' },
+};
+
+const COMPLIANCE_ON_TARGET: Compliance = {
+  event_id: 12345,
+  paired_activity_id: 'i999',
+  paired: true,
+  planned: { load: 75, duration: 3600 },
+  actual: { load: 78, duration: 3700, intensity: 85 },
+  compliance: { load_pct: 104, duration_pct: 103, verdict: 'on_target' },
+};
+
+const RECENT_ACTIVITIES: PlannedEvent[] = [
+  {
+    id: 'i999',
+    name: 'Tuesday Intervals',
+    type: 'Ride',
+    category: 'RIDE',
+    start_date_local: '2026-06-24T07:00:00',
+    end_date_local: '2026-06-24T08:00:00',
+    icu_training_load: 78,
+  },
+];
 
 // ── Test fixtures ─────────────────────────────────────────────────────────────
 
@@ -92,6 +127,9 @@ beforeEach(() => {
   vi.mocked(api.getActivityIntervals).mockResolvedValue({ icu_intervals: [] });
   // Default: activity fallback never called (event succeeds by default)
   vi.mocked(api.getActivity).mockResolvedValue(PLANNED_EVENT);
+  // Default compliance: not paired
+  vi.mocked(api.getCompliance).mockResolvedValue(COMPLIANCE_NOT_PAIRED);
+  vi.mocked(api.getActivities).mockResolvedValue(RECENT_ACTIVITIES);
 });
 
 describe('WorkoutDetail', () => {
@@ -186,6 +224,66 @@ describe('WorkoutDetail', () => {
       await waitFor(() => screen.getAllByTestId('workout-bar'));
       // 3 bars from the steps
       expect(screen.getAllByTestId('workout-bar').length).toBe(3);
+    });
+  });
+
+  describe('compliance section', () => {
+    beforeEach(() => {
+      vi.mocked(api.getEvent).mockResolvedValue(PLANNED_EVENT);
+    });
+
+    it('shows verdict text and load_pct when paired + on target', async () => {
+      vi.mocked(api.getCompliance).mockResolvedValue(COMPLIANCE_ON_TARGET);
+      renderWorkoutDetail();
+      await waitFor(() => screen.getByTestId('verdict-badge'));
+      expect(screen.getByTestId('verdict-badge').textContent).toMatch(/On target/i);
+      expect(screen.getByText(/104% of planned/i)).toBeTruthy();
+    });
+
+    it('shows Link activity button when not paired', async () => {
+      vi.mocked(api.getCompliance).mockResolvedValue(COMPLIANCE_NOT_PAIRED);
+      renderWorkoutDetail();
+      await waitFor(() => screen.getByTestId('link-activity-btn'));
+      expect(screen.getByText(/Not linked to an activity yet/i)).toBeTruthy();
+    });
+
+    it('opens picker and calls pairActivity when an activity is selected', async () => {
+      vi.mocked(api.getCompliance).mockResolvedValue(COMPLIANCE_NOT_PAIRED);
+      vi.mocked(api.pairActivity).mockResolvedValue(PLANNED_EVENT);
+      renderWorkoutDetail();
+      const linkBtn = await screen.findByTestId('link-activity-btn');
+      fireEvent.click(linkBtn);
+      const option = await screen.findByTestId('activity-option');
+      fireEvent.click(option);
+      await waitFor(() =>
+        expect(api.pairActivity).toHaveBeenCalledWith('12345', 'i999')
+      );
+    });
+
+    it('shows "No linkable activities found" when picker is empty', async () => {
+      vi.mocked(api.getCompliance).mockResolvedValue(COMPLIANCE_NOT_PAIRED);
+      vi.mocked(api.getActivities).mockResolvedValue([]);
+      renderWorkoutDetail();
+      const linkBtn = await screen.findByTestId('link-activity-btn');
+      fireEvent.click(linkBtn);
+      await waitFor(() => screen.getByText(/No linkable activities found/i));
+    });
+
+    it('calls unpairActivity when Unlink clicked', async () => {
+      vi.mocked(api.getCompliance).mockResolvedValue(COMPLIANCE_ON_TARGET);
+      vi.mocked(api.unpairActivity).mockResolvedValue(PLANNED_EVENT);
+      renderWorkoutDetail();
+      const unlinkBtn = await screen.findByTestId('unlink-btn');
+      fireEvent.click(unlinkBtn);
+      await waitFor(() => expect(api.unpairActivity).toHaveBeenCalledWith('12345'));
+    });
+
+    it('does not crash when compliance endpoint errors', async () => {
+      vi.mocked(api.getCompliance).mockRejectedValue(new Error('boom'));
+      renderWorkoutDetail();
+      await waitFor(() => screen.getByText(/Compliance data unavailable/i));
+      // Workout itself still renders
+      expect(screen.getByText('Test Threshold Workout')).toBeTruthy();
     });
   });
 

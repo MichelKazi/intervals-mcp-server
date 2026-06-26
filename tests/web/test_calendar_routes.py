@@ -292,3 +292,138 @@ def test_mark_done_service_error(monkeypatch):
     r = c.post("/api/events/ev1/mark-done")
     assert r.status_code == 500
     assert r.json()["error"] is True
+
+
+# --- POST /api/events/{event_id}/pair ---
+
+def test_pair_requires_token(monkeypatch):
+    monkeypatch.setenv("WEB_API_TOKEN", "secret")
+    import intervals_mcp_server.config as cfg
+    cfg._config_instance = None
+    from intervals_mcp_server.web.app import create_app
+    c = TestClient(create_app())
+    r = c.post("/api/events/ev1/pair", json={"activity_id": 123})
+    assert r.status_code == 401
+
+
+def test_pair_200(monkeypatch):
+    captured = {}
+
+    async def fake_pair(event_id, activity_id, athlete_id=None):
+        captured["event_id"] = event_id
+        captured["activity_id"] = activity_id
+        return {**SAMPLE_EVENT, "paired_activity_id": activity_id}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.pair_activity", fake_pair
+    )
+    c = _client(monkeypatch)
+    r = c.post("/api/events/ev1/pair", json={"activity_id": 987654})
+    assert r.status_code == 200
+    assert r.json()["paired_activity_id"] == 987654
+    assert captured["event_id"] == "ev1"
+    assert captured["activity_id"] == 987654
+
+
+def test_pair_service_error(monkeypatch):
+    async def fake_pair(event_id, activity_id, athlete_id=None):
+        raise ServiceError(403, "forbidden")
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.pair_activity", fake_pair
+    )
+    c = _client(monkeypatch)
+    r = c.post("/api/events/ev1/pair", json={"activity_id": 1})
+    assert r.status_code == 403
+    assert r.json()["error"] is True
+    assert "forbidden" in r.json()["message"]
+
+
+# --- POST /api/events/{event_id}/unpair ---
+
+def test_unpair_requires_token(monkeypatch):
+    monkeypatch.setenv("WEB_API_TOKEN", "secret")
+    import intervals_mcp_server.config as cfg
+    cfg._config_instance = None
+    from intervals_mcp_server.web.app import create_app
+    c = TestClient(create_app())
+    r = c.post("/api/events/ev1/unpair")
+    assert r.status_code == 401
+
+
+def test_unpair_200(monkeypatch):
+    async def fake_unpair(event_id, athlete_id=None):
+        return {**SAMPLE_EVENT, "paired_activity_id": None}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.unpair_activity", fake_unpair
+    )
+    c = _client(monkeypatch)
+    r = c.post("/api/events/ev1/unpair")
+    assert r.status_code == 200
+    assert r.json()["paired_activity_id"] is None
+
+
+def test_unpair_service_error(monkeypatch):
+    async def fake_unpair(event_id, athlete_id=None):
+        raise ServiceError(404, "not found")
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.unpair_activity", fake_unpair
+    )
+    c = _client(monkeypatch)
+    r = c.post("/api/events/ev99/unpair")
+    assert r.status_code == 404
+    assert r.json()["error"] is True
+
+
+# --- GET /api/events/{event_id}/compliance ---
+
+SAMPLE_COMPLIANCE = {
+    "event_id": "ev1",
+    "paired_activity_id": "i9",
+    "paired": True,
+    "planned": {"load": 100, "duration": 3600},
+    "actual": {"load": 104, "duration": 3700, "intensity": 85},
+    "compliance": {"load_pct": 104, "duration_pct": 103, "verdict": "on_target"},
+}
+
+
+def test_compliance_requires_token(monkeypatch):
+    monkeypatch.setenv("WEB_API_TOKEN", "secret")
+    import intervals_mcp_server.config as cfg
+    cfg._config_instance = None
+    from intervals_mcp_server.web.app import create_app
+    c = TestClient(create_app())
+    r = c.get("/api/events/ev1/compliance")
+    assert r.status_code == 401
+
+
+def test_compliance_200(monkeypatch):
+    async def fake_compliance(event_id, athlete_id=None):
+        return SAMPLE_COMPLIANCE
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.get_compliance", fake_compliance
+    )
+    c = _client(monkeypatch)
+    r = c.get("/api/events/ev1/compliance")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["event_id"] == "ev1"
+    assert data["paired"] is True
+    assert data["planned"]["load"] == 100
+    assert data["compliance"]["verdict"] == "on_target"
+
+
+def test_compliance_service_error(monkeypatch):
+    async def fake_compliance(event_id, athlete_id=None):
+        raise ServiceError(404, "not found")
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.web.routes.calendar.get_compliance", fake_compliance
+    )
+    c = _client(monkeypatch)
+    r = c.get("/api/events/missing/compliance")
+    assert r.status_code == 404
+    assert r.json()["error"] is True

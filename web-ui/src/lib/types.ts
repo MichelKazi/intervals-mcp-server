@@ -42,6 +42,28 @@ export interface PlannedEvent {
 
 export type Activity = PlannedEvent; // same shape, category differs
 
+export type ComplianceVerdict = 'on_target' | 'under' | 'over' | 'unknown';
+
+export interface Compliance {
+  event_id: number | string;
+  paired_activity_id: number | string | null;
+  paired: boolean;
+  planned: {
+    load: number | null;
+    duration: number | null;
+  };
+  actual: {
+    load: number | null;
+    duration: number | null;
+    intensity: number | null;
+  } | null;
+  compliance: {
+    load_pct: number | null;
+    duration_pct: number | null;
+    verdict: ComplianceVerdict;
+  };
+}
+
 export interface Readiness {
   verdict: string; // "green" | "yellow" | "red"
   reasoning: string;

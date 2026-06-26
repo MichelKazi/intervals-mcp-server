@@ -11,10 +11,13 @@ from pydantic import BaseModel, ConfigDict
 from intervals_mcp_server.services.events import (
     create_event,
     delete_event,
+    get_compliance,
     get_event,
     list_events,
     mark_done,
     move_event,
+    pair_activity,
+    unpair_activity,
     update_event,
 )
 from intervals_mcp_server.web.auth import require_token
@@ -32,6 +35,12 @@ class MoveBody(BaseModel):
     """Body for the move (reschedule) endpoint."""
 
     start_date: str
+
+
+class PairBody(BaseModel):
+    """Body for the pair endpoint."""
+
+    activity_id: int | str
 
 
 @router.get("")
@@ -82,3 +91,23 @@ async def event_move(
 async def event_mark_done(event_id: str, athlete_id: str | None = Query(default=None)):
     """Mark an event as done."""
     return await mark_done(event_id, athlete_id=athlete_id)
+
+
+@router.post("/{event_id}/pair")
+async def event_pair(
+    event_id: str, body: PairBody, athlete_id: str | None = Query(default=None)
+):
+    """Link a completed activity to a planned event."""
+    return await pair_activity(event_id, body.activity_id, athlete_id=athlete_id)
+
+
+@router.post("/{event_id}/unpair")
+async def event_unpair(event_id: str, athlete_id: str | None = Query(default=None)):
+    """Unlink the paired activity from an event."""
+    return await unpair_activity(event_id, athlete_id=athlete_id)
+
+
+@router.get("/{event_id}/compliance")
+async def event_compliance(event_id: str, athlete_id: str | None = Query(default=None)):
+    """Return planned-vs-actual compliance for an event."""
+    return await get_compliance(event_id, athlete_id=athlete_id)
