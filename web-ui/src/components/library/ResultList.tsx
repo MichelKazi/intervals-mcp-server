@@ -52,7 +52,7 @@ export default function ResultList({ workouts, isLoading, onSelect }: ResultList
           key={w.tr_workout_id ?? idx}
           type="button"
           onClick={() => onSelect(w)}
-          className="mb-2 flex min-h-[44px] w-full cursor-pointer flex-col gap-1 rounded-md border border-border bg-card p-3 text-left text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mb-2 flex min-h-[44px] w-full cursor-pointer flex-col gap-1 rounded-md border border-border bg-card p-3 text-left text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <div className="flex items-start justify-between gap-2">
             <span className="flex-1 text-sm font-semibold">{w.name}</span>

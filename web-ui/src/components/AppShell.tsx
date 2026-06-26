@@ -13,15 +13,15 @@ export default function AppShell({ title, showBack, children }: AppShellProps) {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
+    <div className="min-h-screen bg-bg-base text-foreground font-ui">
       <header
-        className="fixed inset-x-0 top-0 z-[100] flex items-end border-b border-border bg-card px-4 pb-2 pt-safe"
+        className="fixed inset-x-0 top-0 z-[100] flex items-end border-b border-border-subtle bg-bg-surface px-4 pb-2 pt-safe"
         style={{ height: 'calc(56px + env(safe-area-inset-top))' }}
       >
         {showBack && (
           <button
             onClick={() => navigate(-1)}
-            className="mr-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mr-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Go back"
           >
             <ChevronLeft className="h-5 w-5" strokeWidth={2} />

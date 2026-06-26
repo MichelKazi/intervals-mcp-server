@@ -68,13 +68,19 @@ test.describe('Dashboard', () => {
     expect(title).not.toContain('undefined');
   });
 
-  test('bottom nav has 4 tabs each at least 44px tall', async ({ page }) => {
+  test('bottom nav has 4 tabs (Home/Calendar/Library/More) each at least 44px tall', async ({ page }) => {
     // When the bottom nav renders
     const nav = page.locator('nav[aria-label="Main navigation"]');
     await expect(nav).toBeVisible();
 
     const tabs = nav.locator('a');
     await expect(tabs).toHaveCount(4);
+
+    // And the tabs are the expected ones (Activities removed, More added)
+    await expect(page.getByTestId('nav-tab-home')).toBeVisible();
+    await expect(page.getByTestId('nav-tab-calendar')).toBeVisible();
+    await expect(page.getByTestId('nav-tab-library')).toBeVisible();
+    await expect(page.getByTestId('nav-tab-more')).toBeVisible();
 
     // Then each tab is at least 44px tall (touch target)
     for (let i = 0; i < 4; i++) {
@@ -85,23 +91,20 @@ test.describe('Dashboard', () => {
   });
 
   test('each bottom nav tab navigates to its route', async ({ page }) => {
-    const nav = page.locator('nav[aria-label="Main navigation"]');
-    const tabs = nav.locator('a');
-
     // Calendar tab
-    await tabs.nth(1).tap();
+    await page.getByTestId('nav-tab-calendar').tap();
     await expect(page).toHaveURL('/calendar', { timeout: 5000 });
 
     // Library tab
-    await tabs.nth(2).tap();
+    await page.getByTestId('nav-tab-library').tap();
     await expect(page).toHaveURL('/library', { timeout: 5000 });
 
-    // Activities tab
-    await tabs.nth(3).tap();
-    await expect(page).toHaveURL('/activities', { timeout: 5000 });
+    // More tab
+    await page.getByTestId('nav-tab-more').tap();
+    await expect(page).toHaveURL('/more', { timeout: 5000 });
 
     // Home tab
-    await tabs.nth(0).tap();
+    await page.getByTestId('nav-tab-home').tap();
     await expect(page).toHaveURL('/', { timeout: 5000 });
   });
 });

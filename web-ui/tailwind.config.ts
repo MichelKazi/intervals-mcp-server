@@ -33,23 +33,43 @@ const config: Config = {
           DEFAULT: 'hsl(var(--muted))',
           foreground: 'hsl(var(--muted-foreground))',
         },
-        accent: {
-          DEFAULT: 'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))',
-        },
         destructive: {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
         },
-        border: 'hsl(var(--border))',
+        // ── New token system (orange/Inter overhaul) ───────────────────────
+        // `accent` is now the orange brand color (flat). Hover surfaces that
+        // previously used shadcn's `bg-accent` now use `bg-muted`.
+        accent: '#f97316',
+        bg: {
+          base: '#09090f',
+          surface: '#111118',
+          raised: '#1a1a24',
+          high: '#22222f',
+        },
+        status: {
+          green: '#22c55e',
+          yellow: '#f59e0b',
+          red: '#ef4444',
+        },
+        border: {
+          DEFAULT: 'hsl(var(--border))',
+          subtle: '#1e1e2c',
+          default: '#2a2a3c',
+          strong: '#3a3a50',
+        },
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
-        // Zone colors — also referenced as var(--z1..7) in SVG attrs elsewhere.
-        'zone-1': '#4a9eff',
-        'zone-2': '#52c77f',
-        'zone-3': '#f5c842',
-        'zone-4': '#f5842a',
-        'zone-5': '#e84040',
+        // Zone colors — endurance/tempo/threshold/vo2max/anaerobic.
+        // Also referenced as var(--z1..5) in SVG attrs elsewhere.
+        zone: {
+          1: '#3b82f6',
+          2: '#eab308',
+          3: '#f97316',
+          4: '#ef4444',
+          5: '#a855f7',
+        },
+        // Legacy zone-6/7 kept: existing screens still reference them.
         'zone-6': '#c040e8',
         'zone-7': '#ff3399',
       },
@@ -59,8 +79,10 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        sans: ['-apple-system', '"SF Pro Text"', 'system-ui', 'sans-serif'],
-        mono: ['ui-monospace', '"SF Mono"', 'monospace'],
+        ui: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', '"SF Mono"', 'monospace'],
+        // `sans` kept (aliased to Inter) for existing screens using font-sans.
+        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       keyframes: {
         shimmer: {

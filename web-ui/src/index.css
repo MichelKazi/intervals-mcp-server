@@ -9,75 +9,84 @@
  *   tight gap:    gap-2  (8px)
  *   section gap:  gap-4  (16px)
  *   screen pad:   p-4    (16px)
- *   card pad:     p-4    (16px)
+ *   card pad:     p-5    (20px)
  *   list-row:     py-3   (12px top/bottom)
  *
  * TYPE SCALE:
- *   Screen / hero title:  text-xl / text-2xl font-bold
- *   Section heading:      text-xs uppercase tracking-wide font-semibold text-muted-foreground
- *   Body:                 text-base (16px) or text-[15px]
- *   Secondary / captions: text-sm text-muted-foreground
- *   Labels / chips:       text-xs
+ *   Screen / hero title:  text-2xl font-bold
+ *   Card title:           text-base/lg font-semibold
+ *   Eyebrow:              text-[11px] uppercase tracking-widest font-medium (accent or slate-500)
+ *   Body:                 text-[13px] text-slate-400
+ *   Micro:                text-[10px]/[11px] uppercase text-slate-500
+ *   Data numbers:         font-mono font-semibold text-slate-100 (tabular-nums)
+ *   Status text:          text-[11px] font-semibold
  *
  * RADIUS:
- *   Cards:    rounded-xl / rounded-2xl
- *   Controls: rounded-lg (= var(--radius) = 8px)
+ *   Cards:    rounded-xl (= var(--radius) = 12px)
+ *   Controls: rounded-lg
  *   Chips:    rounded-full
  *
  * ELEVATION:
  *   Cards:   shadow-md   (0 4px 12px rgba(0,0,0,0.5))
  *   Sheets:  shadow-2xl  (0 8px 32px rgba(0,0,0,0.65))
- *   Nav:     shadow-sm + border-t border-border
+ *   Nav:     border-t border-border-subtle
  *
- * COLOR IDENTITY: amber (#f0a500) primary + deep-blue-black bg + zone palette.
+ * CARD DEFAULT: bg-bg-surface border border-border-default rounded-xl p-5
+ *               active:scale-[0.99] transition-transform
+ *
+ * COLOR IDENTITY: orange (#f97316) accent + true-black bg + 5-zone palette.
+ * FONTS: Inter (font-ui / body) + JetBrains Mono (font-mono, tabular numerics).
+ * Dark-only — :root is the dark theme.
  * ─────────────────────────────────────────────────────────────────────────── */
 
 @layer base {
   :root {
     /* ── shadcn semantic slots (HSL channel values, no hsl() wrapper) ─────── */
-    --background: 220 31% 7%;          /* #0a0e14 deep blue-black */
-    --foreground: 210 40% 93%;         /* #e6edf3 */
+    --background: 240 24% 5%;          /* #09090f bg-base */
+    --foreground: 0 0% 95%;            /* near-white */
 
-    --card: 217 29% 11%;               /* #131a24 */
-    --card-foreground: 210 40% 93%;
+    --card: 240 20% 8%;                /* #111118 bg-surface */
+    --card-foreground: 0 0% 95%;
 
-    --popover: 213 27% 15%;            /* #1c2531 */
-    --popover-foreground: 210 40% 93%;
+    --popover: 240 16% 12%;            /* #1a1a24 bg-raised */
+    --popover-foreground: 0 0% 95%;
 
-    --primary: 38 100% 47%;            /* #f0a500 amber — our brand */
-    --primary-foreground: 220 31% 7%;  /* near-black text on amber */
+    --primary: 24 95% 53%;             /* #f97316 orange — our brand */
+    --primary-foreground: 240 24% 5%;  /* near-black text on orange */
 
-    --secondary: 213 27% 15%;          /* #1c2531 surface-2 */
-    --secondary-foreground: 210 40% 93%;
+    --secondary: 240 16% 12%;          /* #1a1a24 bg-raised */
+    --secondary-foreground: 0 0% 95%;
 
-    --muted: 213 27% 15%;              /* surface-2 inset fills */
-    --muted-foreground: 211 12% 60%;   /* #8b98a5 */
+    --muted: 240 14% 14%;              /* inset fills + hover surface */
+    --muted-foreground: 215 16% 47%;   /* slate-500 #64748b */
 
-    --accent: 213 27% 15%;             /* hover surface (NOT brand) */
-    --accent-foreground: 210 40% 93%;
+    /* `--accent` no longer drives shadcn hover (those use --muted now); kept
+       for any residual references, mapped to the orange brand. */
+    --accent: 24 95% 53%;
+    --accent-foreground: 240 24% 5%;
 
-    --destructive: 0 78% 58%;          /* #e84040 zone-5 red */
+    --destructive: 0 84% 60%;          /* #ef4444 */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 213 25% 19%;             /* #243040 */
-    --input: 213 25% 19%;
-    --ring: 38 100% 47%;               /* amber focus ring — 9.29:1 on bg (AAA) */
-    --radius: 0.5rem;                  /* 8px */
+    --border: 240 17% 20%;             /* #2a2a3c border-default */
+    --input: 240 17% 20%;
+    --ring: 24 95% 53%;                /* orange focus ring */
+    --radius: 0.75rem;                 /* 12px — matches rounded-xl */
 
     /* ── Legacy CSS vars — kept for SVG color attrs + inline style compat ─── */
     /* New code should use Tailwind classes; these remain for existing inline styles */
-    --bg: #0a0e14;
-    --surface: #131a24;
-    --surface-2: #1c2531;
-    --text: #e6edf3;
-    --text-dim: #8b98a5;
-    --brand: #f0a500;
-    --brand-dim: #b87c00;
-    --z1: #4a9eff;
-    --z2: #52c77f;
-    --z3: #f5c842;
-    --z4: #f5842a;
-    --z5: #e84040;
+    --bg: #09090f;
+    --surface: #111118;
+    --surface-2: #1a1a24;
+    --text: #f2f2f5;
+    --text-dim: #64748b;
+    --brand: #f97316;
+    --brand-dim: #ea6c0a;
+    --z1: #3b82f6;
+    --z2: #eab308;
+    --z3: #f97316;
+    --z4: #ef4444;
+    --z5: #a855f7;
     --z6: #c040e8;
     --z7: #ff3399;
     --sp-1: 4px;
@@ -91,8 +100,8 @@
     --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
     --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
     --shadow-3: 0 8px 32px rgba(0, 0, 0, 0.65);
-    --font: -apple-system, 'SF Pro Text', system-ui, sans-serif;
-    --font-mono: ui-monospace, 'SF Mono', monospace;
+    --font: Inter, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
   }
 }
 
@@ -115,6 +124,11 @@ body {
 
 #root {
   min-height: 100vh;
+}
+
+/* Data numbers use tabular figures wherever font-mono is applied. */
+.font-mono {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Shimmer skeleton — combined with the Tailwind animate-shimmer keyframe. */
