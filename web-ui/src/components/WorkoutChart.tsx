@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { WorkoutStep, IntervalLap } from '../lib/types';
 import { zoneColor, zoneName, formatDuration } from '../lib/format';
 
@@ -15,20 +15,17 @@ interface FlatBar {
   label?: string;
 }
 
-function flattenSteps(steps: WorkoutStep[]): FlatBar[] {
+function flattenSteps(steps: WorkoutStep[], ftp?: number): FlatBar[] {
   const bars: FlatBar[] = [];
   for (const step of steps) {
     if (step.reps && step.steps) {
       for (let i = 0; i < step.reps; i++) {
-        bars.push(...flattenSteps(step.steps));
+        bars.push(...flattenSteps(step.steps, ftp));
       }
     } else {
       const pct = step.power?.value ?? 0;
-      bars.push({
-        pctFtp: pct,
-        durationSecs: step.duration ?? 0,
-        label: step.text,
-      });
+      const watts = ftp ? pct * ftp / 100 : undefined;
+      bars.push({ pctFtp: pct, durationSecs: step.duration ?? 0, watts, label: step.text });
     }
   }
   return bars;
@@ -49,8 +46,9 @@ function lapsToFlatBars(laps: IntervalLap[], ftp?: number): FlatBar[] {
 
 export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const barRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  const bars: FlatBar[] = steps ? flattenSteps(steps) : laps ? lapsToFlatBars(laps, ftp) : [];
+  const bars: FlatBar[] = steps ? flattenSteps(steps, ftp) : laps ? lapsToFlatBars(laps, ftp) : [];
   const maxPct = Math.max(...bars.map(b => b.pctFtp), 100);
   const totalDur = bars.reduce((s, b) => s + b.durationSecs, 0) || 1;
   const CHART_HEIGHT = 200;
@@ -59,10 +57,14 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
   const handleKey = useCallback((e: React.KeyboardEvent, idx: number) => {
     if (e.key === 'ArrowRight') {
       e.preventDefault();
-      setSelectedIdx(Math.min(idx + 1, bars.length - 1));
+      const newIdx = Math.min(idx + 1, bars.length - 1);
+      setSelectedIdx(newIdx);
+      barRefs.current[newIdx]?.focus();
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      setSelectedIdx(Math.max(idx - 1, 0));
+      const newIdx = Math.max(idx - 1, 0);
+      setSelectedIdx(newIdx);
+      barRefs.current[newIdx]?.focus();
     }
   }, [bars.length]);
 
@@ -90,11 +92,11 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
       >
         {bars.map((bar, idx) => {
           const barH = Math.max(MIN_BAR_HEIGHT, (bar.pctFtp / maxPct) * (CHART_HEIGHT - 16));
-          const barW = Math.max(44, (bar.durationSecs / totalDur) * 100);
           const isSelected = selectedIdx === idx;
           return (
             <div
               key={idx}
+              ref={el => { barRefs.current[idx] = el; }}
               data-testid="workout-bar"
               role="button"
               tabIndex={0}
@@ -105,7 +107,7 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
               style={{
                 position: 'relative',
                 minWidth: 44,
-                flex: `0 0 ${barW}px`,
+                flex: `${bar.durationSecs} 0 0`,
                 height: CHART_HEIGHT - 16,
                 display: 'flex',
                 alignItems: 'flex-end',
