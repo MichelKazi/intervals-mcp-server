@@ -32,7 +32,9 @@ def create_app() -> FastAPI:
     async def health():
         return {"status": "ok", "version": version}
 
-    # routers registered in later tasks via register_routes(app)
+    from intervals_mcp_server.web.routes import activities as activities_routes
+    app.include_router(activities_routes.router)
+
     return app
 
 
