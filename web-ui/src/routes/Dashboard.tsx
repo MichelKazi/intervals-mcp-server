@@ -67,11 +67,11 @@ function NextWorkoutCard({ event }: NextWorkoutCardProps) {
 
       {/* Meta row */}
       <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap', marginBottom: steps ? 'var(--sp-4)' : 0 }}>
-        {event.start_date && (
-          <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>{formatDate(event.start_date)}</span>
+        {(event.start_date_local || event.start_date) && (
+          <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>{formatDate(event.start_date_local || event.start_date!)}</span>
         )}
-        {event.sport_type && (
-          <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>{event.sport_type}</span>
+        {(event.type || event.sport_type) && (
+          <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>{event.type || event.sport_type}</span>
         )}
         {event.moving_time != null && event.moving_time > 0 && (
           <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>
@@ -197,8 +197,8 @@ function LatestActivityCard({ activity }: LatestActivityCardProps) {
           {activity.name}
         </p>
         <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-          {activity.sport_type && (
-            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{activity.sport_type}</span>
+          {(activity.type || activity.sport_type) && (
+            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{activity.type || activity.sport_type}</span>
           )}
           {activity.moving_time != null && (
             <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{formatDuration(activity.moving_time)}</span>

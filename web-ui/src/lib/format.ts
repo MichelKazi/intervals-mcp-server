@@ -26,6 +26,12 @@ export function kmFromMeters(m: number): string {
   return (m / 1000).toFixed(1);
 }
 
+/** "31.1 km" from meters; empty string when missing */
+export function formatDistance(meters?: number | null): string {
+  if (!meters) return '';
+  return `${kmFromMeters(meters)} km`;
+}
+
 /** Coggan-ish zone color token (CSS var string like "var(--z3)") */
 export function zoneColor(pctFtp: number): string {
   if (pctFtp < 56) return 'var(--z1)';

@@ -29,10 +29,15 @@ export interface PlannedEvent {
   icu_ctl?: number;
   icu_atl?: number;
   icu_intensity?: number;
+  icu_ftp?: number;
   color?: string;
   description?: string;
   workout_doc?: WorkoutDoc;
   indoor?: boolean;
+  start_date?: string; // date-only variant some payloads include alongside start_date_local
+  sport_type?: string; // alias intervals.icu sometimes returns instead of `type`
+  paired_activity_id?: number | string | null; // links a planned workout to its completed activity
+  [key: string]: unknown; // intervals.icu returns many more fields; keep loose
 }
 
 export type Activity = PlannedEvent; // same shape, category differs
@@ -40,9 +45,9 @@ export type Activity = PlannedEvent; // same shape, category differs
 export interface Readiness {
   verdict: string; // "green" | "yellow" | "red"
   reasoning: string;
-  date: string;
-  computed_at: string;
-  confounds: unknown[];
+  date?: string;
+  computed_at?: string;
+  confounds?: unknown[];
 }
 
 export interface Dashboard {
