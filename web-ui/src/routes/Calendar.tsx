@@ -1,20 +1,20 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import MonthGrid from '../components/calendar/MonthGrid';
 import SportIcon, { sportColor } from '../components/calendar/SportIcon';
 import { useLongPressDrag } from '../components/calendar/useLongPressDrag';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
+import ActivityDrawer from '../components/calendar/ActivityDrawer';
+import { ZoneDot, ComplianceDot, type Zone } from '../components/viz';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Badge } from '../components/ui/badge';
 import { Skeleton } from '../components/ui/skeleton';
 import { getEvents, getActivities, moveEvent } from '../lib/api';
-import { formatDuration, formatDate, formatDistance } from '../lib/format';
-import type { PlannedEvent, Activity } from '../lib/types';
+import { formatDuration, formatDistance, ftpToZone, DEFAULT_FTP } from '../lib/format';
+import type { PlannedEvent, Activity, WorkoutStep } from '../lib/types';
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Date helpers ─────────────────────────────────────────────────────────────
 
 function toIso(year: number, month: number, day: number): string {
   const mm = String(month + 1).padStart(2, '0');
@@ -29,10 +29,9 @@ function addDays(iso: string, n: number): string {
 }
 
 function startOfWeek(iso: string): string {
-  // Returns the Sunday of the week containing `iso`
+  // Sunday of the week containing `iso`
   const d = new Date(iso + 'T00:00:00');
-  const dow = d.getDay(); // 0=Sun
-  d.setDate(d.getDate() - dow);
+  d.setDate(d.getDate() - d.getDay());
   return d.toISOString().slice(0, 10);
 }
 
@@ -41,26 +40,24 @@ function firstOfMonth(year: number, month: number): string {
 }
 
 function lastOfMonth(year: number, month: number): string {
-  const last = new Date(year, month + 1, 0).getDate();
-  return toIso(year, month, last);
+  return toIso(year, month, new Date(year, month + 1, 0).getDate());
 }
 
-/** Inclusive date range [oldest, newest] covering N weeks around today */
+/** Range covering 8 weeks back to 9 weeks forward, for the scrollable week strip. */
 function weekRangeForScroll(): { oldest: string; newest: string } {
-  const today = new Date();
-  const todayIso = today.toISOString().slice(0, 10);
-  // 8 weeks back, 8 weeks forward
-  const oldest = addDays(startOfWeek(todayIso), -56);
-  const newest = addDays(startOfWeek(todayIso), 7 * 9);
-  return { oldest, newest };
+  const todayIso = new Date().toISOString().slice(0, 10);
+  return {
+    oldest: addDays(startOfWeek(todayIso), -56),
+    newest: addDays(startOfWeek(todayIso), 7 * 9),
+  };
 }
+
+// ── Item classification ──────────────────────────────────────────────────────
 
 function isRestrictedActivity(a: Activity): boolean {
-  // Drop Strava-sourced activities — they come back with null data due to API restrictions
   const src = (a as Record<string, unknown>).source as string | undefined;
   if (src === 'STRAVA') return true;
-  const note = (a as Record<string, unknown>)._note as string | undefined;
-  if (note) return true;
+  if ((a as Record<string, unknown>)._note) return true;
   if (!a.name) return true;
   return false;
 }
@@ -69,18 +66,55 @@ function isDone(ev: PlannedEvent | Activity): boolean {
   return ev.category === 'ACTIVITY' || ev.category === 'DONE';
 }
 
-const DOW_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+/** Training load (TSS) for an item, rounded; null when absent. */
+function tssOf(ev: PlannedEvent | Activity): number | null {
+  const raw = ev.icu_training_load ?? (ev as Record<string, unknown>).load_target as number | undefined;
+  return raw != null ? Math.round(raw as number) : null;
+}
+
+/** Peak %FTP across a workout's steps (recursing into repeat blocks). */
+function peakStepPct(steps: WorkoutStep[]): number {
+  let peak = 0;
+  for (const s of steps) {
+    if (s.steps?.length) peak = Math.max(peak, peakStepPct(s.steps));
+    const v = s.power?.value ?? s.power?.end ?? s.power?.start ?? 0;
+    if (v > peak) peak = v;
+  }
+  return peak;
+}
+
+/**
+ * Representative 1–5 zone for an item. Prefers the workout structure's peak
+ * intensity, then icu_intensity (fraction → %), else endurance (zone 1).
+ */
+function deriveZone(ev: PlannedEvent | Activity): Zone {
+  const steps = ev.workout_doc?.steps;
+  if (steps?.length) {
+    const peak = peakStepPct(steps);
+    if (peak > 0) return ftpToZone(peak);
+  }
+  const intensity = ev.icu_intensity;
+  if (intensity != null) {
+    const pct = intensity <= 2 ? intensity * 100 : intensity;
+    return ftpToZone(pct);
+  }
+  return 1;
+}
+
+const DOW_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-// ── Merged day items ──────────────────────────────────────────────────────
+// ── Merged day items ──────────────────────────────────────────────────────────
 
 interface DayItems {
   planned: PlannedEvent[];
   completed: Activity[];
+  plannedTss: number;
+  actualTss: number;
 }
 
 function mergeDayItems(
@@ -88,19 +122,21 @@ function mergeDayItems(
   activities: Activity[],
 ): Record<string, DayItems> {
   const byDate: Record<string, DayItems> = {};
-
   const ensure = (d: string) => {
-    if (!byDate[d]) byDate[d] = { planned: [], completed: [] };
+    if (!byDate[d]) byDate[d] = { planned: [], completed: [], plannedTss: 0, actualTss: 0 };
+    return byDate[d];
   };
 
   for (const ev of events) {
     const d = ev.start_date_local?.slice(0, 10);
     if (!d) continue;
-    ensure(d);
+    const bucket = ensure(d);
     if (isDone(ev)) {
-      byDate[d].completed.push(ev as Activity);
+      bucket.completed.push(ev as Activity);
+      bucket.actualTss += tssOf(ev) ?? 0;
     } else {
-      byDate[d].planned.push(ev);
+      bucket.planned.push(ev);
+      bucket.plannedTss += tssOf(ev) ?? 0;
     }
   }
 
@@ -108,54 +144,58 @@ function mergeDayItems(
     if (isRestrictedActivity(act)) continue;
     const d = act.start_date_local?.slice(0, 10);
     if (!d) continue;
-    ensure(d);
-    // Check if this activity is already paired with a planned event
-    const alreadyPresent = byDate[d].completed.some(a => String(a.id) === String(act.id));
-    if (!alreadyPresent) {
-      byDate[d].completed.push(act);
-    }
+    const bucket = ensure(d);
+    if (bucket.completed.some(a => String(a.id) === String(act.id))) continue;
+    bucket.completed.push(act);
+    bucket.actualTss += tssOf(act) ?? 0;
   }
 
   return byDate;
 }
 
-// ── Week row ───────────────────────────────────────────────────────────────
+// ── Week strip (TrainingPeaks planned-vs-actual) ───────────────────────────────
 
-interface WeekRowProps {
-  weekStart: string; // ISO of Sunday
+interface WeekStripProps {
+  weekStart: string; // ISO Sunday
   dayItems: Record<string, DayItems>;
   todayIso: string;
-  selectedDate: string | null;
+  selectedDate: string;
   onSelectDay: (date: string) => void;
   onCellRef?: (date: string, el: HTMLButtonElement | null) => void;
-  onEventLongPress?: (e: React.PointerEvent, ev: PlannedEvent, originDate: string) => void;
   highlightDate?: string | null;
 }
 
-function WeekRow({
+function WeekStrip({
   weekStart,
   dayItems,
   todayIso,
   selectedDate,
   onSelectDay,
   onCellRef,
-  onEventLongPress,
   highlightDate,
-}: WeekRowProps) {
+}: WeekStripProps) {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // Scale bars against the busiest day in the visible week (min ceiling so a
+  // light planned day still shows a visible sliver).
+  const maxTss = Math.max(
+    60,
+    ...days.map(d => Math.max(dayItems[d]?.plannedTss ?? 0, dayItems[d]?.actualTss ?? 0)),
+  );
+  const BAR_H = 48;
+
   return (
-    <div className="grid grid-cols-7 gap-0.5">
-      {Array.from({ length: 7 }).map((_, i) => {
-        const iso = addDays(weekStart, i);
+    <div className="grid grid-cols-7 gap-0.5 px-1 pt-2" data-testid="week-strip">
+      {days.map((iso, i) => {
         const isToday = iso === todayIso;
         const isSelected = iso === selectedDate;
         const isHighlight = iso === highlightDate;
         const items = dayItems[iso];
-        const planned = items?.planned ?? [];
-        const completed = items?.completed ?? [];
-        const allItems = [...planned, ...completed];
-        const displayItems = allItems.slice(0, 3);
-        const overflow = allItems.length - displayItems.length;
+        const plannedTss = items?.plannedTss ?? 0;
+        const actualTss = items?.actualTss ?? 0;
+        const plannedH = Math.round((plannedTss / maxTss) * BAR_H);
+        const actualH = Math.round((actualTss / maxTss) * BAR_H);
         const dayNum = parseInt(iso.slice(8), 10);
+        const total = (items?.planned.length ?? 0) + (items?.completed.length ?? 0);
 
         return (
           <button
@@ -163,65 +203,58 @@ function WeekRow({
             ref={el => onCellRef?.(iso, el)}
             data-date={iso}
             onClick={() => onSelectDay(iso)}
-            className="flex min-h-[56px] flex-col items-center gap-0.5 rounded p-1 transition-colors"
+            className="flex min-h-[44px] flex-col items-center gap-1 rounded-md px-0.5 pb-1 pt-1 transition-colors"
             style={{
               background: isSelected
                 ? 'var(--surface-2)'
-                : isHighlight
-                  ? 'rgba(240,165,0,0.15)'
-                  : 'transparent',
-              border: isHighlight ? '2px solid var(--brand)' : '1px solid transparent',
-              touchAction: 'manipulation',
+                : isToday
+                  ? 'var(--popover)'
+                  : isHighlight
+                    ? 'rgba(249,115,22,0.15)'
+                    : 'transparent',
+              border: isSelected ? '1px solid var(--brand)' : '1px solid transparent',
               cursor: 'pointer',
+              touchAction: 'manipulation',
             }}
-            aria-label={`${iso}${isToday ? ' (today)' : ''}${allItems.length > 0 ? `, ${allItems.length} event${allItems.length > 1 ? 's' : ''}` : ''}`}
+            aria-label={`${iso}${isToday ? ' (today)' : ''}, planned ${plannedTss} TSS, actual ${actualTss} TSS${total > 0 ? `, ${total} item${total > 1 ? 's' : ''}` : ''}`}
             aria-pressed={isSelected}
           >
-            {/* Date badge */}
             <span
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px]"
-              style={{
-                fontWeight: isToday ? 700 : 400,
-                color: isToday ? 'var(--bg)' : isSelected ? 'var(--brand)' : 'var(--text)',
-                background: isToday ? 'var(--brand)' : 'transparent',
-                border: isToday ? 'none' : isSelected ? '2px solid var(--brand)' : '2px solid transparent',
-              }}
+              className="text-[11px] font-semibold uppercase"
+              style={{ color: isToday ? 'var(--brand)' : 'var(--text-dim)' }}
+            >
+              {DOW_LABELS[i]}
+            </span>
+            <span
+              className="text-[13px]"
+              style={{ fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--brand)' : 'var(--text)' }}
             >
               {dayNum}
             </span>
 
-            {/* Sport icon indicators */}
-            {displayItems.length > 0 && (
-              <div className="flex flex-wrap items-center justify-center gap-0.5">
-                {displayItems.map(ev => {
-                  const done = isDone(ev);
-                  return (
-                    <span
-                      key={ev.id}
-                      data-testid="sport-glyph-indicator"
-                      onPointerDown={e => {
-                        if (!done) {
-                          e.stopPropagation();
-                          onEventLongPress?.(e, ev as PlannedEvent, iso);
-                        }
-                      }}
-                      style={{ touchAction: 'none', lineHeight: 0, opacity: done ? 1 : 0.85 }}
-                    >
-                      <SportIcon
-                        type={ev.type}
-                        size={13}
-                        color={sportColor(ev.type)}
-                      />
-                    </span>
-                  );
-                })}
-                {overflow > 0 && (
-                  <span className="text-[9px] leading-none" style={{ color: 'var(--text-dim)' }}>
-                    +{overflow}
-                  </span>
-                )}
-              </div>
-            )}
+            {/* Planned (light) bar with actual (filled) overlaid */}
+            <span
+              className="relative flex w-full items-end justify-center"
+              style={{ height: BAR_H }}
+              aria-hidden="true"
+            >
+              <span
+                className="absolute bottom-0 w-3.5 rounded-sm"
+                style={{
+                  height: Math.max(plannedTss > 0 ? 3 : 0, plannedH),
+                  background: 'rgba(148,163,184,0.30)',
+                }}
+              />
+              <span
+                className="absolute bottom-0 w-3.5 rounded-sm"
+                style={{
+                  height: Math.max(actualTss > 0 ? 3 : 0, actualH),
+                  background: 'var(--brand)',
+                }}
+              />
+            </span>
+
+            <ComplianceDot planned={plannedTss} actual={actualTss} />
           </button>
         );
       })}
@@ -229,244 +262,227 @@ function WeekRow({
   );
 }
 
-// ── Week label ─────────────────────────────────────────────────────────────
+// ── Week header (single visible week + prev/next nav) ──────────────────────────
 
-function WeekLabel({ weekStart, todayIso }: { weekStart: string; todayIso: string }) {
-  const d = new Date(weekStart + 'T00:00:00');
-  const month = d.getMonth();
-  const year = d.getFullYear();
-  const isCurrentWeek =
-    todayIso >= weekStart && todayIso <= addDays(weekStart, 6);
-
-  return (
-    <div
-      className="px-3 pb-1 pt-3 text-xs font-semibold"
-      style={{ color: isCurrentWeek ? 'var(--brand)' : 'var(--text-dim)' }}
-    >
-      {MONTH_NAMES[month].slice(0, 3)} {year}
-      {isCurrentWeek && <span className="ml-2 text-[10px] uppercase tracking-wide" style={{ color: 'var(--brand)' }}>this week</span>}
-    </div>
-  );
-}
-
-// ── Week scroll view ──────────────────────────────────────────────────────
-
-interface WeekScrollProps {
+interface WeekHeaderProps {
+  weekStart: string;
   dayItems: Record<string, DayItems>;
   todayIso: string;
-  selectedDate: string | null;
+  selectedDate: string;
   onSelectDay: (date: string) => void;
   onCellRef?: (date: string, el: HTMLButtonElement | null) => void;
-  onEventLongPress?: (e: React.PointerEvent, ev: PlannedEvent, originDate: string) => void;
   highlightDate?: string | null;
+  onPrevWeek: () => void;
+  onNextWeek: () => void;
 }
 
-function WeekScroll({
+function WeekHeader({
+  weekStart,
   dayItems,
   todayIso,
   selectedDate,
   onSelectDay,
   onCellRef,
-  onEventLongPress,
   highlightDate,
-}: WeekScrollProps) {
-  const currentWeekStart = startOfWeek(todayIso);
-  const todayRowRef = useRef<HTMLDivElement>(null);
-
-  // Build list of weeks: 8 past + current + 8 future = 17 weeks
-  const weeks: string[] = [];
-  for (let w = -8; w <= 8; w++) {
-    weeks.push(addDays(currentWeekStart, w * 7));
-  }
-
-  useEffect(() => {
-    if (todayRowRef.current && typeof todayRowRef.current.scrollIntoView === 'function') {
-      todayRowRef.current.scrollIntoView({ behavior: 'auto', block: 'center' });
-    }
-  }, []);
-
+  onPrevWeek,
+  onNextWeek,
+}: WeekHeaderProps) {
+  const d = new Date(weekStart + 'T00:00:00');
+  const isCurrentWeek = todayIso >= weekStart && todayIso <= addDays(weekStart, 6);
   return (
-    <div>
-      {/* DOW header */}
-      <div className="grid grid-cols-7 border-b px-1 py-1" style={{ borderColor: 'var(--border)' }}>
-        {DOW_LABELS.map(d => (
-          <div key={d} className="text-center text-[11px] font-semibold" style={{ color: 'var(--text-dim)' }}>
-            {d}
-          </div>
-        ))}
+    <div className="border-b" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex items-center justify-between px-2 pb-0.5 pt-2">
+        <button
+          onClick={onPrevWeek}
+          aria-label="Previous week"
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md"
+          style={{ background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <span
+          className="text-xs font-semibold"
+          style={{ color: isCurrentWeek ? 'var(--brand)' : 'var(--text-dim)' }}
+        >
+          {MONTH_NAMES[d.getMonth()].slice(0, 3)} {d.getFullYear()}
+          {isCurrentWeek && <span className="ml-2 text-[10px] uppercase tracking-wide">this week</span>}
+        </span>
+        <button
+          onClick={onNextWeek}
+          aria-label="Next week"
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md"
+          style={{ background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
       </div>
-
-      {/* Week rows */}
-      <div className="px-1">
-        {weeks.map(weekStart => {
-          const isCurrent = weekStart === currentWeekStart;
-          return (
-            <div
-              key={weekStart}
-              ref={isCurrent ? todayRowRef : undefined}
-              className="border-b"
-              style={{
-                borderColor: 'var(--border)',
-                background: isCurrent ? 'rgba(240,165,0,0.04)' : 'transparent',
-              }}
-            >
-              <WeekLabel weekStart={weekStart} todayIso={todayIso} />
-              <WeekRow
-                weekStart={weekStart}
-                dayItems={dayItems}
-                todayIso={todayIso}
-                selectedDate={selectedDate}
-                onSelectDay={onSelectDay}
-                onCellRef={onCellRef}
-                onEventLongPress={onEventLongPress}
-                highlightDate={highlightDate}
-              />
-            </div>
-          );
-        })}
-      </div>
+      <WeekStrip
+        weekStart={weekStart}
+        dayItems={dayItems}
+        todayIso={todayIso}
+        selectedDate={selectedDate}
+        onSelectDay={onSelectDay}
+        onCellRef={onCellRef}
+        highlightDate={highlightDate}
+      />
+      <div className="h-2" />
     </div>
   );
 }
 
-// ── Day detail Sheet ──────────────────────────────────────────────────────
+// ── Day list row ─────────────────────────────────────────────────────────────
 
-interface DaySheetProps {
-  date: string | null;
-  items: DayItems | null;
+interface DayRowProps {
+  item: PlannedEvent | Activity;
+  done: boolean;
+  date: string;
   draggingId?: string | number | null;
-  open: boolean;
-  onClose: () => void;
+  onOpen: (item: PlannedEvent | Activity) => void;
   onEventLongPress?: (e: React.PointerEvent, ev: PlannedEvent, date: string) => void;
 }
 
-function DaySheet({ date, items, draggingId, open, onClose, onEventLongPress }: DaySheetProps) {
-  const navigate = useNavigate();
-
-  const planned = items?.planned ?? [];
-  const completed = items?.completed ?? [];
-
-  const label = date ? formatDate(date + 'T00:00:00') : '';
+function DayRow({ item, done, date, draggingId, onOpen, onEventLongPress }: DayRowProps) {
+  const zone = deriveZone(item);
+  const tss = tssOf(item);
+  const isBeingDragged = draggingId != null && String(item.id) === String(draggingId);
 
   return (
-    <Sheet open={open} onOpenChange={o => !o && onClose()}>
-      <SheetContent side="bottom" className="px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-        <SheetHeader className="mb-4">
-          <SheetTitle>{label}</SheetTitle>
-        </SheetHeader>
-
-        {planned.length === 0 && completed.length === 0 && (
-          <p className="text-sm text-muted-foreground">No workouts for this day.</p>
+    <li data-testid="agenda-event-row" data-event-id={item.id}>
+      <button
+        onClick={() => onOpen(item)}
+        onPointerDown={done ? undefined : e => onEventLongPress?.(e, item as PlannedEvent, date)}
+        aria-label={`${item.name} — ${done ? 'completed' : 'planned'}`}
+        className="flex w-full items-center gap-3 rounded-lg p-3 text-left transition-transform"
+        style={{
+          background: isBeingDragged ? 'var(--surface-2)' : 'var(--surface)',
+          border: '1px solid var(--border)',
+          touchAction: done ? 'manipulation' : 'none',
+          transform: isBeingDragged ? 'scale(1.03)' : 'scale(1)',
+          minHeight: 56,
+        }}
+      >
+        <ZoneDot zone={zone} />
+        <span className="shrink-0" style={{ lineHeight: 0 }}>
+          <SportIcon type={item.type} size={20} color={sportColor(item.type)} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-medium text-foreground">{item.name}</span>
+          <span className="mt-0.5 flex gap-2 text-xs text-muted-foreground">
+            {item.moving_time != null && <span>{formatDuration(item.moving_time)}</span>}
+            {item.distance != null && item.distance > 0 && <span>{formatDistance(item.distance)}</span>}
+          </span>
+        </span>
+        {tss != null && (
+          <span className="shrink-0 font-mono text-[13px] text-foreground">{tss}</span>
         )}
-
-        {planned.length > 0 && (
-          <section className="mb-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Planned</p>
-            <ul className="space-y-2" role="list">
-              {planned.map(ev => {
-                const isBeingDragged = draggingId != null && String(ev.id) === String(draggingId);
-                return (
-                  <li key={ev.id} data-testid="agenda-event-row" data-event-id={ev.id}>
-                    <button
-                      onClick={() => { onClose(); navigate(`/workout/${ev.id}`); }}
-                      onPointerDown={e => date && onEventLongPress?.(e, ev, date)}
-                      aria-label={`${ev.name} — planned`}
-                      className="flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors"
-                      style={{
-                        background: isBeingDragged ? 'var(--surface-2)' : 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        touchAction: 'none',
-                        transform: isBeingDragged ? 'scale(1.03)' : 'scale(1)',
-                        minHeight: 56,
-                      }}
-                    >
-                      <span className="shrink-0" style={{ lineHeight: 0 }}>
-                        <SportIcon type={ev.type} size={22} color={sportColor(ev.type)} />
-                      </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="block truncate text-[15px] font-medium text-foreground">
-                          {ev.name}
-                        </span>
-                        <span className="flex gap-2 text-xs mt-0.5 text-muted-foreground">
-                          {ev.moving_time != null && <span>{formatDuration(ev.moving_time)}</span>}
-                          {ev.icu_training_load != null && <span>{Math.round(ev.icu_training_load)} TSS</span>}
-                        </span>
-                      </span>
-                      <Badge variant="outline" className="shrink-0 text-[10px]" style={{ color: 'var(--brand)', borderColor: 'rgba(240,165,0,0.4)' }}>
-                        planned
-                      </Badge>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
+        {done ? (
+          <span
+            className="flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold"
+            style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}
+          >
+            <Check className="h-3 w-3" strokeWidth={3} />
+            done
+          </span>
+        ) : (
+          <span
+            className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold"
+            style={{ color: 'var(--brand)', border: '1px solid rgba(249,115,22,0.4)' }}
+          >
+            planned
+          </span>
         )}
-
-        {completed.length > 0 && (
-          <section>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Completed</p>
-            <ul className="space-y-2" role="list">
-              {completed.map(act => (
-                <li key={act.id} data-testid="agenda-event-row" data-event-id={act.id}>
-                  <button
-                    onClick={() => { onClose(); navigate(`/workout/${act.id}`); }}
-                    aria-label={`${act.name} — completed`}
-                    className="flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors"
-                    style={{
-                      background: 'var(--surface)',
-                      border: '1px solid var(--border)',
-                      minHeight: 56,
-                    }}
-                  >
-                    <span className="shrink-0" style={{ lineHeight: 0 }}>
-                      <SportIcon type={act.type} size={22} color={sportColor(act.type)} />
-                    </span>
-                    <span className="flex-1 min-w-0">
-                      <span className="block truncate text-[15px] font-medium text-foreground">
-                        {act.name}
-                      </span>
-                      <span className="flex gap-2 text-xs mt-0.5 text-muted-foreground">
-                        {act.moving_time != null && <span>{formatDuration(act.moving_time)}</span>}
-                        {act.distance != null && act.distance > 0 && <span>{formatDistance(act.distance)}</span>}
-                        {act.icu_training_load != null && <span>{Math.round(act.icu_training_load)} TSS</span>}
-                      </span>
-                    </span>
-                    <span className="shrink-0 flex items-center gap-1 text-[10px] font-semibold rounded px-2 py-0.5" style={{ background: 'rgba(82,199,127,0.15)', color: 'var(--z2)' }}>
-                      <CheckCircle2 className="h-3 w-3" />
-                      done
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </SheetContent>
-    </Sheet>
+      </button>
+    </li>
   );
 }
 
-// ── Skeleton ───────────────────────────────────────────────────────────────
+// ── Day list ─────────────────────────────────────────────────────────────────
 
-function SkeletonWeek() {
+interface DayListProps {
+  date: string;
+  items: DayItems | null;
+  draggingId?: string | number | null;
+  onOpen: (item: PlannedEvent | Activity) => void;
+  onEventLongPress?: (e: React.PointerEvent, ev: PlannedEvent, date: string) => void;
+}
+
+function DayList({ date, items, draggingId, onOpen, onEventLongPress }: DayListProps) {
+  const planned = items?.planned ?? [];
+  const completed = items?.completed ?? [];
+  const label = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'short', day: 'numeric',
+  });
+
   return (
-    <div className="px-1">
-      {Array.from({ length: 5 }).map((_, wi) => (
-        <div key={wi} className="border-b py-2" style={{ borderColor: 'var(--border)' }}>
-          <Skeleton className="mb-1 ml-3 h-3 w-16" />
-          <div className="grid grid-cols-7 gap-0.5">
-            {Array.from({ length: 7 }).map((_, di) => (
-              <Skeleton key={di} className="h-14 rounded" />
+    <div className="px-3 pt-3" data-testid="day-list" style={{ paddingBottom: 80 }}>
+      <p className="mb-2 text-[13px] font-semibold text-foreground">{label}</p>
+
+      {planned.length === 0 && completed.length === 0 && (
+        <p className="text-sm text-muted-foreground">Nothing scheduled or logged.</p>
+      )}
+
+      {planned.length > 0 && (
+        <>
+          <p className="mb-1.5 mt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Planned
+          </p>
+          <ul className="mb-3 space-y-2" role="list">
+            {planned.map(ev => (
+              <DayRow
+                key={ev.id}
+                item={ev}
+                done={false}
+                date={date}
+                draggingId={draggingId}
+                onOpen={onOpen}
+                onEventLongPress={onEventLongPress}
+              />
             ))}
-          </div>
-        </div>
-      ))}
+          </ul>
+        </>
+      )}
+
+      {completed.length > 0 && (
+        <>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Completed
+          </p>
+          <ul className="space-y-2" role="list">
+            {completed.map(act => (
+              <DayRow key={act.id} item={act} done date={date} onOpen={onOpen} />
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
 
-// ── Main Calendar ─────────────────────────────────────────────────────────
+// ── Skeleton ─────────────────────────────────────────────────────────────────
+
+function SkeletonCalendar() {
+  return (
+    <div className="px-1 pt-2">
+      <Skeleton className="mb-2 ml-2 h-3 w-16" />
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <Skeleton key={i} className="h-24 rounded-md" />
+        ))}
+      </div>
+      <div className="mt-4 space-y-2 px-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-14 rounded-lg" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
 
 const VIEW_KEY = 'cal_view';
 
@@ -474,11 +490,9 @@ export default function Calendar() {
   const today = new Date();
   const todayIso = today.toISOString().slice(0, 10);
 
-  // View: 'week' or 'month'
   const [view, setView] = useState<'week' | 'month'>(() => {
     try {
-      const stored = localStorage.getItem(VIEW_KEY);
-      return stored === 'month' ? 'month' : 'week';
+      return localStorage.getItem(VIEW_KEY) === 'month' ? 'month' : 'week';
     } catch {
       return 'week';
     }
@@ -489,13 +503,14 @@ export default function Calendar() {
     try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
   }
 
-  // Month view navigation
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
 
-  // Day detail sheet
-  const [sheetDate, setSheetDate] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // Selected day drives the day list; defaults to today.
+  const [selectedDate, setSelectedDate] = useState<string>(todayIso);
+
+  // Activity detail drawer
+  const [drawerItem, setDrawerItem] = useState<PlannedEvent | Activity | null>(null);
 
   // Drag state
   const [draggingId, setDraggingId] = useState<string | number | null>(null);
@@ -505,7 +520,6 @@ export default function Calendar() {
   const queryClient = useQueryClient();
   const cellRefs = useRef<Map<string, DOMRect>>(new Map());
 
-  // Compute query range
   const { oldest: weekOldest, newest: weekNewest } = weekRangeForScroll();
   const monthOldest = firstOfMonth(viewYear, viewMonth);
   const monthNewest = lastOfMonth(viewYear, viewMonth);
@@ -530,15 +544,21 @@ export default function Calendar() {
 
   const isLoading = evLoading || actLoading;
 
-  const dayItems = mergeDayItems(events ?? [], activities ?? []);
+  const dayItems = useMemo(
+    () => mergeDayItems(events ?? [], activities ?? []),
+    [events, activities],
+  );
 
-  // For MonthGrid: build a flat PlannedEvent[] keyed by date (all items)
-  const eventsByDate: Record<string, PlannedEvent[]> = {};
-  for (const [d, items] of Object.entries(dayItems)) {
-    eventsByDate[d] = [...items.planned, ...items.completed] as PlannedEvent[];
-  }
+  // MonthGrid wants a flat PlannedEvent[] per date.
+  const eventsByDate = useMemo(() => {
+    const out: Record<string, PlannedEvent[]> = {};
+    for (const [d, items] of Object.entries(dayItems)) {
+      out[d] = [...items.planned, ...items.completed] as PlannedEvent[];
+    }
+    return out;
+  }, [dayItems]);
 
-  // Drag infrastructure
+  // Drag hit-testing infrastructure (reused from prior implementation).
   useEffect(() => {
     function updateRects() {
       document.querySelectorAll<HTMLButtonElement>('button[data-date]').forEach(el => {
@@ -555,18 +575,13 @@ export default function Calendar() {
   }, []);
 
   const handleCellRef = useCallback((date: string, el: HTMLButtonElement | null) => {
-    if (el) {
-      cellRefs.current.set(date, el.getBoundingClientRect());
-    } else {
-      cellRefs.current.delete(date);
-    }
+    if (el) cellRefs.current.set(date, el.getBoundingClientRect());
+    else cellRefs.current.delete(date);
   }, []);
 
   const dateFromPoint = useCallback((x: number, y: number): string | null => {
     for (const [date, rect] of cellRefs.current.entries()) {
-      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-        return date;
-      }
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return date;
     }
     return null;
   }, []);
@@ -589,22 +604,18 @@ export default function Calendar() {
       setDraggingId(null);
     },
     onTap: eventId => {
-      navigate(`/workout/${eventId}`);
+      const found = (events ?? []).find(e => String(e.id) === String(eventId))
+        ?? (activities ?? []).find(a => String(a.id) === String(eventId));
+      if (found) setDrawerItem(found);
     },
-    onDragStart: eventId => {
-      setDraggingId(eventId);
-    },
-    onDragEnd: () => {
-      setDraggingId(null);
-      setHighlightDate(null);
-    },
+    onDragStart: eventId => setDraggingId(eventId),
+    onDragEnd: () => { setDraggingId(null); setHighlightDate(null); },
     dateFromPoint,
   });
 
   useEffect(() => {
     function onDragOver(e: Event) {
-      const date = (e as CustomEvent<{ date: string | null }>).detail.date;
-      setHighlightDate(date ?? null);
+      setHighlightDate((e as CustomEvent<{ date: string | null }>).detail.date ?? null);
     }
     document.addEventListener('calendar:drag-over', onDragOver);
     return () => document.removeEventListener('calendar:drag-over', onDragOver);
@@ -614,9 +625,18 @@ export default function Calendar() {
     onPointerDown(e, ev.id, originDate);
   }
 
+  // Selecting a day filters the list below; in week view it keeps the day's week visible.
   function handleSelectDay(date: string) {
-    setSheetDate(date);
-    setSheetOpen(true);
+    setSelectedDate(date);
+  }
+
+  function prevWeek() {
+    const ns = addDays(startOfWeek(selectedDate), -7);
+    setSelectedDate(ns);
+  }
+  function nextWeek() {
+    const ns = addDays(startOfWeek(selectedDate), 7);
+    setSelectedDate(ns);
   }
 
   function prevMonth() {
@@ -628,16 +648,16 @@ export default function Calendar() {
     else setViewMonth(m => m + 1);
   }
 
-  const sheetItems = sheetDate ? (dayItems[sheetDate] ?? { planned: [], completed: [] }) : null;
+  const selectedItems = dayItems[selectedDate] ?? null;
+  const ftp = (drawerItem as PlannedEvent & { icu_ftp?: number })?.icu_ftp ?? DEFAULT_FTP;
 
   return (
     <AppShell title="Calendar">
-      {/* Header: month nav (month view only) + view toggle + add button — sticky so it stays visible while scrolling */}
+      {/* Sticky header: month label / nav + view toggle + add */}
       <div
-        className="sticky top-0 z-10 flex items-center justify-between border-b px-3 py-2"
+        className="sticky z-10 flex items-center justify-between border-b px-3 py-2"
         style={{ borderColor: 'var(--border)', background: 'var(--bg)', top: 'calc(56px + env(safe-area-inset-top))' }}
       >
-        {/* Left: month nav (only in month view) */}
         {view === 'month' ? (
           <div className="flex items-center gap-1">
             <button
@@ -671,7 +691,6 @@ export default function Calendar() {
         )}
 
         <div className="flex items-center gap-2">
-          {/* View toggle */}
           <Tabs value={view} onValueChange={v => switchView(v as 'week' | 'month')}>
             <TabsList className="h-8">
               <TabsTrigger value="week" className="h-7 px-3 text-xs">Week</TabsTrigger>
@@ -679,7 +698,6 @@ export default function Calendar() {
             </TabsList>
           </Tabs>
 
-          {/* Add button */}
           <button
             onClick={() => navigate('/library')}
             aria-label="Add workout"
@@ -693,12 +711,10 @@ export default function Calendar() {
 
       {/* Content */}
       {isLoading ? (
-        <SkeletonWeek />
+        <SkeletonCalendar />
       ) : evError ? (
         <div className="p-4 text-center">
-          <p className="mb-3 text-sm" style={{ color: 'var(--text-dim)' }}>
-            Could not load calendar events.
-          </p>
+          <p className="mb-3 text-sm" style={{ color: 'var(--text-dim)' }}>Could not load calendar events.</p>
           <button
             onClick={() => refetch()}
             className="rounded px-4 py-2 text-sm font-semibold"
@@ -708,38 +724,56 @@ export default function Calendar() {
           </button>
         </div>
       ) : view === 'week' ? (
-        <WeekScroll
-          dayItems={dayItems}
-          todayIso={todayIso}
-          selectedDate={sheetDate}
-          onSelectDay={handleSelectDay}
-          onCellRef={handleCellRef}
-          onEventLongPress={handleEventLongPress}
-          highlightDate={highlightDate}
-        />
-      ) : (
-        <div className="px-1 pb-2">
-          <MonthGrid
-            year={viewYear}
-            month={viewMonth}
-            eventsByDate={eventsByDate}
-            selectedDate={sheetDate}
+        <>
+          <WeekHeader
+            weekStart={startOfWeek(selectedDate)}
+            dayItems={dayItems}
+            todayIso={todayIso}
+            selectedDate={selectedDate}
             onSelectDay={handleSelectDay}
             onCellRef={handleCellRef}
-            onEventLongPress={handleEventLongPress}
             highlightDate={highlightDate}
+            onPrevWeek={prevWeek}
+            onNextWeek={nextWeek}
           />
-        </div>
+          <DayList
+            date={selectedDate}
+            items={selectedItems}
+            draggingId={draggingId}
+            onOpen={setDrawerItem}
+            onEventLongPress={handleEventLongPress}
+          />
+        </>
+      ) : (
+        <>
+          <div className="px-1 pb-2">
+            <MonthGrid
+              year={viewYear}
+              month={viewMonth}
+              eventsByDate={eventsByDate}
+              selectedDate={selectedDate}
+              onSelectDay={handleSelectDay}
+              onCellRef={handleCellRef}
+              onEventLongPress={handleEventLongPress}
+              highlightDate={highlightDate}
+            />
+          </div>
+          <DayList
+            date={selectedDate}
+            items={selectedItems}
+            draggingId={draggingId}
+            onOpen={setDrawerItem}
+            onEventLongPress={handleEventLongPress}
+          />
+        </>
       )}
 
-      {/* Day detail sheet */}
-      <DaySheet
-        date={sheetDate}
-        items={sheetItems}
-        draggingId={draggingId}
-        open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        onEventLongPress={handleEventLongPress}
+      <ActivityDrawer
+        item={drawerItem}
+        ftp={ftp}
+        open={drawerItem != null}
+        onClose={() => setDrawerItem(null)}
+        onOpenFull={id => { setDrawerItem(null); navigate(`/workout/${id}`); }}
       />
     </AppShell>
   );

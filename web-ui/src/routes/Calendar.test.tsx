@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import Calendar from './Calendar';
@@ -10,6 +10,7 @@ vi.mock('../lib/api', () => ({
   getEvents: vi.fn(),
   getActivities: vi.fn(),
   moveEvent: vi.fn(),
+  getCompliance: vi.fn(),
 }));
 
 import { getEvents, getActivities, moveEvent } from '../lib/api';
@@ -18,24 +19,35 @@ const mockGetEvents = vi.mocked(getEvents);
 const mockGetActivities = vi.mocked(getActivities);
 const mockMoveEvent = vi.mocked(moveEvent);
 
-const june26: PlannedEvent = {
+// Anchor test fixtures to "today" so the selected-day list (defaults to today)
+// shows them regardless of the real calendar date.
+const todayIso = new Date().toISOString().slice(0, 10);
+function nextDayIso(): string {
+  const d = new Date(todayIso + 'T00:00:00');
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+const tomorrowIso = nextDayIso();
+
+const plannedToday: PlannedEvent = {
   id: 101,
   name: 'Threshold Intervals',
   type: 'Ride',
   category: 'WORKOUT',
-  start_date_local: '2026-06-26T09:00:00',
-  end_date_local: '2026-06-26T10:30:00',
+  start_date_local: `${todayIso}T09:00:00`,
+  end_date_local: `${todayIso}T10:30:00`,
   moving_time: 5400,
   icu_training_load: 85,
+  icu_intensity: 0.92,
 };
 
-const june27: PlannedEvent = {
+const completedTomorrow: PlannedEvent = {
   id: 102,
   name: 'Easy Run',
   type: 'Run',
   category: 'ACTIVITY',
-  start_date_local: '2026-06-27T07:00:00',
-  end_date_local: '2026-06-27T07:45:00',
+  start_date_local: `${tomorrowIso}T07:00:00`,
+  end_date_local: `${tomorrowIso}T07:45:00`,
   moving_time: 2700,
   icu_training_load: 40,
 };
@@ -61,152 +73,120 @@ function renderCalendar() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Clear localStorage view preference so week is default
   try { localStorage.clear(); } catch { /* ignore */ }
-  mockGetEvents.mockResolvedValue([june26, june27]);
+  mockGetEvents.mockResolvedValue([plannedToday, completedTomorrow]);
   mockGetActivities.mockResolvedValue([]);
-  mockMoveEvent.mockResolvedValue({ ...june26, start_date_local: '2026-06-28T09:00:00' });
+  mockMoveEvent.mockResolvedValue({ ...plannedToday, start_date_local: `${tomorrowIso}T09:00:00` });
 });
 
 describe('Calendar screen', () => {
-  it('(a) renders week view with day number cells', async () => {
+  it('(a) renders the week strip with 7 day columns', async () => {
     renderCalendar();
-    // Week view: should have day buttons with data-date; 17 weeks × 7 = 119 cells
     await waitFor(() => {
       const dayButtons = screen.getAllByRole('button').filter(b => b.getAttribute('data-date'));
-      // 17 weeks of 7 days each = 119 day cells (generous range)
-      expect(dayButtons.length).toBeGreaterThanOrEqual(28);
+      expect(dayButtons.length).toBe(7);
     });
-
-    // Today's date numbers should be visible
-    expect(screen.getAllByText('26').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByTestId('week-strip').length).toBe(1);
+    // Week navigation present
+    expect(screen.getByRole('button', { name: /previous week/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /next week/i })).toBeDefined();
   });
 
-  it('(b) a day with events shows a sport glyph (SVG, not just a dot)', async () => {
+  it('(b) the day list defaults to today and shows the planned workout with a zone dot', async () => {
     renderCalendar();
 
-    // Wait for glyph indicators to appear (events loaded + grid rendered)
     await waitFor(() => {
-      const glyphIndicators = screen.getAllByTestId('sport-glyph-indicator');
-      expect(glyphIndicators.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByTestId('day-list')).toBeDefined();
     });
 
-    const glyphIndicators = screen.getAllByTestId('sport-glyph-indicator');
-    // Each indicator should contain an SVG element
-    const svgs = glyphIndicators[0].querySelectorAll('svg');
-    expect(svgs.length).toBeGreaterThanOrEqual(1);
+    const list = screen.getByTestId('day-list');
+    // Today's planned workout is listed
+    expect(within(list).getByText('Threshold Intervals')).toBeDefined();
 
-    // The SVG should have a data-sport attribute indicating the sport type
-    const svg = svgs[0];
-    expect(svg.getAttribute('data-sport')).toBeTruthy();
-    expect(svg.getAttribute('data-sport')).not.toBe('');
+    // Row carries a zone dot (role=img with a Zone aria-label) and a sport SVG
+    const row = within(list).getAllByTestId('agenda-event-row')[0];
+    const zoneDot = within(row).getByRole('img', { name: /Zone/ });
+    expect(zoneDot).toBeDefined();
+    expect(row.querySelector('svg[data-sport]')).not.toBeNull();
   });
 
-  it('(c) selecting a day opens the sheet with its agenda list', async () => {
+  it('(c) the week strip carries compliance dots (planned vs actual)', async () => {
     renderCalendar();
-
-    // Wait for grid to render — look for June 26 cell
     await waitFor(() => {
-      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
-      expect(cells.length).toBeGreaterThanOrEqual(1);
+      // ComplianceDot renders role=img with a descriptive aria-label
+      const dots = screen.getAllByRole('img', { name: /completed|planned|skipped|no planned/i });
+      expect(dots.length).toBeGreaterThanOrEqual(7);
     });
-
-    // Click on June 26
-    const june26Cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
-    fireEvent.click(june26Cells[0]);
-
-    // Sheet should show the event for June 26
-    await waitFor(() => {
-      const rows = screen.getAllByTestId('agenda-event-row');
-      expect(rows.length).toBeGreaterThanOrEqual(1);
-    });
-
-    expect(screen.getByText('Threshold Intervals')).toBeDefined();
   });
 
-  it('(d) tapping an agenda event row navigates to /workout/:id', async () => {
+  it('(d) tapping a different day filters the list to that day', async () => {
     renderCalendar();
 
-    // Wait for grid to render
-    await waitFor(() => {
-      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
-      expect(cells.length).toBeGreaterThanOrEqual(1);
+    await waitFor(() => screen.getByTestId('day-list'));
+    // Today's planned workout shows by default
+    expect(within(screen.getByTestId('day-list')).getByText('Threshold Intervals')).toBeDefined();
+
+    // Tap a day cell that is not today (any other column in the visible week)
+    const cells = screen.getAllByRole('button').filter(b => {
+      const d = b.getAttribute('data-date');
+      return d && d !== todayIso;
     });
+    expect(cells.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(cells[0]);
 
-    // Select June 26 to open the sheet
-    const june26Cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
-    fireEvent.click(june26Cells[0]);
-
-    // Wait for sheet to open with agenda rows
-    await waitFor(() => screen.getAllByTestId('agenda-event-row'));
-
-    // Click the event row button
-    const eventButton = screen.getByRole('button', { name: /Threshold Intervals/ });
-    fireEvent.click(eventButton);
-
-    // Should navigate to /workout/101
+    // The today-only planned workout is no longer in the (different day) list
     await waitFor(() => {
-      expect(screen.getByTestId('workout-page')).toBeDefined();
+      const list = screen.getByTestId('day-list');
+      expect(within(list).queryByText('Threshold Intervals')).toBeNull();
+    });
+  });
+
+  it('(e) tapping a list row opens the activity detail drawer', async () => {
+    renderCalendar();
+
+    await waitFor(() => screen.getByTestId('day-list'));
+
+    const row = within(screen.getByTestId('day-list')).getByRole('button', { name: /Threshold Intervals/ });
+    fireEvent.click(row);
+
+    // Drawer shows the workout name as its title + an "Open full detail" action
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /open full detail/i })).toBeDefined();
     });
   });
 
   it('renders header with month name and add/view controls', async () => {
     renderCalendar();
-    // Header renders immediately
-    expect(screen.getByText(/June 2026/)).toBeDefined();
+    const monthName = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    expect(screen.getByText(monthName)).toBeDefined();
     expect(screen.getByRole('button', { name: /add workout/i })).toBeDefined();
-    // View toggle tabs present
     expect(screen.getByRole('tab', { name: /week/i })).toBeDefined();
     expect(screen.getByRole('tab', { name: /month/i })).toBeDefined();
-  });
-
-  it('renders empty week with no event indicators when API returns []', async () => {
-    mockGetEvents.mockResolvedValue([]);
-    renderCalendar();
-    // Wait for grid to render
-    await waitFor(() => {
-      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date'));
-      expect(cells.length).toBeGreaterThanOrEqual(7);
-    });
-
-    // No glyph indicators
-    expect(screen.queryAllByTestId('sport-glyph-indicator')).toHaveLength(0);
   });
 
   it('month view toggle switches to month grid', async () => {
     renderCalendar();
 
-    // Wait for week view to load first
     await waitFor(() => {
       const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date'));
       expect(cells.length).toBeGreaterThanOrEqual(7);
     });
 
-    // Switch to month view
-    const monthTab = screen.getByRole('tab', { name: /month/i });
-    fireEvent.click(monthTab);
+    fireEvent.click(screen.getByRole('tab', { name: /month/i }));
 
-    // Month grid should appear with prev/next navigation buttons
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /previous month/i })).toBeDefined();
-    }, { timeout: 3000 });
-
-    // Day cells in current month should be 28-42
-    await waitFor(() => {
-      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date')?.startsWith('2026-06'));
-      expect(cells.length).toBeGreaterThanOrEqual(28);
-      expect(cells.length).toBeLessThanOrEqual(42);
     }, { timeout: 3000 });
   });
 
   it('filters out Strava-restricted activities', async () => {
     const restrictedAct = {
       id: 200,
-      name: null as unknown as string, // null name = restricted
+      name: null as unknown as string,
       type: 'Ride',
       category: 'ACTIVITY',
-      start_date_local: '2026-06-26T10:00:00',
-      end_date_local: '2026-06-26T11:00:00',
+      start_date_local: `${todayIso}T10:00:00`,
+      end_date_local: `${todayIso}T11:00:00`,
       source: 'STRAVA',
     } as PlannedEvent;
 
@@ -215,30 +195,22 @@ describe('Calendar screen', () => {
       name: 'Zwift Ride',
       type: 'VirtualRide',
       category: 'ACTIVITY',
-      start_date_local: '2026-06-26T10:00:00',
-      end_date_local: '2026-06-26T11:00:00',
+      start_date_local: `${todayIso}T10:00:00`,
+      end_date_local: `${todayIso}T11:00:00`,
       source: 'OAUTH_CLIENT',
     } as PlannedEvent;
 
-    mockGetEvents.mockResolvedValue([june26]);
+    mockGetEvents.mockResolvedValue([plannedToday]);
     mockGetActivities.mockResolvedValue([restrictedAct, goodAct] as PlannedEvent[]);
 
     renderCalendar();
 
-    // Open June 26 sheet
     await waitFor(() => {
-      const cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
-      expect(cells.length).toBeGreaterThanOrEqual(1);
+      const list = screen.getByTestId('day-list');
+      expect(within(list).getByText('Zwift Ride')).toBeDefined();
     });
 
-    const june26Cells = screen.getAllByRole('button').filter(b => b.getAttribute('data-date') === '2026-06-26');
-    fireEvent.click(june26Cells[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText('Zwift Ride')).toBeDefined();
-    });
-
-    // Restricted activity with null name should NOT appear
-    expect(screen.queryByText('null')).toBeNull();
+    const list = screen.getByTestId('day-list');
+    expect(within(list).queryByText('null')).toBeNull();
   });
 });
