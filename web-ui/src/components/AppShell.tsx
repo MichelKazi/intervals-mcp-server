@@ -19,14 +19,14 @@ export default function AppShell({ title, showBack, children }: AppShellProps) {
           top: 0,
           left: 0,
           right: 0,
-          height: 56,
+          height: 'calc(56px + env(safe-area-inset-top))',
           background: 'var(--surface)',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-end',
           padding: '0 var(--sp-4)',
+          paddingBottom: 'var(--sp-2)',
           zIndex: 100,
-          paddingTop: 'env(safe-area-inset-top)',
         }}
       >
         {showBack && (
@@ -56,7 +56,7 @@ export default function AppShell({ title, showBack, children }: AppShellProps) {
       </header>
       <main
         style={{
-          paddingTop: 56,
+          paddingTop: 'calc(56px + env(safe-area-inset-top))',
           paddingBottom: 'calc(64px + env(safe-area-inset-bottom))',
         }}
       >
