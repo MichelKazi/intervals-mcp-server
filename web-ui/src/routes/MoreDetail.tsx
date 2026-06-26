@@ -2,27 +2,51 @@ import type { ComponentType } from 'react';
 import { useParams } from 'react-router-dom';
 
 import AppShell from '@/components/AppShell';
-
-// ─── Slug → screen registry ──────────────────────────────────────────────────
-// Each batch of More-tab screens registers ONLY its own slugs here. Keep entries
-// additive and alphabetical within a batch so parallel edits merge cleanly.
-//
-// ── ANALYTICS batch ──
+// Analytics
 import Fitness from './more/Fitness';
 import PowerProfile from './more/PowerProfile';
 import Volume from './more/Volume';
 import ZoneDistribution from './more/ZoneDistribution';
 import Aerobic from './more/Aerobic';
 import FatigueRisk from './more/FatigueRisk';
+// Wellness + Race
+import Sleep from './more/Sleep';
+import ReadinessHistory from './more/ReadinessHistory';
+import BodyMetrics from './more/BodyMetrics';
+import RaceHub from './more/RaceHub';
+import RaceReadiness from './more/RaceReadiness';
+// Training + Tools
+import PlannedVsActual from './more/PlannedVsActual';
+import Polarization from './more/Polarization';
+import WorkoutBuilder from './more/WorkoutBuilder';
+import CoachingChat from './more/CoachingChat';
+import DoseLog from './more/DoseLog';
+import FieldTest from './more/FieldTest';
+import Settings from './more/Settings';
 
+// slug → screen component.
 const SCREENS: Record<string, ComponentType> = {
-  // ── ANALYTICS batch ──
+  // Analytics
   'fitness': Fitness,
   'power-profile': PowerProfile,
   'volume': Volume,
   'zone-distribution': ZoneDistribution,
   'aerobic': Aerobic,
   'fatigue': FatigueRisk,
+  // Wellness + Race
+  'sleep': Sleep,
+  'readiness-history': ReadinessHistory,
+  'body-metrics': BodyMetrics,
+  'race-hub': RaceHub,
+  'race-readiness': RaceReadiness,
+  // Training + Tools
+  'planned-vs-actual': PlannedVsActual,
+  'polarization': Polarization,
+  'workout-builder': WorkoutBuilder,
+  'coaching-chat': CoachingChat,
+  'dose-log': DoseLog,
+  'field-test': FieldTest,
+  'settings': Settings,
 };
 
 function titleFromSlug(slug?: string): string {
@@ -33,11 +57,10 @@ function titleFromSlug(slug?: string): string {
     .join(' ');
 }
 
-/** Routes /more/<slug> to its screen, falling back to a placeholder. */
+/** Routes /more/<slug> to its built screen, falling back to a placeholder. */
 export default function MoreDetail() {
   const { slug } = useParams<{ slug: string }>();
   const Screen = slug ? SCREENS[slug] : undefined;
-
   if (Screen) return <Screen />;
 
   return (

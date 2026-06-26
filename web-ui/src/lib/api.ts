@@ -153,6 +153,26 @@ export function analyzeActivity(activityId: string | number): Promise<unknown> {
   return callMcp('analyze_activity', { activity_id: String(activityId) });
 }
 
+/**
+ * Call an MCP tool that returns formatted text. Unwraps the `{ result: string }`
+ * envelope. Returns null when the tool errors or yields no text — callers render
+ * an empty state instead of surfacing a backend stack trace.
+ */
+export async function callMcpText(tool: string, args?: Record<string, unknown>): Promise<string | null> {
+  try {
+    const raw = await callMcp(tool, args);
+    if (typeof raw === 'string') return raw || null;
+    if (raw && typeof raw === 'object') {
+      const r = raw as { result?: unknown; error?: unknown; message?: unknown };
+      if (r.error) return null;
+      if (typeof r.result === 'string') return r.result || null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function getMcpTools(): Promise<unknown[]> {
   return apiFetch('/api/mcp/tools');
 }
