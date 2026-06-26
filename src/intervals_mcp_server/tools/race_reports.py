@@ -578,7 +578,10 @@ async def query_race_reports(
                     patterns_raw = json.loads(patterns_raw)
                 except json.JSONDecodeError:
                     continue
-            if patterns_raw and any(p.get("id") == pattern_id and p.get("present", True) for p in patterns_raw):
+            if patterns_raw and any(
+                isinstance(p, dict) and p.get("id") == pattern_id and p.get("present", True)
+                for p in patterns_raw
+            ):
                 filtered.append(row)
         rows = filtered
 
@@ -596,7 +599,11 @@ async def query_race_reports(
                 patterns_raw = []
         pattern_summary = ""
         if patterns_raw:
-            p_parts = [f"{p['id']}({p.get('severity', '?')})" for p in patterns_raw if p.get("present", True)]
+            p_parts = [
+                f"{p['id']}({p.get('severity', '?')})"
+                for p in patterns_raw
+                if isinstance(p, dict) and p.get("id") and p.get("present", True)
+            ]
             if p_parts:
                 pattern_summary = f" | patterns: {', '.join(p_parts)}"
 
