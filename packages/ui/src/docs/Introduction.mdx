@@ -1,0 +1,54 @@
+import { Meta } from '@storybook/blocks';
+
+<Meta title="Aura/Introduction" />
+
+# Aura Design System
+
+Dark-first coaching UI built for one athlete. Aura is named for the
+atmospheric mesh gradient that defines its visual signature.
+
+## Principles
+
+**Numbers mean something.** Every metric is always accompanied by a
+plain-English meaning. Never just a number. `MetricRing` enforces this — its
+`meaning` prop is required and an empty string throws.
+
+**Zone colors are semantic.** Blue = endurance. Yellow = tempo. Orange =
+threshold. Red = VO2max. Purple = anaerobic. These are never used for
+decoration.
+
+**Spacing is mathematical.** Every gap derives from the 4px base scale.
+Nothing is arbitrary.
+
+**Dark, not depressing.** Radial glows, gradient card backgrounds, and
+gradient arc strokes make the dark palette feel lit rather than void.
+
+## Token Philosophy
+
+All values derive from `tokens.json`. Tokens generate:
+
+- CSS variables (`--aura-color-bg-base`)
+- TypeScript constants (`tokens.color.bg.base`)
+- Tailwind classes (`bg-bg-base`)
+
+Never hardcode a hex value. If it's not in the tokens, add it to tokens
+first and run `npm run tokens`.
+
+## Constraints (non-negotiable)
+
+- Never show daily weight — 7-day rolling average only
+- Missed workouts: "unlogged", never "missed"
+- HRV readiness: always show the confound when yellow/red
+- "Stay On" / dropout tracker: positive framing only
+- All data numbers use DM Mono with tabular-nums
+- `meaning` on `MetricRing` is required — empty string throws
+
+## Theming
+
+Wrap an app in `AuraProvider` to override tokens without forking:
+
+```tsx
+<AuraProvider theme={{ colors: { accent: { primary: '#06b6d4' } } }}>
+  {/* All Aura components now use cyan instead of violet */}
+</AuraProvider>
+```
