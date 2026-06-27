@@ -115,6 +115,16 @@ export interface ActivityIntervals {
   icu_groups?: unknown[];
 }
 
+/** LLM-enriched assessment of a pre-computed FTP goal. */
+export interface GoalAssessment {
+  /** The PreComputedGoalContext echoed back from the backend. */
+  computed: unknown;
+  coaching_note: string;
+  risk_factors: string[];
+  /** Clamped server-side to [5, computed.baseConfidence]. */
+  confidence_pct: number;
+}
+
 export interface LibraryWorkout {
   tr_workout_id?: string;
   name: string;

@@ -201,6 +201,45 @@ async def post_level_correction(zone: str, proposed_level: float, rationale: str
         return None
 
 
+async def validate_ftp_goal(computed: dict) -> dict | None:
+    """Validate a pre-computed FTP goal context via directeur.
+
+    Returns directeur's {coaching_note, risk_factors, confidence_pct} or None on
+    missing directeur_url or any failure.
+    """
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().post("/ftp-goal/validate", json={"computed": computed}, timeout=60.0)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur ftp-goal validate failed: %s", e)
+        return None
+
+
+async def generate_ftp_plan(assessment: dict, availability: dict) -> dict | None:
+    """Generate an FTP training plan via directeur.
+
+    Returns directeur's plan dict or None on missing directeur_url or any failure.
+    """
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().post(
+            "/ftp-goal/plan",
+            json={"assessment": assessment, "availability": availability},
+            timeout=60.0,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur ftp-goal plan failed: %s", e)
+        return None
+
+
 async def get_coaching_snapshot(zone: str = "threshold") -> dict:
     """Fetch readiness + patterns + levels concurrently, then progression for key zone."""
     config = get_config()

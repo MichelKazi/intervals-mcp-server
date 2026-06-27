@@ -77,6 +77,7 @@ const SECTIONS: Section[] = [
     title: 'Training',
     cards: [
       { slug: 'coaching-chat', title: 'Command Bar', description: 'Tell your coach what to do', icon: MessageSquare, iconColor: 'text-accent', violet: true },
+      { slug: 'ftp-goal', title: 'FTP Goal', description: 'Set and validate an FTP target', icon: Target, iconColor: 'text-zone-3' },
       { slug: 'dose-log', title: 'Dose Log', description: 'Manual training load entries', icon: ClipboardList, iconColor: 'text-zone-2' },
     ],
   },
