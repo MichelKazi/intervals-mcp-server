@@ -1,0 +1,63 @@
+/**
+ * Do not edit directly, this file was auto-generated.
+ */
+
+:root {
+  --aura-color-bg-void: #04050c; /** Deepest bg, never for content */
+  --aura-color-bg-base: #07080f; /** Page background */
+  --aura-color-bg-surface: #0d0e1a; /** Cards, panels */
+  --aura-color-bg-raised: #13152a; /** Elevated cards, popovers */
+  --aura-color-bg-high: #1a1d36; /** Tooltips, highest elevation */
+  --aura-color-border-subtle: #1a1d36; /** Barely visible dividers */
+  --aura-color-border-default: #242742; /** Standard card borders */
+  --aura-color-border-strong: #333660; /** Emphasized borders */
+  --aura-color-border-accent: #8b5cf640; /** Purple-tinted accent border */
+  --aura-color-zone-1: #3b82f6; /** Endurance — calm, deep blue */
+  --aura-color-zone-2: #eab308; /** Tempo — slightly uncomfortable yellow */
+  --aura-color-zone-3: #f97316; /** Threshold — hot orange */
+  --aura-color-zone-4: #ef4444; /** VO2max — red, maximum */
+  --aura-color-zone-5: #a855f7; /** Anaerobic — electric purple */
+  --aura-color-status-good: #22c55e;
+  --aura-color-status-caution: #f59e0b;
+  --aura-color-status-danger: #ef4444;
+  --aura-color-accent-primary: #8b5cf6; /** Violet — Aura signature */
+  --aura-color-accent-secondary: #6366f1; /** Indigo — secondary accent */
+  --aura-color-accent-glow: #8b5cf620; /** Glow layer for radial gradients */
+  --aura-color-text-primary: #f0f2ff;
+  --aura-color-text-secondary: #9ea3c8;
+  --aura-color-text-muted: #4a4d6e;
+  --aura-color-text-ghost: #2a2d4c;
+  --aura-spacing-0: 0px;
+  --aura-spacing-1: 4px;
+  --aura-spacing-2: 8px;
+  --aura-spacing-3: 12px;
+  --aura-spacing-4: 16px;
+  --aura-spacing-5: 20px;
+  --aura-spacing-6: 24px;
+  --aura-spacing-8: 32px;
+  --aura-spacing-10: 40px;
+  --aura-spacing-12: 48px;
+  --aura-spacing-16: 64px;
+  --aura-radius-sm: 6px;
+  --aura-radius-md: 10px;
+  --aura-radius-lg: 14px;
+  --aura-radius-xl: 20px;
+  --aura-radius-2xl: 28px;
+  --aura-radius-full: 9999px;
+  --aura-font-size-xs: 10px;
+  --aura-font-size-sm: 12px;
+  --aura-font-size-base: 14px;
+  --aura-font-size-md: 16px;
+  --aura-font-size-lg: 18px;
+  --aura-font-size-xl: 21px;
+  --aura-font-size-2xl: 28px;
+  --aura-font-size-3xl: 40px;
+  --aura-shadow-elevation1: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+  --aura-shadow-elevation2: 0 4px 12px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.4);
+  --aura-shadow-elevation3: 0 16px 40px rgba(0,0,0,0.6), 0 4px 8px rgba(0,0,0,0.4);
+  --aura-shadow-glow-accent: 0 0 20px rgba(139,92,246,0.3), 0 0 40px rgba(139,92,246,0.15);
+  --aura-shadow-glow-good: 0 0 16px rgba(34,197,94,0.3);
+  --aura-shadow-glow-caution: 0 0 16px rgba(245,158,11,0.3);
+  --aura-shadow-glow-danger: 0 0 16px rgba(239,68,68,0.3);
+  --aura-shadow-inner-highlight: inset 0 1px 0 rgba(255,255,255,0.06);
+}

@@ -6,7 +6,7 @@
     },
     "build": {
       "dependsOn": ["^build", "tokens"],
-      "outputs": ["dist/**", ".next/**", "storybook-static/**"]
+      "outputs": ["dist/**", ".next/**", "storybook-static/**", "src/tokens/generated/**"]
     },
     "dev": { "cache": false, "persistent": true },
     "storybook": { "cache": false, "persistent": true },

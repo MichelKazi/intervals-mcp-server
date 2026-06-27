@@ -1,0 +1,70 @@
+/*
+ * Aura design-system global styles. Imports the generated token variables and
+ * defines the signature surface treatments the mockup relies on: violet mesh
+ * background, glassmorphism cards, gradient-stroke gauges.
+ *
+ * Consumers import this once at the app root:  import '@coaching/ui/styles'
+ */
+@import '../tokens/generated/variables.css';
+
+:root {
+  color-scheme: dark;
+}
+
+/* ── Mesh background ───────────────────────────────────────────────────────
+ * Lit-from-within violet field over the base void. Three offset radial glows
+ * layered on bg-base so the page never reads as flat black. */
+.aura-mesh-bg {
+  background-color: var(--aura-color-bg-base);
+  background-image:
+    radial-gradient(60% 50% at 18% 0%, rgba(139, 92, 246, 0.18), transparent 70%),
+    radial-gradient(50% 45% at 100% 12%, rgba(99, 102, 241, 0.14), transparent 70%),
+    radial-gradient(70% 60% at 50% 100%, rgba(139, 92, 246, 0.08), transparent 75%);
+  background-attachment: fixed;
+}
+
+/* ── Glass card surface ────────────────────────────────────────────────────
+ * Frosted panel: translucent raised fill, hairline border, top inner highlight
+ * to fake a light source, elevation shadow. */
+.aura-glass {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(19, 21, 42, 0.72),
+      rgba(13, 14, 26, 0.72)
+    );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--aura-color-border-default);
+  border-radius: var(--aura-radius-xl);
+  box-shadow: var(--aura-shadow-elevation2), var(--aura-shadow-inner-highlight);
+}
+
+/* Hairline gradient top edge — the signature directional-light accent. */
+.aura-edge-light {
+  position: relative;
+}
+.aura-edge-light::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(139, 92, 246, 0.5),
+    rgba(139, 92, 246, 0.05) 60%,
+    transparent
+  );
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
