@@ -4,10 +4,10 @@ import AppShell from '../components/AppShell';
 import ReadinessCard from '../components/dashboard/ReadinessCard';
 import WorkoutChart from '../components/WorkoutChart';
 import { tsbBand } from '../components/fitness/FitnessRings';
-import { AdaptiveBadge, ZoneDot, SkeletonCard } from '../components/viz';
+import { AdaptiveBadge, ZoneDot, SkeletonCard, SparkLine } from '../components/viz';
 import type { Zone } from '../components/viz';
 import { Button } from '../components/ui/button';
-import { getDashboard, getWellness, getActivities } from '../lib/api';
+import { getDashboard, getWellness, getActivities, getEvents } from '../lib/api';
 import { formatDate, formatDuration, DEFAULT_FTP } from '../lib/format';
 import type { PlannedEvent, Activity, WellnessDay } from '../lib/types';
 
@@ -160,7 +160,7 @@ function RecentRow({ activity }: { activity: Activity }) {
       type="button"
       aria-label={`Activity: ${activity.name}. Tap to open.`}
       onClick={go}
-      className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-bg-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-foreground transition-colors hover:bg-bg-high active:bg-bg-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <ZoneDot zone={activityZone(activity)} />
       <span className="min-w-0 flex-1 truncate text-[14px] text-foreground">{activity.name}</span>
@@ -190,6 +190,129 @@ function RecentSection({ activities }: { activities: Activity[] }) {
           {activities.map((a) => <RecentRow key={String(a.id)} activity={a} />)}
         </div>
       )}
+    </section>
+  );
+}
+
+// ─── 7-day readiness trend ───────────────────────────────────────────────────
+
+/** Color a readiness score the same way the readiness verdict bands do. */
+function readinessColor(score: number): string {
+  if (score >= 67) return '#22c55e';
+  if (score >= 34) return '#f59e0b';
+  return '#ef4444';
+}
+
+function ReadinessTrendStrip({ days }: { days: WellnessDay[] }) {
+  const series = days
+    .map((d) => (typeof d.readiness === 'number' ? d.readiness : null))
+    .filter((v): v is number => v != null)
+    .slice(-7);
+  if (series.length < 2) return null;
+
+  const latest = series[series.length - 1];
+  const first = series[0];
+  const delta = Math.round(latest - first);
+  const deltaStr = delta === 0 ? 'flat' : `${delta > 0 ? '+' : ''}${delta}`;
+
+  return (
+    <div
+      data-testid="readiness-trend"
+      className="mx-4 mb-1 flex items-center gap-3 rounded-full bg-bg-raised/50 px-4 py-2"
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-accent">7-day</span>
+      <SparkLine data={series} color={readinessColor(latest)} width={72} height={20} />
+      <span className="font-mono text-[13px] text-slate-200">{Math.round(latest)}</span>
+      <span className="ml-auto text-[12px] text-slate-400">
+        vs <span className="font-mono text-slate-300">{deltaStr}</span>
+      </span>
+    </div>
+  );
+}
+
+// ─── This-week summary ───────────────────────────────────────────────────────
+
+/** Monday 00:00 → now, in local YYYY-MM-DD bounds for the current training week. */
+function weekBounds(now: Date): { start: Date; oldest: string; newest: string } {
+  const start = new Date(now);
+  const dow = (start.getDay() + 6) % 7; // 0 = Monday
+  start.setDate(start.getDate() - dow);
+  start.setHours(0, 0, 0, 0);
+  return {
+    start,
+    oldest: start.toISOString().slice(0, 10),
+    newest: now.toISOString().slice(0, 10),
+  };
+}
+
+function thisWeekStat(label: string, value: string, accent = false) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
+      <span className={`font-mono text-lg font-semibold ${accent ? 'text-accent' : 'text-foreground'}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function ThisWeekCard({
+  activities,
+  planned,
+  weekStart,
+}: {
+  activities: Activity[];
+  planned: PlannedEvent[];
+  weekStart: Date;
+}) {
+  const startMs = weekStart.getTime();
+  const inWeek = (iso?: string) => {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return !Number.isNaN(t) && t >= startMs;
+  };
+
+  const done = activities.filter(
+    (a) => a.source !== 'STRAVA' && !a._note && inWeek(a.start_date_local || a.start_date),
+  );
+  const completedTss = Math.round(
+    done.reduce((s, a) => s + (a.icu_training_load ?? 0), 0),
+  );
+  const sessions = done.length;
+  const hours = done.reduce((s, a) => s + (a.moving_time ?? 0), 0) / 3600;
+
+  const plannedTss = Math.round(
+    planned
+      .filter((e) => e.category === 'WORKOUT' && inWeek(e.start_date_local || e.start_date))
+      .reduce((s, e) => s + (e.icu_training_load ?? 0), 0),
+  );
+
+  const pct = plannedTss > 0 ? Math.min(100, Math.round((completedTss / plannedTss) * 100)) : null;
+  const barColor = pct == null ? '#64748b' : pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#f97316';
+
+  return (
+    <section data-testid="this-week" aria-label="This week summary" className="m-4">
+      <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-widest text-accent">This Week</p>
+      <div className="rounded-2xl border border-border-subtle bg-bg-surface p-4">
+        <div className="grid grid-cols-3 gap-4">
+          {thisWeekStat('TSS', `${completedTss}${plannedTss > 0 ? ` / ${plannedTss}` : ''}`, true)}
+          {thisWeekStat('Sessions', String(sessions))}
+          {thisWeekStat('Hours', hours.toFixed(1))}
+        </div>
+        {pct != null && (
+          <div className="mt-3">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-high">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${pct}%`, backgroundColor: barColor }}
+              />
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-400">
+              <span className="font-mono text-slate-300">{pct}%</span> of planned load
+            </p>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -234,6 +357,12 @@ export default function Dashboard() {
     queryFn: () => getActivities({ oldest: actOldest, newest, limit: 30 }),
   });
 
+  const week = weekBounds(today);
+  const { data: plannedThisWeek } = useQuery({
+    queryKey: ['week-events', week.oldest, week.newest],
+    queryFn: () => getEvents(week.oldest, week.newest),
+  });
+
   const fitnessDay = latestFitnessDay(wellness);
   const tsb = fitnessDay && fitnessDay.ctl != null && fitnessDay.atl != null
     ? fitnessDay.ctl - fitnessDay.atl
@@ -264,6 +393,9 @@ export default function Dashboard() {
             <ReadinessCard readiness={data.readiness} wellness={wellnessDay} tsb={tsb} />
           )}
 
+          {/* A2) 7-day readiness trend */}
+          {wellness && <ReadinessTrendStrip days={wellness} />}
+
           {/* B) Load-match strip */}
           {data.next_workout && <LoadMatchStrip event={data.next_workout} tsb={tsb} />}
 
@@ -272,6 +404,13 @@ export default function Dashboard() {
 
           {/* D) Recent */}
           <RecentSection activities={recent} />
+
+          {/* E) This week */}
+          <ThisWeekCard
+            activities={(activitiesRaw ?? []) as Activity[]}
+            planned={plannedThisWeek ?? []}
+            weekStart={week.start}
+          />
         </div>
       )}
     </AppShell>

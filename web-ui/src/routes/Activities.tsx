@@ -77,7 +77,7 @@ export default function Activities() {
             <li key={activity.id}>
               <button
                 onClick={() => navigate(`/workout/${activity.id}`)}
-                className="flex w-full items-center gap-3 rounded-lg bg-card px-4 py-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex w-full items-center gap-3 rounded-lg bg-card px-4 py-3 text-left text-foreground transition-colors hover:bg-muted active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <SportIcon
                   type={activity.type ?? activity.sport_type ?? ''}

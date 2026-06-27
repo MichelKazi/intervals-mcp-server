@@ -54,6 +54,26 @@ describe('WorkoutChart', () => {
     expect(readout.textContent).toMatch(/recovery|50%/i);
   });
 
+  it('renders an intentional steady summary (not a slab) for a single-zone workout', () => {
+    const steady: WorkoutStep[] = [{ duration: 5400, power: { units: 'percent', value: 65 } }];
+    render(<WorkoutChart steps={steady} ftp={250} />);
+    expect(screen.queryByTestId('workout-bar')).toBeNull();
+    const summary = screen.getByTestId('workout-steady');
+    expect(summary.textContent).toMatch(/65% FTP/);
+    expect(summary.textContent).toMatch(/endurance/i);
+    expect(summary.textContent).toMatch(/1h30m/);
+  });
+
+  it('keeps the interval bar chart for warmup + work + cooldown workouts', () => {
+    const intervals: WorkoutStep[] = [
+      { duration: 600, power: { units: 'percent', value: 55 } },
+      { duration: 1800, power: { units: 'percent', value: 95 } },
+      { duration: 600, power: { units: 'percent', value: 55 } },
+    ];
+    render(<WorkoutChart steps={intervals} />);
+    expect(screen.getAllByTestId('workout-bar')).toHaveLength(3);
+  });
+
   it('only one bar has tabIndex 0 at a time (roving tabindex)', () => {
     render(<WorkoutChart steps={steps} />);
     const bars = screen.getAllByTestId('workout-bar');

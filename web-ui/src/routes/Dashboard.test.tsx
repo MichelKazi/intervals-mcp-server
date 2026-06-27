@@ -11,12 +11,14 @@ vi.mock('../lib/api', () => ({
   getDashboard: vi.fn(),
   getWellness: vi.fn(),
   getActivities: vi.fn(),
+  getEvents: vi.fn(),
 }));
 
-import { getDashboard, getWellness, getActivities } from '../lib/api';
+import { getDashboard, getWellness, getActivities, getEvents } from '../lib/api';
 const mockGetDashboard = vi.mocked(getDashboard);
 const mockGetWellness = vi.mocked(getWellness);
 const mockGetActivities = vi.mocked(getActivities);
+const mockGetEvents = vi.mocked(getEvents);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -71,8 +73,21 @@ const SAMPLE_DATA: DashboardData = {
 };
 
 const SAMPLE_WELLNESS = [
-  { id: '2026-06-01', ctl: 48, atl: 50, hrv: 40, restingHR: 52, sleepScore: 70, readiness: 75 },
+  { id: '2026-06-20', ctl: 48, atl: 50, hrv: 40, restingHR: 52, sleepScore: 70, readiness: 70 },
+  { id: '2026-06-21', ctl: 49, atl: 50, readiness: 65 },
+  { id: '2026-06-22', ctl: 50, atl: 50, readiness: 72 },
+  { id: '2026-06-23', ctl: 51, atl: 50, readiness: 80 },
+  { id: '2026-06-24', ctl: 52, atl: 50, readiness: 78 },
+  { id: '2026-06-25', ctl: 53, atl: 50, readiness: 82 },
   { id: '2026-06-26', ctl: 55, atl: 50, hrv: 36, restingHR: 50, sleepScore: 79, readiness: 84 },
+];
+
+const SAMPLE_PLANNED = [
+  {
+    id: 99, name: 'Planned Threshold', type: 'Ride', category: 'WORKOUT',
+    start_date_local: '2026-06-26T09:00:00', end_date_local: '2026-06-26T10:00:00',
+    icu_training_load: 90,
+  },
 ];
 
 const SAMPLE_ACTIVITIES: Activity[] = [
@@ -92,6 +107,7 @@ beforeEach(() => {
   mockGetDashboard.mockClear();
   mockGetWellness.mockResolvedValue(SAMPLE_WELLNESS);
   mockGetActivities.mockResolvedValue(SAMPLE_ACTIVITIES);
+  mockGetEvents.mockResolvedValue(SAMPLE_PLANNED as never);
 });
 
 describe('Dashboard', () => {
@@ -183,5 +199,24 @@ describe('Dashboard', () => {
     mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
     renderDashboard();
     await waitFor(() => expect(screen.getByText(/TSS planned/i)).toBeInTheDocument());
+  });
+
+  it('renders the 7-day readiness trend strip with the latest score', async () => {
+    mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
+    renderDashboard();
+    const strip = await screen.findByTestId('readiness-trend');
+    expect(strip).toHaveTextContent('7-day');
+    expect(strip).toHaveTextContent('84'); // latest readiness score
+  });
+
+  it('renders the this-week summary with completed/planned TSS, sessions, hours', async () => {
+    mockGetDashboard.mockResolvedValueOnce(SAMPLE_DATA);
+    renderDashboard();
+    const card = await screen.findByTestId('this-week');
+    expect(card).toHaveTextContent('This Week');
+    // Morning Endurance (70 TSS, 1.5h) is in-week; planned is 90.
+    expect(card).toHaveTextContent('70 / 90');
+    expect(card).toHaveTextContent('1.5'); // hours
+    expect(card).toHaveTextContent('% of planned load');
   });
 });
