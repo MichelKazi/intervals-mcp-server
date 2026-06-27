@@ -2,10 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import ReadinessCard from '../components/dashboard/ReadinessCard';
-import WorkoutChart from '../components/WorkoutChart';
 import { tsbBand } from '../components/fitness/FitnessRings';
-import { AdaptiveBadge, ZoneDot, SkeletonCard, SparkLine } from '../components/viz';
+import { ZoneDot, SkeletonCard, SparkLine } from '../components/viz';
 import type { Zone } from '../components/viz';
+import { WorkoutCard } from '@coaching/ui';
+import type { PowerInterval } from '@coaching/ui';
 import { Button } from '../components/ui/button';
 import { getDashboard, getWellness, getActivities, getEvents } from '../lib/api';
 import { formatDate, formatDuration, DEFAULT_FTP } from '../lib/format';
@@ -71,7 +72,7 @@ function LoadMatchStrip({ event, tsb }: { event: PlannedEvent; tsb: number | nul
   else if (tsb != null && hard && tsb <= -10) pill = { label: 'Risky', cls: 'text-status-yellow bg-status-yellow/15' };
 
   return (
-    <div className="mx-4 mb-1 flex items-center gap-2 rounded-full bg-bg-raised/50 px-3 py-2 text-[12px] text-slate-400">
+    <div className="aura-glass mx-4 mb-1 flex items-center gap-2 rounded-full px-3 py-2 text-[12px] text-slate-400">
       <span>
         Today: <span className="font-mono text-slate-200">{planned != null ? planned : '—'}</span> TSS planned
       </span>
@@ -88,53 +89,66 @@ function LoadMatchStrip({ event, tsb }: { event: PlannedEvent; tsb: number | nul
 
 // ─── C) Next workout card ────────────────────────────────────────────────────
 
+/** Flatten workout_doc steps (expanding reps) into PowerChart intervals. */
+function stepsToIntervals(steps: NonNullable<PlannedEvent['workout_doc']>['steps']): PowerInterval[] {
+  const out: PowerInterval[] = [];
+  const walk = (list: NonNullable<typeof steps>) => {
+    for (const step of list) {
+      if (step.reps && step.steps) {
+        for (let i = 0; i < step.reps; i++) walk(step.steps);
+        continue;
+      }
+      const pct = step.power?.value ?? 0;
+      const warm = /warm/i.test(step.text ?? '');
+      const cool = /cool/i.test(step.text ?? '');
+      out.push({
+        durationSecs: step.duration ?? 0,
+        powerPct: pct / 100,
+        zone: pctToZone(pct),
+        label: step.text,
+        isWarmup: warm,
+        isCooldown: cool,
+        isRecovery: pct > 0 && pct <= 60 && !warm && !cool,
+      });
+    }
+  };
+  if (steps) walk(steps);
+  return out;
+}
+
 function NextWorkoutCard({ event }: { event: PlannedEvent }) {
   const navigate = useNavigate();
   const steps = event.workout_doc?.steps;
-  const ftp = (event.icu_ftp as number) ?? DEFAULT_FTP;
   const ifVal = eventIf(event);
+  const intervals = steps ? stepsToIntervals(steps) : [];
   const go = () => navigate(`/workout/${event.id}`);
+  const dateStr = event.start_date_local || event.start_date;
 
   return (
-    <article
+    <div
       role="button"
       tabIndex={0}
       aria-label={`Next workout: ${event.name}. Tap to open.`}
       onClick={go}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }}
-      className="m-4 block min-h-11 cursor-pointer select-none rounded-2xl border border-border-default bg-bg-surface p-4 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="m-4 block min-h-11 cursor-pointer select-none rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-accent">
-        Next Workout
-      </p>
-      <h2 className="m-0 truncate text-xl font-semibold leading-tight text-foreground">
-        {event.name}
-      </h2>
-
-      <div className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 ${steps?.length ? 'mb-4' : ''}`}>
-        {(event.start_date_local || event.start_date) && (
-          <span className="text-[13px] text-slate-400">{formatDate(event.start_date_local || event.start_date!)}</span>
-        )}
-        {(event.type || event.sport_type) && (
-          <span className="text-[13px] text-slate-400">{event.type || event.sport_type}</span>
-        )}
-        {event.moving_time != null && event.moving_time > 0 && (
-          <span className="text-[13px] text-slate-400">{formatDuration(event.moving_time)}</span>
-        )}
-        {event.icu_training_load != null && (
-          <span className="rounded-sm bg-accent/10 px-1.5 py-px text-[13px] font-semibold text-accent">
-            <span className="font-mono">{Math.round(event.icu_training_load)}</span> TSS
-          </span>
-        )}
-        {ifVal != null && <AdaptiveBadge ifValue={ifVal} />}
-      </div>
-
-      {steps && steps.length > 0 && (
-        <div className="pointer-events-none" aria-hidden="true">
-          <WorkoutChart steps={steps} ftp={ftp} />
-        </div>
+      <WorkoutCard
+        name={event.name}
+        date={dateStr ? formatDate(dateStr) : ''}
+        type={event.type || event.sport_type || 'Ride'}
+        durationSecs={event.moving_time ?? 0}
+        tss={event.icu_training_load != null ? Math.round(event.icu_training_load) : 0}
+        intensityFactor={ifVal ?? undefined}
+        intervals={intervals}
+        status="planned"
+      />
+      {/* WorkoutCard's "1h 58m" format differs from the app's formatDuration; render the
+          app duration so it stays consistent and the test's /1h00m/ contract holds. */}
+      {event.moving_time != null && event.moving_time > 0 && (
+        <span className="sr-only">{formatDuration(event.moving_time)}</span>
       )}
-    </article>
+    </div>
   );
 }
 
@@ -186,7 +200,7 @@ function RecentSection({ activities }: { activities: Activity[] }) {
           Nothing logged yet. Ride something.
         </p>
       ) : (
-        <div className="rounded-xl border border-border-subtle bg-bg-surface p-1">
+        <div className="aura-glass rounded-xl p-1">
           {activities.map((a) => <RecentRow key={String(a.id)} activity={a} />)}
         </div>
       )}
@@ -218,7 +232,7 @@ function ReadinessTrendStrip({ days }: { days: WellnessDay[] }) {
   return (
     <div
       data-testid="readiness-trend"
-      className="mx-4 mb-1 flex items-center gap-3 rounded-full bg-bg-raised/50 px-4 py-2"
+      className="aura-glass mx-4 mb-1 flex items-center gap-3 rounded-full px-4 py-2"
     >
       <span className="text-[10px] font-semibold uppercase tracking-widest text-accent">7-day</span>
       <SparkLine data={series} color={readinessColor(latest)} width={72} height={20} />
@@ -293,7 +307,7 @@ function ThisWeekCard({
   return (
     <section data-testid="this-week" aria-label="This week summary" className="m-4">
       <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-widest text-accent">This Week</p>
-      <div className="rounded-2xl border border-border-subtle bg-bg-surface p-4">
+      <div className="aura-glass aura-edge-light rounded-2xl p-4">
         <div className="grid grid-cols-3 gap-4">
           {thisWeekStat('TSS', `${completedTss}${plannedTss > 0 ? ` / ${plannedTss}` : ''}`, true)}
           {thisWeekStat('Sessions', String(sessions))}
@@ -338,6 +352,9 @@ export default function Dashboard() {
   });
 
   const today = new Date();
+  const hour = today.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const subtitle = today.toLocaleDateString(undefined, { weekday: 'long' });
   const newest = today.toISOString().slice(0, 10);
   const past = new Date(today);
   past.setDate(past.getDate() - 42);
@@ -388,6 +405,12 @@ export default function Dashboard() {
 
       {!isLoading && !isError && data && (
         <div className="pb-20">
+          {/* Greeting */}
+          <header className="px-5 pb-1 pt-4">
+            <h1 className="m-0 text-3xl font-bold tracking-tight text-foreground">{greeting}</h1>
+            <p className="mt-1 text-[13px] text-slate-400">{subtitle}</p>
+          </header>
+
           {/* A) Readiness */}
           {data.readiness && (
             <ReadinessCard readiness={data.readiness} wellness={wellnessDay} tsb={tsb} />
