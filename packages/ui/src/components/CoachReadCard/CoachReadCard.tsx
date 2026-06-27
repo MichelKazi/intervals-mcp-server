@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cn } from '../../lib/cn';
+import { useDragDismiss } from '../../lib/useDragDismiss';
 import type { CoachReadCardProps } from './CoachReadCard.types';
 
 /**
@@ -30,6 +31,7 @@ export function CoachReadCard({
   className,
 }: CoachReadCardProps) {
   const [open, setOpen] = useState(false);
+  const { offsetY, dragging, handlers } = useDragDismiss({ onDismiss: () => setOpen(false) });
 
   useEffect(() => {
     if (!open) return;
@@ -82,8 +84,17 @@ export function CoachReadCard({
             aria-modal="true"
             aria-label="Coach read"
             onClick={(e) => e.stopPropagation()}
+            style={{ transform: `translateY(${offsetY}px)`, transition: dragging ? 'none' : 'transform 0.2s ease-out' }}
             className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-border-default bg-bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:rounded-2xl sm:pb-4"
           >
+            {/* Drag handle — grab to pull the sheet down to dismiss. */}
+            <div
+              {...handlers}
+              className="mx-auto -mt-1 mb-2 flex h-5 w-full max-w-[120px] cursor-grab touch-none items-center justify-center active:cursor-grabbing sm:hidden"
+              aria-hidden="true"
+            >
+              <span className="h-1 w-10 rounded-full bg-border-default" />
+            </div>
             <h2 className="mb-3 text-base font-semibold text-text-primary">Coach read</h2>
             <section className="mb-4">
               <h3 className="mb-1 text-[11px] uppercase tracking-widest text-text-muted">
