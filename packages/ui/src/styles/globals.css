@@ -64,6 +64,15 @@
   pointer-events: none;
 }
 
+/* SparkLine draw-on: hides the stroke then reveals it left-to-right.
+ * forwards holds the final state, so reduced-motion (duration → 0) lands on a
+ * fully drawn line. */
+@keyframes aura-sparkline-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
