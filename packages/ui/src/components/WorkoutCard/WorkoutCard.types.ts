@@ -17,5 +17,7 @@ export interface WorkoutCardProps {
   summary?: string;
   status?: WorkoutStatus;
   onClick?: () => void;
+  /** Overrides the button's accessible name (defaults to "{name}, {status}"). */
+  ariaLabel?: string;
   className?: string;
 }

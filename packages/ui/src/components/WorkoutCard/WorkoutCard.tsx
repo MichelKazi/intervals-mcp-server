@@ -43,6 +43,7 @@ export function WorkoutCard({
   summary,
   status = 'planned',
   onClick,
+  ariaLabel,
   className,
 }: WorkoutCardProps) {
   const eyebrow = STATUS_LABEL[status] ?? STATUS_LABEL.planned;
@@ -87,7 +88,7 @@ export function WorkoutCard({
       <button
         type="button"
         onClick={onClick}
-        aria-label={`${name}, ${STATUS_LABEL[status] ?? STATUS_LABEL.planned}`}
+        aria-label={ariaLabel ?? `${name}, ${STATUS_LABEL[status] ?? STATUS_LABEL.planned}`}
         className={cn(
           rootClass,
           'w-full text-left transition active:scale-[0.99]',

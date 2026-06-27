@@ -125,14 +125,7 @@ function NextWorkoutCard({ event }: { event: PlannedEvent }) {
   const dateStr = event.start_date_local || event.start_date;
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`Next workout: ${event.name}. Tap to open.`}
-      onClick={go}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }}
-      className="m-4 block min-h-11 cursor-pointer select-none rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
+    <div className="m-4">
       <WorkoutCard
         name={event.name}
         date={dateStr ? formatDate(dateStr) : ''}
@@ -142,6 +135,8 @@ function NextWorkoutCard({ event }: { event: PlannedEvent }) {
         intensityFactor={ifVal ?? undefined}
         intervals={intervals}
         status="planned"
+        onClick={go}
+        ariaLabel={`Next workout: ${event.name}. Tap to open.`}
       />
       {/* WorkoutCard's "1h 58m" format differs from the app's formatDuration; render the
           app duration so it stays consistent and the test's /1h00m/ contract holds. */}

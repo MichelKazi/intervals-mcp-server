@@ -1,4 +1,4 @@
-import { ZONE_COLORS, ZONE_LABELS, type Zone } from './zoneColors';
+import { ZONE_COLORS, ZONE_TEXT, ZONE_LABELS, type Zone } from './zoneColors';
 
 export interface ZoneBadgeProps {
   zone?: Zone;
@@ -17,11 +17,10 @@ export default function ZoneBadge({ zone, label }: ZoneBadgeProps) {
     );
   }
 
-  const color = ZONE_COLORS[zone];
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
-      style={{ backgroundColor: `${color}26`, color }}
+      style={{ backgroundColor: `${ZONE_COLORS[zone]}26`, color: ZONE_TEXT[zone] }}
     >
       {text || `Zone ${zone}`}
     </span>

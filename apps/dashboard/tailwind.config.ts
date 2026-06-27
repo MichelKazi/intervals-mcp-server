@@ -7,13 +7,31 @@ const config: Config = {
   // hover: utilities only apply under @media (hover: hover) — prevents iOS Safari
   // keeping :hover backgrounds stuck after a tap (the white-row contrast bug).
   future: { hoverOnlyWhenSupported: true },
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  content: [
+    './index.html',
+    './src/**/*.{ts,tsx}',
+    // Scan the design-system source so its utility classes (text-text-*,
+    // bg-bg-*, etc.) get generated in the app's CSS bundle.
+    '../../packages/ui/src/**/*.{ts,tsx}',
+  ],
   // Keep the existing deliberate reset in index.css; do NOT let Tailwind's
   // preflight overwrite body/button/input and create specificity conflicts.
   corePlugins: { preflight: false },
   theme: {
     extend: {
       colors: {
+        // Override the slate ramp used for secondary/muted text. Tailwind's
+        // slate-500 (#64748b) lands at ~4.0:1 on the Aura base — below WCAG AA.
+        // Bumping 500/600 to the Aura text tokens (#9ea3c8 ≈ 6.4:1, #6b7099
+        // ≈ 4.6:1) clears AA everywhere those classes are used.
+        slate: {
+          100: '#f0f2ff',
+          200: '#d6d9ee',
+          300: '#b6bbdc',
+          400: '#9ea3c8',
+          500: '#8186ad',
+          600: '#6b7099',
+        },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {
@@ -49,6 +67,15 @@ const config: Config = {
           surface: '#0d0e1a',
           raised: '#13152a',
           high: '#1a1d36',
+        },
+        // Aura text scale — mirrors the @coaching/ui token set so design-system
+        // components rendered here resolve text-text-* instead of falling back
+        // to black. secondary/muted both clear WCAG AA on the dark surfaces.
+        text: {
+          primary: '#f0f2ff',
+          secondary: '#9ea3c8',
+          muted: '#8186ad',
+          ghost: '#4a4d6e',
         },
         status: {
           green: '#22c55e',

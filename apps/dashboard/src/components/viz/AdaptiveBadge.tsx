@@ -9,11 +9,13 @@ interface Tier {
   text: string;
 }
 
+// Text shades are 400-level (brighter than the 15% tint background) so each
+// pill clears WCAG AA 4.5:1 on the dark card.
 function tierFor(ifValue: number): Tier {
-  if (ifValue < 0.85) return { label: 'Achievable', bg: '#22c55e26', text: '#22c55e' };
-  if (ifValue < 0.95) return { label: 'Productive', bg: '#3b82f626', text: '#3b82f6' };
-  if (ifValue <= 1.0) return { label: 'Stretch', bg: '#f59e0b26', text: '#f59e0b' };
-  return { label: 'Breakthrough', bg: '#ef444426', text: '#ef4444' };
+  if (ifValue < 0.85) return { label: 'Achievable', bg: '#22c55e26', text: '#4ade80' };
+  if (ifValue < 0.95) return { label: 'Productive', bg: '#3b82f626', text: '#60a5fa' };
+  if (ifValue <= 1.0) return { label: 'Stretch', bg: '#f59e0b26', text: '#fbbf24' };
+  return { label: 'Breakthrough', bg: '#ef444426', text: '#f87171' };
 }
 
 /** Derives an effort label + color from an Intensity Factor. */

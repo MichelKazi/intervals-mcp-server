@@ -9,7 +9,7 @@ import { useLongPressDrag } from '../components/calendar/useLongPressDrag';
 import ActivityDrawer from '../components/calendar/ActivityDrawer';
 import WorkoutChart from '../components/WorkoutChart';
 import { ZoneDot, ComplianceDot, type Zone } from '../components/viz';
-import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Skeleton } from '../components/ui/skeleton';
 import { getEvents, getActivities, moveEvent } from '../lib/api';
 import { formatDuration, formatDistance, ftpToZone, DEFAULT_FTP } from '../lib/format';
@@ -755,9 +755,13 @@ export default function Calendar() {
         <div className="flex items-center gap-2">
           <Tabs value={view} onValueChange={v => switchView(v as 'week' | 'month')}>
             <TabsList className="h-8 rounded-full">
-              <TabsTrigger value="week" className="h-7 rounded-full px-3 text-xs">Week</TabsTrigger>
-              <TabsTrigger value="month" className="h-7 rounded-full px-3 text-xs">Month</TabsTrigger>
+              <TabsTrigger value="week" className="h-7 rounded-full px-3 text-xs text-slate-300">Week</TabsTrigger>
+              <TabsTrigger value="month" className="h-7 rounded-full px-3 text-xs text-slate-300">Month</TabsTrigger>
             </TabsList>
+            {/* Empty panels so radix's aria-controls points at real elements
+                (validates ARIA); the views render below, not inside these. */}
+            <TabsContent value="week" />
+            <TabsContent value="month" />
           </Tabs>
 
           <button
