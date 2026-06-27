@@ -52,14 +52,27 @@ export default function SearchFilters({
   return (
     <div className="flex flex-col gap-3">
       {/* Search input */}
-      <Input
-        type="search"
-        placeholder="Search workouts…"
-        value={nameSearch}
-        onChange={e => onNameSearch(e.target.value)}
-        aria-label="Search workouts"
-        className="min-h-[44px] text-[15px]"
-      />
+      <div className="relative">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+        >
+          <circle cx="11" cy="11" r="7" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <Input
+          type="search"
+          placeholder="Search workouts…"
+          value={nameSearch}
+          onChange={e => onNameSearch(e.target.value)}
+          aria-label="Search workouts"
+          className="min-h-[44px] rounded-full bg-card/80 pl-10 text-[15px]"
+        />
+      </div>
 
       {/* Zone chips */}
       <div role="group" aria-label="Filter by zone" className="flex flex-wrap gap-2">

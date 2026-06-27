@@ -75,15 +75,15 @@ export default function LibraryAdd() {
 
       <div className="p-4">
         {/* Header row */}
-        <div className="mb-3 flex justify-end">
+        <div className="mb-4 flex items-center justify-between">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Library</h1>
           <Button
             type="button"
             onClick={() => setShowCustomForm(true)}
-            variant="outline"
             size="touch"
-            className="border-primary bg-muted text-primary"
+            className="rounded-full bg-primary px-5 font-semibold text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.35)] hover:bg-primary/90"
           >
-            Build custom
+            + Build
           </Button>
         </div>
 

@@ -12,12 +12,12 @@ interface MetricProps {
 
 function Metric({ label, value }: MetricProps) {
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
-        {label}
-      </span>
-      <span className="text-[15px] tabular-nums text-muted-foreground">
+    <div className="flex flex-col items-center gap-1 rounded-md border border-border bg-card/40 px-2 py-3">
+      <span className="font-mono text-lg font-semibold tabular-nums text-foreground">
         {value}
+      </span>
+      <span className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
       </span>
     </div>
   );
@@ -43,7 +43,7 @@ export default function MetricStrip({ event }: MetricStripProps) {
   if (metrics.length === 0) return null;
 
   return (
-    <div className="mx-4 mb-4 flex justify-around gap-4 rounded-md bg-card px-4 py-3">
+    <div className="mx-4 mb-4 grid grid-cols-4 gap-2">
       {metrics.map((m) => (
         <Metric key={m.label} label={m.label} value={m.value} />
       ))}

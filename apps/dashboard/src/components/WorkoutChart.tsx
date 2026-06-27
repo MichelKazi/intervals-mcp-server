@@ -222,7 +222,7 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
                 style={{
                   width: '100%',
                   height: barH,
-                  background: zoneColor(bar.pctFtp),
+                  background: `linear-gradient(180deg, ${zoneColor(bar.pctFtp)} 0%, ${zoneColor(bar.pctFtp)}b3 100%)`,
                   borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
                   opacity: isSelected ? 1 : 0.85,
                 }}

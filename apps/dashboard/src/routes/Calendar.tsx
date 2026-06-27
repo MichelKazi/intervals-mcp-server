@@ -7,6 +7,7 @@ import MonthGrid from '../components/calendar/MonthGrid';
 import SportIcon, { sportColor } from '../components/calendar/SportIcon';
 import { useLongPressDrag } from '../components/calendar/useLongPressDrag';
 import ActivityDrawer from '../components/calendar/ActivityDrawer';
+import WorkoutChart from '../components/WorkoutChart';
 import { ZoneDot, ComplianceDot, type Zone } from '../components/viz';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Skeleton } from '../components/ui/skeleton';
@@ -101,11 +102,41 @@ function deriveZone(ev: PlannedEvent | Activity): Zone {
   return 1;
 }
 
+/**
+ * Plain-English one-liner for a workout's structure, e.g.
+ * "3 sets · 12 min each · hard then steady". Derived from the largest repeat
+ * block; falls back to a coarse intensity read when there's no repeat.
+ */
+function workoutSummary(steps: WorkoutStep[]): string | null {
+  const block = steps.find(s => (s.reps ?? 0) > 1 && (s.steps?.length ?? 0) > 0);
+  if (block) {
+    const work = block.steps!.reduce(
+      (a, s) => (s.duration ?? 0) > (a.duration ?? 0) ? s : a,
+      block.steps![0],
+    );
+    const mins = Math.round((work.duration ?? 0) / 60);
+    const tail = ftpToZone(peakStepPct(block.steps!)) >= 3 ? 'hard then steady' : 'steady';
+    return `${block.reps} sets · ${mins} min each · ${tail}`;
+  }
+  const peak = peakStepPct(steps);
+  if (peak <= 0) return null;
+  const mins = Math.round(steps.reduce((a, s) => a + (s.duration ?? 0), 0) / 60);
+  return ftpToZone(peak) >= 3 ? `~${mins} min · structured intensity` : `~${mins} min · steady endurance`;
+}
+
 const DOW_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** Static color key for the month-grid zone dots. */
+const ZONE_LEGEND: ReadonlyArray<[string, string]> = [
+  ['#3b82f6', 'Endurance'],
+  ['#f97316', 'Threshold'],
+  ['#a855f7', 'Anaerobic'],
+  ['#f97316', 'Race'],
 ];
 
 // ── Merged day items ──────────────────────────────────────────────────────────
@@ -196,6 +227,8 @@ function WeekStrip({
         const actualH = Math.round((actualTss / maxTss) * BAR_H);
         const dayNum = parseInt(iso.slice(8), 10);
         const total = (items?.planned.length ?? 0) + (items?.completed.length ?? 0);
+        // Hard day: a heavy planned session. Presentational accent only.
+        const isHardDay = plannedTss >= 70;
 
         return (
           <button
@@ -205,14 +238,14 @@ function WeekStrip({
             onClick={() => onSelectDay(iso)}
             className="flex min-h-[44px] flex-col items-center gap-1 rounded-md px-0.5 pb-1 pt-1 transition-colors"
             style={{
-              background: isSelected
-                ? 'var(--surface-2)'
-                : isToday
-                  ? 'var(--popover)'
-                  : isHighlight
-                    ? 'rgba(249,115,22,0.15)'
-                    : 'transparent',
-              border: isSelected ? '1px solid var(--brand)' : '1px solid transparent',
+              background: isHighlight ? 'rgba(249,115,22,0.15)' : 'transparent',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderTopColor: isSelected ? 'var(--brand)' : 'transparent',
+              borderRightColor: isSelected ? 'var(--brand)' : 'transparent',
+              borderBottomColor: isSelected ? 'var(--brand)' : 'transparent',
+              borderLeftWidth: isHardDay ? '2px' : '1px',
+              borderLeftColor: isHardDay ? '#f97316' : (isSelected ? 'var(--brand)' : 'transparent'),
               cursor: 'pointer',
               touchAction: 'manipulation',
             }}
@@ -226,8 +259,12 @@ function WeekStrip({
               {DOW_LABELS[i]}
             </span>
             <span
-              className="text-[13px]"
-              style={{ fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--brand)' : 'var(--text)' }}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-[13px]"
+              style={{
+                fontWeight: isToday ? 700 : 400,
+                color: isToday ? 'var(--bg)' : 'var(--text)',
+                background: isToday ? 'var(--brand)' : 'transparent',
+              }}
             >
               {dayNum}
             </span>
@@ -349,19 +386,28 @@ function DayRow({ item, done, date, draggingId, onOpen, onEventLongPress }: DayR
   const zone = deriveZone(item);
   const tss = tssOf(item);
   const isBeingDragged = draggingId != null && String(item.id) === String(draggingId);
+  const steps = item.workout_doc?.steps ?? [];
+  const summary = !done && steps.length ? workoutSummary(steps) : null;
 
   return (
-    <li data-testid="agenda-event-row" data-event-id={item.id}>
+    <li
+      data-testid="agenda-event-row"
+      data-event-id={item.id}
+      className="aura-glass aura-edge-light overflow-hidden rounded-2xl"
+      style={{
+        borderLeft: '3px solid #f97316',
+        transform: isBeingDragged ? 'scale(1.02)' : 'scale(1)',
+        transition: 'transform 120ms',
+      }}
+    >
       <button
         onClick={() => onOpen(item)}
         onPointerDown={done ? undefined : e => onEventLongPress?.(e, item as PlannedEvent, date)}
         aria-label={`${item.name} — ${done ? 'completed' : 'planned'}`}
-        className="flex w-full items-center gap-3 rounded-lg p-3 text-left transition-transform"
+        className="flex w-full items-center gap-3 p-3 text-left"
         style={{
-          background: isBeingDragged ? 'var(--surface-2)' : 'var(--surface)',
-          border: '1px solid var(--border)',
+          background: 'transparent',
           touchAction: done ? 'manipulation' : 'none',
-          transform: isBeingDragged ? 'scale(1.03)' : 'scale(1)',
           minHeight: 56,
         }}
       >
@@ -372,30 +418,36 @@ function DayRow({ item, done, date, draggingId, onOpen, onEventLongPress }: DayR
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15px] font-medium text-foreground">{item.name}</span>
           <span className="mt-0.5 flex gap-2 text-xs text-muted-foreground">
-            {item.moving_time != null && <span>{formatDuration(item.moving_time)}</span>}
-            {item.distance != null && item.distance > 0 && <span>{formatDistance(item.distance)}</span>}
+            {tss != null && <span className="font-mono">{tss} TSS</span>}
+            <span>{done ? 'Completed' : 'Planned'}</span>
+            {item.moving_time != null && <span>· {formatDuration(item.moving_time)}</span>}
+            {item.distance != null && item.distance > 0 && <span>· {formatDistance(item.distance)}</span>}
           </span>
         </span>
-        {tss != null && (
-          <span className="shrink-0 font-mono text-[13px] text-foreground">{tss}</span>
-        )}
         {done ? (
           <span
-            className="flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold"
+            className="flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
             style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}
           >
             <Check className="h-3 w-3" strokeWidth={3} />
-            done
+            Achievable
           </span>
         ) : (
           <span
-            className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold"
-            style={{ color: 'var(--brand)', border: '1px solid rgba(249,115,22,0.4)' }}
+            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}
           >
-            planned
+            Achievable
           </span>
         )}
       </button>
+
+      {steps.length > 0 && (
+        <div className="px-3 pb-3">
+          <WorkoutChart steps={steps} ftp={(item as PlannedEvent).icu_ftp ?? DEFAULT_FTP} />
+          {summary && <p className="mt-2 text-[13px] text-muted-foreground">{summary}</p>}
+        </div>
+      )}
     </li>
   );
 }
@@ -416,10 +468,16 @@ function DayList({ date, items, draggingId, onOpen, onEventLongPress }: DayListP
   const label = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long', month: 'short', day: 'numeric',
   });
+  const total = planned.length + completed.length;
 
   return (
     <div className="px-3 pt-3" data-testid="day-list" style={{ paddingBottom: 80 }}>
-      <p className="mb-2 text-[13px] font-semibold text-foreground">{label}</p>
+      <p
+        className="mb-2 text-[11px] font-semibold uppercase tracking-widest"
+        style={{ color: 'var(--brand)' }}
+      >
+        {label}
+      </p>
 
       {planned.length === 0 && completed.length === 0 && (
         <p className="text-sm text-muted-foreground">Nothing scheduled or logged.</p>
@@ -457,6 +515,10 @@ function DayList({ date, items, draggingId, onOpen, onEventLongPress }: DayListP
             ))}
           </ul>
         </>
+      )}
+
+      {total === 1 && (
+        <p className="mt-3 text-[13px] text-muted-foreground">No other activities today</p>
       )}
     </div>
   );
@@ -670,7 +732,7 @@ export default function Calendar() {
                 <polyline points="15 18 9 12 15 6" />
               </svg>
             </button>
-            <span className="min-w-[130px] text-center text-[15px] font-semibold">
+            <span className="min-w-[130px] text-center text-2xl font-bold">
               {MONTH_NAMES[viewMonth]} {viewYear}
             </span>
             <button
@@ -685,16 +747,16 @@ export default function Calendar() {
             </button>
           </div>
         ) : (
-          <span className="text-[15px] font-semibold" style={{ color: 'var(--text)' }}>
+          <span className="text-2xl font-bold" style={{ color: 'var(--text)' }}>
             {MONTH_NAMES[today.getMonth()]} {today.getFullYear()}
           </span>
         )}
 
         <div className="flex items-center gap-2">
           <Tabs value={view} onValueChange={v => switchView(v as 'week' | 'month')}>
-            <TabsList className="h-8">
-              <TabsTrigger value="week" className="h-7 px-3 text-xs">Week</TabsTrigger>
-              <TabsTrigger value="month" className="h-7 px-3 text-xs">Month</TabsTrigger>
+            <TabsList className="h-8 rounded-full">
+              <TabsTrigger value="week" className="h-7 rounded-full px-3 text-xs">Week</TabsTrigger>
+              <TabsTrigger value="month" className="h-7 rounded-full px-3 text-xs">Month</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -758,6 +820,18 @@ export default function Calendar() {
               highlightDate={highlightDate}
             />
           </div>
+          <ul className="flex flex-wrap gap-3 px-3 pb-2" aria-label="Zone legend">
+            {ZONE_LEGEND.map(([color, label]) => (
+              <li key={label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+                {label}
+              </li>
+            ))}
+          </ul>
           <DayList
             date={selectedDate}
             items={selectedItems}

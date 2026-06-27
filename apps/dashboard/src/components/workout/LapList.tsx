@@ -1,16 +1,17 @@
 import type { IntervalLap } from '../../lib/types';
-import { formatDuration, formatWatts } from '../../lib/format';
+import { formatDuration, formatWatts, zoneColor, DEFAULT_FTP } from '../../lib/format';
 import { cn } from '@/lib/utils';
 
 interface LapListProps {
   laps: IntervalLap[];
   selectedLapIdx?: number | null;
   onSelectLap?: (idx: number) => void;
+  ftp?: number;
 }
 
 const GRID = 'grid grid-cols-[32px_1fr_64px_56px_56px]';
 
-export default function LapList({ laps, selectedLapIdx, onSelectLap }: LapListProps) {
+export default function LapList({ laps, selectedLapIdx, onSelectLap, ftp = DEFAULT_FTP }: LapListProps) {
   if (laps.length === 0) return null;
 
   return (
@@ -31,6 +32,8 @@ export default function LapList({ laps, selectedLapIdx, onSelectLap }: LapListPr
         {laps.map((lap, idx) => {
           const isSelected = selectedLapIdx === idx;
           const duration = lap.moving_time ?? lap.elapsed_time;
+          const pct = lap.average_watts ? (lap.average_watts / ftp) * 100 : 0;
+          const dotColor = lap.average_watts ? zoneColor(pct) : 'var(--border)';
           return (
             <button
               key={idx}
@@ -45,11 +48,21 @@ export default function LapList({ laps, selectedLapIdx, onSelectLap }: LapListPr
               aria-pressed={isSelected}
               aria-label={`Lap ${idx + 1}`}
             >
-              <span className="text-[13px] text-muted-foreground">{idx + 1}</span>
+              <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                <span
+                  aria-hidden="true"
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: dotColor }}
+                />
+                {idx + 1}
+              </span>
               <span className="text-[13px] text-foreground">
                 {duration ? formatDuration(duration) : '—'}
               </span>
-              <span className="text-[13px] tabular-nums text-foreground">
+              <span
+                className="font-mono text-[13px] font-semibold tabular-nums"
+                style={{ color: lap.average_watts ? dotColor : 'var(--text-dim)' }}
+              >
                 {lap.average_watts ? formatWatts(lap.average_watts) : '—'}
               </span>
               <span className="text-[13px] tabular-nums text-foreground">

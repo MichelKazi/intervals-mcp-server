@@ -8,6 +8,7 @@ import LapList from '../components/workout/LapList';
 import ActionRow from '../components/workout/ActionRow';
 import AlternativesSheet from '../components/workout/AlternativesSheet';
 import Skeleton from '../components/Skeleton';
+import { Eyebrow } from '@coaching/ui';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import {
@@ -536,9 +537,19 @@ export default function WorkoutDetail() {
 
       {!eventLoading && event && (
         <>
-          {/* Date line */}
-          <div className="px-4 pt-2 text-xs text-muted-foreground">
-            {formatDate(event.start_date_local)}
+          {/* Eyebrow: status · date */}
+          <div className="px-4 pt-3">
+            <Eyebrow color="accent">
+              {(hasLaps || event.category !== 'WORKOUT') ? 'COMPLETED' : 'PLANNED'}
+              {event.start_date_local && (
+                <>
+                  {' · '}
+                  {new Date(event.start_date_local)
+                    .toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    .toUpperCase()}
+                </>
+              )}
+            </Eyebrow>
           </div>
 
           {/* Chart hero — ~40vh, visually dominant */}
@@ -592,6 +603,7 @@ export default function WorkoutDetail() {
           {hasLaps && (
             <LapList
               laps={laps}
+              ftp={ftp}
               selectedLapIdx={selectedLapIdx}
               onSelectLap={(idx) => setSelectedLapIdx(idx === selectedLapIdx ? null : idx)}
             />
