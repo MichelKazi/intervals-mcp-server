@@ -270,7 +270,7 @@ async def save_plan(plan: dict) -> dict | None:
     if not config.directeur_url:
         return None
     try:
-        resp = await _get_client().post("/plans", json=plan)
+        resp = await _get_client().post("/plans/", json=plan)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:

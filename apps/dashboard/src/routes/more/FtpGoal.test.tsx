@@ -145,7 +145,7 @@ describe('Plan Builder', () => {
     await waitFor(() =>
       expect(mockCallMcp).toHaveBeenCalledWith(
         'add_or_update_event',
-        expect.objectContaining({ type: 'Ride', description: expect.stringContaining('[plan:plan-1]') }),
+        expect.objectContaining({ workout_type: 'Ride', start_date: expect.any(String) }),
       ),
     );
   });
