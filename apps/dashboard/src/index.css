@@ -110,9 +110,9 @@
 body {
   background-color: #07080f;
   background-image:
-    radial-gradient(60% 50% at 18% 0%, rgba(139, 92, 246, 0.16), transparent 70%),
-    radial-gradient(50% 45% at 100% 12%, rgba(99, 102, 241, 0.12), transparent 70%),
-    radial-gradient(70% 60% at 50% 100%, rgba(139, 92, 246, 0.07), transparent 75%);
+    radial-gradient(65% 55% at 12% -5%, rgba(139, 92, 246, 0.28), transparent 70%),
+    radial-gradient(55% 50% at 105% 8%, rgba(99, 102, 241, 0.22), transparent 72%),
+    radial-gradient(80% 65% at 50% 108%, rgba(139, 92, 246, 0.13), transparent 78%);
   background-attachment: fixed;
 }
 

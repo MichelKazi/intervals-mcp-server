@@ -427,7 +427,7 @@ function DayRow({ item, done, date, draggingId, onOpen, onEventLongPress }: DayR
         {done ? (
           <span
             className="flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-            style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}
+            style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}
           >
             <Check className="h-3 w-3" strokeWidth={3} />
             Achievable
@@ -435,7 +435,7 @@ function DayRow({ item, done, date, draggingId, onOpen, onEventLongPress }: DayR
         ) : (
           <span
             className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-            style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}
+            style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}
           >
             Achievable
           </span>
@@ -754,9 +754,9 @@ export default function Calendar() {
 
         <div className="flex items-center gap-2">
           <Tabs value={view} onValueChange={v => switchView(v as 'week' | 'month')}>
-            <TabsList className="h-8 rounded-full">
-              <TabsTrigger value="week" className="h-7 rounded-full px-3 text-xs text-slate-300">Week</TabsTrigger>
-              <TabsTrigger value="month" className="h-7 rounded-full px-3 text-xs text-slate-300">Month</TabsTrigger>
+            <TabsList className="h-11 rounded-full">
+              <TabsTrigger value="week" className="h-9 min-h-[36px] rounded-full px-4 text-xs text-slate-300">Week</TabsTrigger>
+              <TabsTrigger value="month" className="h-9 min-h-[36px] rounded-full px-4 text-xs text-slate-300">Month</TabsTrigger>
             </TabsList>
             {/* Empty panels so radix's aria-controls points at real elements
                 (validates ARIA); the views render below, not inside these. */}
@@ -767,7 +767,7 @@ export default function Calendar() {
           <button
             onClick={() => navigate('/library')}
             aria-label="Add workout"
-            className="flex h-9 w-9 items-center justify-center rounded-full"
+            className="flex h-11 w-11 items-center justify-center rounded-full"
             style={{ background: 'var(--brand)', color: 'var(--bg)', border: 'none', cursor: 'pointer', boxShadow: 'var(--shadow-2)' }}
           >
             <Plus className="h-5 w-5" strokeWidth={2.5} />

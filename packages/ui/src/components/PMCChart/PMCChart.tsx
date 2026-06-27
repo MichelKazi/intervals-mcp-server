@@ -49,7 +49,7 @@ function zeroOffset(data: PMCDataPoint[]): number {
   return max / (max - min);
 }
 
-const AXIS_COLOR = tokens.color.text.muted;
+const AXIS_COLOR = tokens.color.text.secondary;
 
 export function PMCChart({
   data,
@@ -111,8 +111,8 @@ export function PMCChart({
               </linearGradient>
             </defs>
             <CartesianGrid stroke={tokens.color.border.subtle} vertical={false} />
-            <XAxis dataKey="date" tick={{ fill: AXIS_COLOR, fontSize: 10 }} stroke={AXIS_COLOR} />
-            <YAxis tick={{ fill: AXIS_COLOR, fontSize: 10 }} stroke={AXIS_COLOR} width={28} />
+            <XAxis dataKey="date" tick={{ fill: AXIS_COLOR, fontSize: 11 }} stroke={AXIS_COLOR} />
+            <YAxis tick={{ fill: AXIS_COLOR, fontSize: 11 }} stroke={AXIS_COLOR} width={28} />
             <Tooltip
               contentStyle={{
                 background: tokens.color.bg.raised,
