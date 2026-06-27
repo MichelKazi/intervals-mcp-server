@@ -75,6 +75,9 @@ def create_app() -> FastAPI:
     from intervals_mcp_server.web.routes import ftp_goal as ftp_goal_routes
     app.include_router(ftp_goal_routes.router)
 
+    from intervals_mcp_server.web.routes import plans as plans_routes
+    app.include_router(plans_routes.router)
+
     from intervals_mcp_server.web.routes import analytics as analytics_routes
     app.include_router(analytics_routes.router)
 

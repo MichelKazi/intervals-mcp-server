@@ -1,8 +1,9 @@
 import type {
   Dashboard, Activity, ActivityIntervals, Stream, PlannedEvent,
-  LibraryWorkout, WellnessDay, Compliance, GoalAssessment
+  LibraryWorkout, WellnessDay, Compliance, GoalAssessment, TrainingPlan
 } from './types';
 import type { PreComputedGoalContext } from '@/lib/ftp/compute';
+import type { PlanSkeleton } from '@/lib/ftp/plan';
 
 // Default to same-origin: the PWA is served by the same FastAPI app that hosts
 // /api/*, so relative requests always reach the backend that served the page.
@@ -129,6 +130,47 @@ export function validateFtpGoal(computed: PreComputedGoalContext): Promise<GoalA
     method: 'POST',
     body: JSON.stringify(computed),
   });
+}
+
+// ── Training plans (directeur-backed, persisted in Supabase) ──
+
+export interface SuggestPlanNameBody {
+  computed: PreComputedGoalContext;
+  hard_weekdays: number[];
+  weeks: number;
+}
+
+/** Ask directeur for a short motivating plan name. Falls back server-side. */
+export function suggestPlanName(body: SuggestPlanNameBody): Promise<{ name: string }> {
+  return apiFetch('/api/coaching/ftp-goal/plan-name', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export interface SavePlanBody {
+  athlete_id?: string;
+  name: string;
+  goal: PreComputedGoalContext;
+  hard_weekdays: number[];
+  weeks: number;
+  start_date: string;
+  skeleton: PlanSkeleton;
+}
+
+/** Persist a plan. Returns the saved row with an `id` (or an unpersisted echo). */
+export function savePlan(body: SavePlanBody): Promise<TrainingPlan & { persisted?: boolean }> {
+  return apiFetch('/api/plans', { method: 'POST', body: JSON.stringify(body) });
+}
+
+/** Latest active plan for the configured athlete, or `{ plan: null }`. */
+export function getActivePlan(): Promise<{ plan: TrainingPlan | null }> {
+  return apiFetch('/api/plans/active');
+}
+
+/** Archive a plan by id. */
+export function archivePlan(id: string): Promise<{ archived: boolean }> {
+  return apiFetch(`/api/plans/${id}/archive`, { method: 'POST' });
 }
 
 export function callMcp(tool: string, args?: Record<string, unknown>): Promise<unknown> {

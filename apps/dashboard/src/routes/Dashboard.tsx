@@ -8,9 +8,12 @@ import type { Zone } from '../components/viz';
 import { WorkoutCard } from '@coaching/ui';
 import type { PowerInterval } from '@coaching/ui';
 import { Button } from '../components/ui/button';
-import { getDashboard, getWellness, getActivities, getEvents } from '../lib/api';
+import { getDashboard, getWellness, getActivities, getEvents, getActivePlan } from '../lib/api';
 import { formatDate, formatDuration, DEFAULT_FTP } from '../lib/format';
-import type { PlannedEvent, Activity, WellnessDay } from '../lib/types';
+import { reconcilePlan } from '../lib/ftp/reconcile';
+import type { PlanSkeleton } from '../lib/ftp/plan';
+import type { PreComputedGoalContext } from '../lib/ftp/compute';
+import type { PlannedEvent, Activity, WellnessDay, TrainingPlan } from '../lib/types';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -55,6 +58,62 @@ function activityZone(a: Activity): Zone {
   const watts = (a.icu_weighted_avg_watts as number) ?? (a.icu_average_watts as number);
   if (watts && ftp) return pctToZone((watts / ftp) * 100);
   return 1;
+}
+
+// ─── A3) Active plan card ─────────────────────────────────────────────────────
+
+function ActivePlanCard({
+  plan,
+  readiness,
+  tsb,
+}: {
+  plan: TrainingPlan;
+  readiness: 'green' | 'yellow' | 'red' | null;
+  tsb: number | null;
+}) {
+  const navigate = useNavigate();
+  const skeleton = plan.skeleton as PlanSkeleton;
+  const goal = plan.goal as Partial<PreComputedGoalContext> | undefined;
+  const targetFtp = goal?.input?.targetFtp;
+
+  const weeksRemaining = (() => {
+    const today = Date.now();
+    return skeleton.weeks.filter(
+      (w) => new Date(w.days[0].date + 'T00:00:00').getTime() + 7 * 86_400_000 >= today,
+    ).length;
+  })();
+
+  const topAdjustment = reconcilePlan({ skeleton, completedDates: [], readiness, tsb })[0];
+
+  return (
+    <section className="m-4">
+      <button
+        type="button"
+        data-testid="home-active-plan"
+        aria-label={`Active plan: ${plan.name}. Tap to open the plan builder.`}
+        onClick={() => navigate('/more/ftp-goal')}
+        className="aura-glass aura-edge-light w-full rounded-2xl p-4 text-left transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-accent">Active Plan</span>
+          {topAdjustment && (
+            <span className="text-[11px] font-semibold text-slate-300">{topAdjustment.title}</span>
+          )}
+        </div>
+        <div className="mt-1.5 text-[16px] font-semibold text-foreground">{plan.name}</div>
+        <div className="mt-1 flex items-center gap-4 font-mono text-[12px] text-slate-400">
+          {typeof targetFtp === 'number' && (
+            <span>
+              <span className="text-slate-500">Target</span> {targetFtp}W
+            </span>
+          )}
+          <span>
+            <span className="text-slate-500">Weeks left</span> {weeksRemaining}
+          </span>
+        </div>
+      </button>
+    </section>
+  );
 }
 
 // ─── B) Load-match strip ─────────────────────────────────────────────────────
@@ -375,6 +434,12 @@ export default function Dashboard() {
     queryFn: () => getEvents(week.oldest, week.newest),
   });
 
+  const { data: activePlanData } = useQuery({
+    queryKey: ['active-plan'],
+    queryFn: getActivePlan,
+  });
+  const activePlan = activePlanData?.plan ?? null;
+
   const fitnessDay = latestFitnessDay(wellness);
   const tsb = fitnessDay && fitnessDay.ctl != null && fitnessDay.atl != null
     ? fitnessDay.ctl - fitnessDay.atl
@@ -409,6 +474,21 @@ export default function Dashboard() {
           {/* A) Readiness */}
           {data.readiness && (
             <ReadinessCard readiness={data.readiness} wellness={wellnessDay} tsb={tsb} />
+          )}
+
+          {/* A3) Active plan */}
+          {activePlan && (
+            <ActivePlanCard
+              plan={activePlan}
+              readiness={
+                data.readiness?.verdict === 'green' ||
+                data.readiness?.verdict === 'yellow' ||
+                data.readiness?.verdict === 'red'
+                  ? (data.readiness.verdict as 'green' | 'yellow' | 'red')
+                  : null
+              }
+              tsb={tsb}
+            />
           )}
 
           {/* A2) 7-day readiness trend */}

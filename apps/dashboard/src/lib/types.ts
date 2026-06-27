@@ -125,6 +125,23 @@ export interface GoalAssessment {
   confidence_pct: number;
 }
 
+/** A persisted training plan (directeur-backed). */
+export interface TrainingPlan {
+  id: string;
+  athlete_id?: string;
+  name: string;
+  /** The PreComputedGoalContext at build time. */
+  goal: unknown;
+  hard_weekdays: number[];
+  weeks: number;
+  start_date: string;
+  /** The PlanSkeleton. */
+  skeleton: unknown;
+  status: string; // 'active' | 'archived'
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface LibraryWorkout {
   tr_workout_id?: string;
   name: string;
