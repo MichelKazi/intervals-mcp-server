@@ -394,10 +394,9 @@ export default function FtpGoal() {
       for (let i = 0; i < days.length; i++) {
         const day = days[i];
         await callMcp('add_or_update_event', {
+          workout_type: 'Ride',
           name: workoutName(day.type, primary),
-          type: 'Ride',
           start_date: day.date,
-          description: `[plan:${id}] ${day.type}`,
         });
         setBuildProgress({ done: i + 1, total: days.length });
       }
