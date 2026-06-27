@@ -67,7 +67,7 @@ const SECTIONS: Section[] = [
   {
     title: 'Training',
     cards: [
-      { slug: 'coaching-chat', title: 'Coaching Chat', description: 'Ask your AI coach anything', icon: MessageSquare, iconColor: 'text-accent' },
+      { slug: 'coaching-chat', title: 'Command Bar', description: 'Tell your coach what to do', icon: MessageSquare, iconColor: 'text-accent' },
       { slug: 'dose-log', title: 'Dose Log', description: 'Manual training load entries', icon: ClipboardList, iconColor: 'text-zone-2' },
     ],
   },
