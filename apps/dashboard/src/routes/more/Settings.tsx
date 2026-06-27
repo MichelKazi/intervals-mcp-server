@@ -120,8 +120,8 @@ export default function Settings() {
 
   return (
     <AppShell title="Settings" showBack>
-      <div className="space-y-4 px-4 pb-20 pt-4">
-        <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+      <div className="screen">
+        <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
           <h2 className="mb-2 text-[11px] font-medium uppercase tracking-widest text-slate-500">Athlete Profile</h2>
           {athleteQ.isLoading ? (
             <SkeletonCard rows={3} className="border-0 bg-transparent p-0" />
@@ -144,7 +144,7 @@ export default function Settings() {
           <p className="mt-2 text-[11px] text-slate-500">Read-only — edit on intervals.icu.</p>
         </section>
 
-        <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+        <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
           <h2 className="mb-2 text-[11px] font-medium uppercase tracking-widest text-slate-500">Server Status</h2>
           <div className="flex items-center gap-2">
             <span
@@ -158,7 +158,7 @@ export default function Settings() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+        <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
           <h2 className="mb-1 text-[11px] font-medium uppercase tracking-widest text-slate-500">Display</h2>
           <Row label="Units">
             <Segmented value={prefs.units} onChange={(v) => set('units', v)} options={[{ v: 'metric', label: 'Metric' }, { v: 'imperial', label: 'Imperial' }]} />
@@ -168,7 +168,7 @@ export default function Settings() {
           </Row>
         </section>
 
-        <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+        <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
           <h2 className="mb-1 text-[11px] font-medium uppercase tracking-widest text-slate-500">Reminders</h2>
           <Row label="Tirzepatide reminder">
             <Toggle on={prefs.tirzepatideReminder} onChange={(v) => set('tirzepatideReminder', v)} label="Toggle tirzepatide reminder" />

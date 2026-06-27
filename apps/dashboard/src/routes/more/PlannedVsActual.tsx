@@ -155,7 +155,7 @@ export default function PlannedVsActual() {
 
     return (
       <div className="space-y-4">
-        <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+        <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
           <h2 className="mb-3 text-[11px] font-medium uppercase tracking-widest text-slate-500">
             Planned vs Actual TSS
           </h2>
@@ -184,7 +184,7 @@ export default function PlannedVsActual() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+        <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
           <h2 className="mb-3 text-[11px] font-medium uppercase tracking-widest text-slate-500">
             Planned Workouts
           </h2>
@@ -212,7 +212,7 @@ export default function PlannedVsActual() {
 
   return (
     <AppShell title="Planned vs Actual" showBack>
-      <div className="px-4 pb-20 pt-4">{body}</div>
+      <div className="screen">{body}</div>
     </AppShell>
   );
 }

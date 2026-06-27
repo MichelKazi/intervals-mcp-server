@@ -94,7 +94,7 @@ export default function DoseLog() {
 
     return (
       <div className="space-y-4">
-        <section className="flex items-center gap-4 rounded-xl border border-border-default bg-bg-surface p-4">
+        <section className="flex items-center gap-4 rounded-2xl border border-border-default bg-bg-surface p-4">
           <div className="flex flex-col items-center">
             <span className="font-mono text-3xl font-semibold text-accent">{untilThu}</span>
             <span className="text-[10px] uppercase tracking-widest text-slate-500">days</span>
@@ -106,7 +106,7 @@ export default function DoseLog() {
         </section>
 
         {hrvSeries.length >= 2 && (
-          <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+          <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
             <h2 className="mb-3 text-[11px] font-medium uppercase tracking-widest text-slate-500">
               HRV Trend
             </h2>
@@ -118,7 +118,7 @@ export default function DoseLog() {
           </section>
         )}
 
-        <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+        <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
           <h2 className="mb-3 text-[11px] font-medium uppercase tracking-widest text-slate-500">
             Dose Timeline
           </h2>
@@ -145,7 +145,7 @@ export default function DoseLog() {
 
   return (
     <AppShell title="Medical Log" showBack>
-      <div className="px-4 pb-20 pt-4">
+      <div className="screen">
         <p className="mb-3 text-[11px] leading-snug text-slate-500">
           Medical Log — compound and dose records parsed from wellness notes. Not coaching guidance.
         </p>

@@ -27,7 +27,7 @@ function acwrBand(acwr: number | null) {
 
 function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="flex-1 rounded-xl border border-border-default bg-bg-surface px-3 py-2.5">
+    <div className="flex-1 rounded-2xl border border-border-default bg-bg-surface px-3 py-2.5">
       <p className="text-[10px] uppercase tracking-widest text-slate-500">{label}</p>
       <p className="mt-0.5 font-mono text-lg text-slate-100">{value}</p>
       {hint && <p className="text-[11px] text-slate-400">{hint}</p>}
@@ -51,7 +51,7 @@ export default function FatigueRisk() {
 
   return (
     <AppShell title="Fatigue Risk" showBack>
-      <div className="flex flex-col gap-4 px-4 pb-20 pt-4">
+      <div className="screen">
         {isLoading && <SkeletonCard rows={6} className="rounded-2xl" />}
 
         {isError && (

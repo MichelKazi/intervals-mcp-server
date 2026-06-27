@@ -216,7 +216,7 @@ function WellnessRow() {
 export default function More() {
   return (
     <AppShell title="More">
-      <div className="space-y-6 px-4 pb-20 pt-4">
+      <div className="space-y-6 screen">
         <div>
           <h1 className="m-0 text-2xl font-bold text-slate-100">More</h1>
           <p className="mt-0.5 text-[13px] text-slate-500">Tools, analytics &amp; tracking</p>
