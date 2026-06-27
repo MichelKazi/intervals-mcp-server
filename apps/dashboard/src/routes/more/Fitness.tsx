@@ -50,7 +50,7 @@ export default function Fitness() {
 
   return (
     <AppShell title="Fitness" showBack>
-      <div className="flex flex-col gap-4 px-4 pb-20 pt-4">
+      <div className="screen">
         <Tabs value={period.key} onValueChange={(v) => setPeriod(PERIODS.find(p => p.key === v) ?? PERIODS[1])}>
           <TabsList className="grid w-full grid-cols-4">
             {PERIODS.map(p => <TabsTrigger key={p.key} value={p.key}>{p.label}</TabsTrigger>)}

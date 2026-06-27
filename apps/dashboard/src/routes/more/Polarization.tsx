@@ -104,7 +104,7 @@ export default function Polarization() {
 
     return (
       <div className="space-y-4">
-        <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+        <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
           <h2 className="mb-3 text-[11px] font-medium uppercase tracking-widest text-slate-500">
             Rolling 4-Week Intensity
           </h2>
@@ -142,7 +142,7 @@ export default function Polarization() {
             </div>
           </section>
         ) : (
-          <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+          <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
             <div className="text-[13px] font-semibold text-status-green">Well polarized</div>
             <p className="mt-1 text-[12px] leading-snug text-slate-400">
               Zone 2 at <span className="font-mono">{z2}%</span>, within the &lt;5–10% polarized window.
@@ -151,7 +151,7 @@ export default function Polarization() {
         )}
 
         {trend && (
-          <section className="flex items-center gap-3 rounded-xl border border-border-default bg-bg-surface p-4">
+          <section className="flex items-center gap-3 rounded-2xl border border-border-default bg-bg-surface p-4">
             {trend.dir === 'up'
               ? <TrendingUp size={18} className="shrink-0 text-status-red" aria-hidden="true" />
               : <TrendingDown size={18} className="shrink-0 text-status-green" aria-hidden="true" />}
@@ -164,7 +164,7 @@ export default function Polarization() {
 
   return (
     <AppShell title="Polarization" showBack>
-      <div className="px-4 pb-20 pt-4">{body}</div>
+      <div className="screen">{body}</div>
     </AppShell>
   );
 }

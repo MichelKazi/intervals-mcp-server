@@ -3,14 +3,66 @@
 @tailwind utilities;
 
 /*
+ * ── Alignment primitives (the design-system grid contract) ──────────────────
+ * Horizontal AND vertical alignment lives here, not in each screen. Screens
+ * compose these classes instead of re-deriving padding/gap/radius, so every
+ * card shares one left/right gutter, one vertical rhythm, one radius, and every
+ * icon+label row is centered on a shared baseline.
+ *
+ *   .screen      page content column: 16px gutter + 16px vertical rhythm + nav-safe bottom pad
+ *   .screen-tight same gutter, 12px rhythm for dense list screens
+ *   .card        canonical surface: bg-surface + hairline border + 16px radius + 16px pad
+ *   .card-glass  frosted variant (composes .aura-glass) at the same radius/pad
+ *   .card-pad-sm card with 12px pad for compact metric tiles
+ *   .row         horizontal flex, vertically centered, 12px gap — icon+text baseline
+ *   .row-between .row with space-between for label/value rows
+ *   .stat-grid   equal-width responsive metric columns on the 8pt grid
+ */
+@layer components {
+  .screen {
+    @apply flex flex-col gap-4 px-4 pt-4;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+  .screen-tight {
+    @apply flex flex-col gap-3 px-4 pt-4;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+  .card {
+    @apply rounded-2xl border border-border-default bg-bg-surface p-4;
+  }
+  .card-glass {
+    @apply aura-glass rounded-2xl p-4;
+  }
+  .card-pad-sm {
+    @apply rounded-2xl border border-border-default bg-bg-surface p-3;
+  }
+  .row {
+    @apply flex items-center gap-3;
+  }
+  .row-between {
+    @apply flex items-center justify-between gap-3;
+  }
+  .stat-grid {
+    @apply grid grid-cols-2 gap-3;
+  }
+}
+
+/*
  * ── Design Token System ────────────────────────────────────────────────────
  *
  * SPACING: 8pt grid — use Tailwind numeric scale exclusively.
  *   tight gap:    gap-2  (8px)
  *   section gap:  gap-4  (16px)
  *   screen pad:   p-4    (16px)
- *   card pad:     p-5    (20px)
+ *   card pad:     p-4    (16px)
  *   list-row:     py-3   (12px top/bottom)
+ *
+ * ALIGNMENT PRIMITIVES (use these, don't re-derive): compose .screen /
+ *   .screen-tight for the page column (owns the 16px gutter + vertical rhythm
+ *   + nav-safe bottom pad), .card / .card-glass / .card-pad-sm for surfaces
+ *   (one radius, one pad), .row / .row-between for centered icon+text rows,
+ *   .stat-grid for 2-up metric tiles. Defined in @layer components at the top
+ *   of this file. e2e/grid-alignment.spec.ts asserts cards stay on the gutter.
  *
  * TYPE SCALE:
  *   Screen / hero title:  text-2xl font-bold

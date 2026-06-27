@@ -116,16 +116,16 @@ export default function FtpGoal() {
 
   return (
     <AppShell title="FTP Goal" showBack>
-      <div className="space-y-4 px-4 pb-20 pt-4">
+      <div className="screen">
         {/* Current state */}
-        <section className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-border-default bg-bg-surface p-4">
+        <section className="stat-grid">
+          <div className="card">
             <div className="text-[11px] uppercase tracking-widest text-slate-500">Current FTP</div>
             <div className="mt-1 font-mono text-2xl font-semibold text-slate-100">
               {loadingProfile ? '—' : `${currentFtp}W`}
             </div>
           </div>
-          <div className="rounded-xl border border-border-default bg-bg-surface p-4">
+          <div className="card">
             <div className="text-[11px] uppercase tracking-widest text-slate-500">Current CTL</div>
             <div className="mt-1 font-mono text-2xl font-semibold text-slate-100">
               {loadingProfile ? '—' : Math.round(currentCtl)}
@@ -134,7 +134,7 @@ export default function FtpGoal() {
         </section>
 
         {/* Inputs */}
-        <section className="rounded-xl border border-border-default bg-bg-surface p-4">
+        <section className="card">
           <Eyebrow>Set Goal</Eyebrow>
           <div className="mt-3 grid grid-cols-2 gap-3">
             <label className="flex min-w-0 flex-col gap-1.5">
@@ -165,9 +165,9 @@ export default function FtpGoal() {
         <section
           data-testid="validation-band"
           data-achievability={computed.isPhysicallyPossible ? computed.achievability : 'impossible'}
-          className={`rounded-xl border p-4 ${band.border} ${band.bg}`}
+          className={`rounded-2xl border p-4 ${band.border} ${band.bg}`}
         >
-          <div className="flex items-center justify-between">
+          <div className="row-between">
             <span className={`text-[13px] font-semibold ${band.text}`}>{band.label}</span>
             {computed.isPhysicallyPossible && (
               <span className="font-mono text-[12px] text-slate-300">
@@ -216,7 +216,7 @@ export default function FtpGoal() {
         {/* Schedule action — only when the goal is valid. */}
         {computed.isPhysicallyPossible &&
           (scheduled ? (
-            <section className="flex items-center gap-3 rounded-xl border border-status-green/40 bg-status-green/10 p-4">
+            <section className="row rounded-2xl border border-status-green/40 bg-status-green/10 p-4">
               <CheckCircle2 size={18} className="shrink-0 text-status-green" aria-hidden="true" />
               <p className="text-[13px] text-status-green">
                 FTP test scheduled for <span className="font-mono">{scheduled}</span>.
@@ -226,7 +226,7 @@ export default function FtpGoal() {
             <button
               onClick={schedule}
               disabled={scheduling}
-              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-accent text-[14px] font-semibold text-bg-base disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl bg-accent text-[14px] font-semibold text-bg-base disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <CalendarPlus size={18} strokeWidth={2.5} aria-hidden="true" />
               {scheduling ? 'Scheduling…' : 'Schedule FTP test'}

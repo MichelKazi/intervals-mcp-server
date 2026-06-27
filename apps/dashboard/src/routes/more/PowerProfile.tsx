@@ -44,7 +44,7 @@ export default function PowerProfile() {
 
   return (
     <AppShell title="Power Profile" showBack>
-      <div className="flex flex-col gap-4 px-4 pb-20 pt-4">
+      <div className="screen">
         {isLoading && <SkeletonCard rows={5} className="h-72 rounded-2xl" />}
 
         {isError && (
