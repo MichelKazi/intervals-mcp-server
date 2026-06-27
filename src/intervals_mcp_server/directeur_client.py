@@ -240,6 +240,78 @@ async def generate_ftp_plan(assessment: dict, availability: dict) -> dict | None
         return None
 
 
+async def suggest_plan_name(computed: dict, hard_weekdays: list, weeks: int) -> dict | None:
+    """Ask directeur to suggest a short motivating plan name.
+
+    Returns directeur's {name} dict or None on missing directeur_url or any failure.
+    """
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().post(
+            "/ftp-goal/plan/name",
+            json={"computed": computed, "hard_weekdays": hard_weekdays, "weeks": weeks},
+            timeout=60.0,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur plan name suggestion failed: %s", e)
+        return None
+
+
+async def save_plan(plan: dict) -> dict | None:
+    """Persist a training plan via directeur.
+
+    Returns the persisted row dict or None on missing directeur_url or any failure.
+    """
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().post("/plans", json=plan)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur save plan failed: %s", e)
+        return None
+
+
+async def get_active_plan(athlete_id: str) -> dict | None:
+    """Fetch the latest active training plan for an athlete via directeur.
+
+    Returns directeur's response dict or None on missing directeur_url or any failure.
+    """
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().get("/plans/active", params={"athlete_id": athlete_id})
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur active plan fetch failed: %s", e)
+        return None
+
+
+async def archive_plan(plan_id: str) -> dict | None:
+    """Archive a training plan via directeur.
+
+    Returns directeur's response dict or None on missing directeur_url or any failure.
+    """
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().post(f"/plans/{plan_id}/archive")
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur archive plan %s failed: %s", plan_id, e)
+        return None
+
+
 async def get_coaching_snapshot(zone: str = "threshold") -> dict:
     """Fetch readiness + patterns + levels concurrently, then progression for key zone."""
     config = get_config()

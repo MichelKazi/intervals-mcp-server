@@ -12,8 +12,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Intervals Coach',
-        short_name: 'Coach',
+        name: 'Directeur',
+        short_name: 'Directeur',
         display: 'standalone',
         background_color: '#0a0e14',
         theme_color: '#0a0e14',

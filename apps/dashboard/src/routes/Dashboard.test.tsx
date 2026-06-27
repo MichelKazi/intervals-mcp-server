@@ -12,13 +12,15 @@ vi.mock('../lib/api', () => ({
   getWellness: vi.fn(),
   getActivities: vi.fn(),
   getEvents: vi.fn(),
+  getActivePlan: vi.fn(),
 }));
 
-import { getDashboard, getWellness, getActivities, getEvents } from '../lib/api';
+import { getDashboard, getWellness, getActivities, getEvents, getActivePlan } from '../lib/api';
 const mockGetDashboard = vi.mocked(getDashboard);
 const mockGetWellness = vi.mocked(getWellness);
 const mockGetActivities = vi.mocked(getActivities);
 const mockGetEvents = vi.mocked(getEvents);
+const mockGetActivePlan = vi.mocked(getActivePlan);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -108,6 +110,7 @@ beforeEach(() => {
   mockGetWellness.mockResolvedValue(SAMPLE_WELLNESS);
   mockGetActivities.mockResolvedValue(SAMPLE_ACTIVITIES);
   mockGetEvents.mockResolvedValue(SAMPLE_PLANNED as never);
+  mockGetActivePlan.mockResolvedValue({ plan: null });
 });
 
 describe('Dashboard', () => {
