@@ -4,6 +4,9 @@ import safeArea from 'tailwindcss-safe-area';
 
 const config: Config = {
   darkMode: ['class'],
+  // hover: utilities only apply under @media (hover: hover) — prevents iOS Safari
+  // keeping :hover backgrounds stuck after a tap (the white-row contrast bug).
+  future: { hoverOnlyWhenSupported: true },
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   // Keep the existing deliberate reset in index.css; do NOT let Tailwind's
   // preflight overwrite body/button/input and create specificity conflicts.

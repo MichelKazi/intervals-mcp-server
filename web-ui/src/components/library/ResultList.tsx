@@ -95,7 +95,7 @@ export default function ResultList({ workouts, isLoading, onSelect }: ResultList
             key={w.tr_workout_id ?? idx}
             type="button"
             onClick={() => onSelect(w)}
-            className="flex min-h-[44px] w-full cursor-pointer flex-col gap-1 overflow-hidden rounded-md border border-border bg-card pl-0 pr-3 pt-3 pb-3 text-left text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-h-[44px] w-full cursor-pointer flex-col gap-1 overflow-hidden rounded-md border border-border bg-card pl-0 pr-3 pt-3 pb-3 text-left text-foreground transition-colors hover:bg-muted active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             style={{ borderLeftColor: accentColor, borderLeftWidth: '3px' }}
           >
             {/* Row 1: title + duration */}

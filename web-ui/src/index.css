@@ -110,6 +110,17 @@
 *::before,
 *::after {
   box-sizing: border-box;
+  /* Kill the iOS Safari tap flash; tap feedback comes from active: classes. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Interactive elements get no native chrome — backgrounds are token-driven so
+   tapped rows never flash to the white default button surface on iOS. */
+button,
+[role='button'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: transparent;
 }
 
 html,

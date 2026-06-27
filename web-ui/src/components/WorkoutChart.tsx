@@ -76,6 +76,105 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
     return <div style={{ color: 'var(--text-dim)', padding: 'var(--sp-4)' }}>No workout data</div>;
   }
 
+  // Steady workout: effectively one zone — ≤2 distinct 5% buckets AND a narrow
+  // intensity spread (≤15% FTP), so warmup+work interval sets stay on the bar
+  // chart. A flat full-bleed slab reads as broken, so render an intentional
+  // single-bar summary with an FTP hairline + label instead.
+  const minPct = Math.min(...bars.map((b) => b.pctFtp));
+  const maxBarPct = Math.max(...bars.map((b) => b.pctFtp));
+  const distinct = new Set(bars.map((b) => Math.round(b.pctFtp / 5))).size;
+  const isSteady = distinct <= 2 && maxBarPct - minPct <= 15;
+  if (isSteady) {
+    const totalSecs = bars.reduce((s, b) => s + b.durationSecs, 0);
+    const dominant = [...bars].sort((a, b) => b.durationSecs - a.durationSecs)[0];
+    const pct = dominant.pctFtp;
+    const barH = Math.max(MIN_BAR_HEIGHT, Math.min(0.85, pct / maxPct) * (CHART_HEIGHT - 16));
+    const ftpY = (CHART_HEIGHT - 16) * (1 - Math.min(1, 100 / maxPct));
+    return (
+      <div style={{ width: '100%' }} data-testid="workout-steady">
+        <div
+          role="group"
+          aria-label={`Steady workout: ${zoneName(pct)}, ${pct.toFixed(0)}% FTP, ${formatDuration(totalSecs)}`}
+          style={{
+            position: 'relative',
+            height: CHART_HEIGHT,
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius)',
+            padding: 'var(--sp-2)',
+            display: 'flex',
+            alignItems: 'flex-end',
+          }}
+        >
+          {/* FTP reference hairline */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: 'var(--sp-2)',
+              right: 'var(--sp-2)',
+              top: ftpY + 8,
+              borderTop: '1px dashed var(--border)',
+              fontSize: 0,
+            }}
+          />
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              right: 'var(--sp-3)',
+              top: ftpY + 12,
+              fontSize: 10,
+              letterSpacing: '0.05em',
+              color: 'var(--text-dim)',
+              textTransform: 'uppercase',
+            }}
+          >
+            FTP
+          </span>
+          <div
+            style={{
+              width: '100%',
+              height: barH,
+              background: `linear-gradient(180deg, ${zoneColor(pct)} 0%, ${zoneColor(pct)}cc 100%)`,
+              borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
+            }}
+          />
+        </div>
+        <div
+          data-testid="workout-readout"
+          style={{
+            marginTop: 'var(--sp-2)',
+            padding: 'var(--sp-3)',
+            background: 'var(--surface-2)',
+            borderRadius: 'var(--radius)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--sp-2)',
+            fontSize: 13,
+            color: 'var(--text)',
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{ width: 10, height: 10, borderRadius: 2, background: zoneColor(pct), flexShrink: 0 }}
+          />
+          <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{zoneName(pct)}</span>
+          <span style={{ color: 'var(--text-dim)' }}>·</span>
+          <span className="font-mono">{pct.toFixed(0)}% FTP</span>
+          {dominant.watts ? (
+            <>
+              <span style={{ color: 'var(--text-dim)' }}>·</span>
+              <span className="font-mono">{formatWatts(dominant.watts)}</span>
+            </>
+          ) : null}
+          <span style={{ marginLeft: 'auto', color: 'var(--text-dim)' }} className="font-mono">
+            {formatDuration(totalSecs)}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ width: '100%' }}>
       <div
