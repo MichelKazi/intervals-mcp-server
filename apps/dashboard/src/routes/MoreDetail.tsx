@@ -22,6 +22,7 @@ import WorkoutBuilder from './more/WorkoutBuilder';
 import CoachingChat from './more/CoachingChat';
 import DoseLog from './more/DoseLog';
 import FieldTest from './more/FieldTest';
+import FtpGoal from './more/FtpGoal';
 import Settings from './more/Settings';
 
 // slug → screen component.
@@ -46,6 +47,7 @@ const SCREENS: Record<string, ComponentType> = {
   'coaching-chat': CoachingChat,
   'dose-log': DoseLog,
   'field-test': FieldTest,
+  'ftp-goal': FtpGoal,
   'settings': Settings,
 };
 

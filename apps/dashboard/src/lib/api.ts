@@ -1,7 +1,8 @@
 import type {
   Dashboard, Activity, ActivityIntervals, Stream, PlannedEvent,
-  LibraryWorkout, WellnessDay, Compliance
+  LibraryWorkout, WellnessDay, Compliance, GoalAssessment
 } from './types';
+import type { PreComputedGoalContext } from '@/lib/ftp/compute';
 
 // Default to same-origin: the PWA is served by the same FastAPI app that hosts
 // /api/*, so relative requests always reach the backend that served the page.
@@ -116,6 +117,18 @@ export function getCoachingState(zone?: string): Promise<unknown> {
 
 export function getWellness(oldest: string, newest: string): Promise<WellnessDay[]> {
   return apiFetch(`/api/wellness?oldest=${oldest}&newest=${newest}`);
+}
+
+/**
+ * Send a pre-computed FTP goal to the backend for LLM enrichment. The body is
+ * the PreComputedGoalContext verbatim; the backend forwards it to directeur and
+ * merges a coaching note, risk factors, and a clamped confidence.
+ */
+export function validateFtpGoal(computed: PreComputedGoalContext): Promise<GoalAssessment> {
+  return apiFetch('/api/coaching/ftp-goal', {
+    method: 'POST',
+    body: JSON.stringify(computed),
+  });
 }
 
 export function callMcp(tool: string, args?: Record<string, unknown>): Promise<unknown> {
