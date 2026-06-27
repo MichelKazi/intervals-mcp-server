@@ -78,6 +78,9 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
   );
 }
 
+const selectCls =
+  'flex h-10 w-full rounded-md border border-input bg-muted px-3 text-[13px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
 function Segmented<T extends string>({ value, options, onChange, ariaLabel }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void; ariaLabel?: string }) {
   return (
     <div role="group" aria-label={ariaLabel} className="flex gap-1 rounded-lg bg-bg-base p-1">
@@ -281,16 +284,24 @@ export default function Settings() {
               {ctx?.use_lifestyle && (
                 <>
                   <Row label="Job type">
-                    <Segmented
-                      ariaLabel="Job type"
-                      value={(ctx?.job_type ?? 'sedentary') as string}
-                      onChange={(v) => contextMut.mutate({ job_type: v })}
-                      options={[
-                        { v: 'sedentary', label: 'Sedentary' },
-                        { v: 'active', label: 'Active' },
-                        { v: 'mixed', label: 'Mixed' },
-                      ]}
-                    />
+                    {/* Keys match knowledge_cache.entity_key (job_type). */}
+                    <select
+                      aria-label="Job type"
+                      className={selectCls}
+                      value={(ctx?.job_type ?? '') as string}
+                      onChange={(e) => contextMut.mutate({ job_type: e.target.value })}
+                    >
+                      <option value="">Select…</option>
+                      <option value="sedentary_desk">Sedentary / desk</option>
+                      <option value="knowledge_worker_high_stress">Desk, high stress</option>
+                      <option value="manual_labor_construction">Manual labor</option>
+                      <option value="standing_service_worker">Standing / service</option>
+                      <option value="shift_work_night">Shift / night work</option>
+                      <option value="commercial_driver_long_commute">Driver / long commute</option>
+                      <option value="healthcare_clinical">Healthcare / clinical</option>
+                      <option value="frequent_traveler">Frequent traveler</option>
+                      <option value="student">Student</option>
+                    </select>
                   </Row>
                   <EditableField
                     label="Free time"
@@ -439,8 +450,6 @@ function AddMedicationForm({ disabled, onAdd }: { disabled: boolean; onAdd: (bod
     setNotes('');
   };
 
-  const selectCls =
-    'flex h-10 w-full rounded-md border border-input bg-muted px-3 text-[13px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
   return (
     <div className="mt-3 flex flex-col gap-2 rounded-lg border border-border-default bg-bg-base p-3">
@@ -448,10 +457,22 @@ function AddMedicationForm({ disabled, onAdd }: { disabled: boolean; onAdd: (bod
       <Input aria-label="Medication name" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} className="w-full min-w-0" />
       <div className="grid grid-cols-2 gap-2">
         <select aria-label="Drug class" className={selectCls} value={drugClass} onChange={(e) => setDrugClass(e.target.value)}>
+          {/* Keys match knowledge_cache.entity_key (medication_class) so the
+              coach finds class knowledge. Common subset; "other" leaves it blank. */}
           <option value="">Class…</option>
-          <option value="GLP1">GLP1</option>
+          <option value="glp1_gip">GLP-1 / GIP</option>
           <option value="stimulant">Stimulant</option>
-          <option value="SSRI">SSRI</option>
+          <option value="ssri">SSRI</option>
+          <option value="snri_other_antidepressant">SNRI / other antidepressant</option>
+          <option value="beta_blocker">Beta blocker</option>
+          <option value="antihypertensive_non_bb">Antihypertensive (non-BB)</option>
+          <option value="statin">Statin</option>
+          <option value="metformin">Metformin</option>
+          <option value="thyroid_hormone">Thyroid hormone</option>
+          <option value="corticosteroid_systemic">Corticosteroid (systemic)</option>
+          <option value="nsaid">NSAID</option>
+          <option value="antihistamine">Antihistamine</option>
+          <option value="hormonal_contraceptive">Hormonal contraceptive</option>
           <option value="other">Other</option>
         </select>
         <select aria-label="Schedule weekday" className={selectCls} value={weekday} onChange={(e) => setWeekday(e.target.value)}>
