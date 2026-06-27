@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2, Plus } from 'lucide-react';
-import { Eyebrow } from '@coaching/ui';
+import {
+  Eyebrow,
+  MotivationSlider,
+  MoodPicker,
+  FreeTimeGrid,
+  NotesField,
+  CoachReadCard,
+  type FreeTimeMap,
+} from '@coaching/ui';
 
 import AppShell from '@/components/AppShell';
 import { Input } from '@/components/ui/input';
@@ -65,15 +73,18 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  // Flex-aligned knob: the track is a flex row whose justify flips on state, so
+  // the knob anchors to the correct edge without translate-x pixel math (which
+  // drifted on iOS Safari). Inset padding keeps a uniform gap on both sides.
   return (
     <button
       role="switch"
       aria-checked={on}
       aria-label={label}
       onClick={() => onChange(!on)}
-      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? 'bg-accent' : 'bg-border-strong'}`}
+      className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${on ? 'justify-end bg-accent' : 'justify-start bg-border-strong'}`}
     >
-      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${on ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+      <span className="h-5 w-5 rounded-full bg-white shadow-sm" />
     </button>
   );
 }
@@ -146,6 +157,32 @@ function EditableField({
         />
       )}
     </label>
+  );
+}
+
+/** NotesField that holds a local draft and commits on blur (avoids a PUT per keystroke). */
+function CommittedNotes({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (v: string | null) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    const next = draft.trim();
+    if (next !== value) onCommit(next === '' ? null : next);
+  };
+  return (
+    <div onBlur={commit}>
+      <NotesField
+        label="Notes for the coach"
+        value={draft}
+        placeholder="Anything else the coach should weigh"
+        onChange={setDraft}
+      />
+    </div>
   );
 }
 
@@ -303,47 +340,63 @@ export default function Settings() {
                       <option value="student">Student</option>
                     </select>
                   </Row>
-                  <EditableField
-                    label="Free time"
-                    value={ctx?.free_time ?? ''}
-                    placeholder="When you can train"
-                    onCommit={(v) => contextMut.mutate({ free_time: v || null })}
-                  />
+                  <label className="flex flex-col gap-1.5 py-2.5">
+                    <span className="text-[11px] uppercase tracking-widest text-slate-500">Free time</span>
+                    <FreeTimeGrid
+                      value={typeof ctx?.free_time === 'object' ? (ctx?.free_time ?? null) : null}
+                      onChange={(v: FreeTimeMap) => contextMut.mutate({ free_time: v })}
+                    />
+                  </label>
                   <EditableField
                     label="Mesocycle preference"
                     value={ctx?.mesocycle_preference ?? ''}
                     placeholder="e.g. 2+1 short mesocycles"
                     onCommit={(v) => contextMut.mutate({ mesocycle_preference: v || null })}
                   />
-                  <EditableField
-                    label="Training history"
-                    textarea
-                    value={ctx?.training_history_notes ?? ''}
-                    onCommit={(v) => contextMut.mutate({ training_history_notes: v || null })}
-                  />
                 </>
               )}
               {ctx?.use_psychological && (
                 <>
-                  <EditableField
-                    label="Mood"
-                    value={ctx?.mood ?? ''}
-                    placeholder="e.g. motivated, focused"
-                    onCommit={(v) => contextMut.mutate({ mood: v || null })}
-                  />
-                  <EditableField
-                    label="Motivation"
-                    value={ctx?.motivation ?? ''}
-                    onCommit={(v) => contextMut.mutate({ motivation: v || null })}
-                  />
-                  <EditableField
-                    label="Dropout risk"
-                    textarea
-                    value={ctx?.dropout_risk ?? ''}
-                    onCommit={(v) => contextMut.mutate({ dropout_risk: v || null })}
-                  />
+                  <Row label="Mood">
+                    <MoodPicker
+                      value={ctx?.mood ?? null}
+                      onChange={(v) => contextMut.mutate({ mood: v })}
+                    />
+                  </Row>
+                  <Row label="Motivation">
+                    <div className="w-44 max-w-[55%]">
+                      <MotivationSlider
+                        value={ctx?.motivation_score ?? 5}
+                        onChange={(v) => contextMut.mutate({ motivation_score: v })}
+                      />
+                    </div>
+                  </Row>
+                  <label className="flex flex-col gap-1.5 py-2.5">
+                    <span className="text-[11px] uppercase tracking-widest text-slate-500">Notes for the coach</span>
+                    <CommittedNotes
+                      value={ctx?.additional_notes ?? ''}
+                      onCommit={(v) => contextMut.mutate({ additional_notes: v })}
+                    />
+                  </label>
                 </>
               )}
+            </div>
+          </section>
+        )}
+
+        {/* ── Coach's read (derived, read-only) ── */}
+        {(ctx?.use_lifestyle || ctx?.use_psychological) && (
+          <section className="card">
+            <Eyebrow>Coach's Read</Eyebrow>
+            <p className="mt-1 text-[12px] text-slate-400">
+              What the coach has inferred from your training. Read-only.
+            </p>
+            <div className="mt-2">
+              <CoachReadCard
+                trainingHistory={ctx?.training_history_notes}
+                dropoutRisk={ctx?.dropout_risk}
+                refreshedAt={ctx?.coach_read_refreshed_at}
+              />
             </div>
           </section>
         )}
