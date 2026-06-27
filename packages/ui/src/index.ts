@@ -8,6 +8,8 @@ export type { Tokens } from './tokens/generated/tokens';
 export { cn } from './lib/cn';
 export { ZONE_COLORS, ZONE_LABELS, STATUS_COLORS } from './lib/zones';
 export type { Zone } from './lib/zones';
+export { useDragDismiss } from './lib/useDragDismiss';
+export type { DragDismissOptions, DragDismissState } from './lib/useDragDismiss';
 
 // Theme
 export { AuraProvider } from './AuraProvider';

@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as SheetPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
+import { useDragDismiss } from '@coaching/ui';
 
 import { cn } from '@/lib/utils';
 
@@ -51,28 +52,49 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = 'right', className, children, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <SheetPrimitive.Content
-      ref={ref}
-      className={cn(sheetVariants({ side }), className)}
-      {...props}
-    >
-      {/* Drag handle — visible only on bottom sheets */}
-      {side === 'bottom' && (
-        <div className="flex justify-center pb-1 pt-3" aria-hidden="true">
-          <div className="h-1 w-10 rounded-full bg-border opacity-60" />
-        </div>
-      )}
-      {children}
-      <SheetPrimitive.Close className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-muted opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring disabled:pointer-events-none">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </SheetPrimitive.Close>
-    </SheetPrimitive.Content>
-  </SheetPortal>
-));
+>(({ side = 'right', className, children, ...props }, ref) => {
+  const closeRef = React.useRef<HTMLButtonElement>(null);
+  // Bottom sheets drag down to dismiss; the handle drives the gesture and a
+  // past-threshold release clicks the (visually hidden) Radix close.
+  const { offsetY, dragging, handlers } = useDragDismiss({
+    onDismiss: () => closeRef.current?.click(),
+  });
+  const isBottom = side === 'bottom';
+
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(sheetVariants({ side }), className)}
+        style={
+          isBottom
+            ? { transform: `translateY(${offsetY}px)`, transition: dragging ? 'none' : 'transform 0.2s ease-out' }
+            : undefined
+        }
+        {...props}
+      >
+        {/* Drag handle — visible only on bottom sheets, draggable to dismiss */}
+        {isBottom && (
+          <div
+            {...handlers}
+            className="flex cursor-grab touch-none justify-center pb-1 pt-3 active:cursor-grabbing"
+          >
+            <div className="h-1 w-10 rounded-full bg-border opacity-60" />
+          </div>
+        )}
+        {children}
+        <SheetPrimitive.Close
+          ref={closeRef}
+          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-muted opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring disabled:pointer-events-none"
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </SheetPrimitive.Close>
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  );
+});
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
 const SheetHeader = ({
