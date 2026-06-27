@@ -32,6 +32,13 @@ export { WorkoutCard } from './components/WorkoutCard';
 export { ActivityRow } from './components/ActivityRow';
 export { PMCChart } from './components/PMCChart';
 
+// Inputs
+export { MotivationSlider } from './components/MotivationSlider';
+export { MoodPicker, MOOD_OPTIONS } from './components/MoodPicker';
+export { FreeTimeGrid } from './components/FreeTimeGrid';
+export { NotesField } from './components/NotesField';
+export { CoachReadCard } from './components/CoachReadCard';
+
 // Organisms
 export { ReadinessCard } from './components/ReadinessCard';
 export { ContextStrip } from './components/ContextStrip';
@@ -71,3 +78,12 @@ export type { HomeTemplateProps } from './components/HomeTemplate/HomeTemplate.t
 export type { CalendarTemplateProps } from './components/CalendarTemplate/CalendarTemplate.types';
 export type { LibraryTemplateProps } from './components/LibraryTemplate/LibraryTemplate.types';
 export type { MoreGridTemplateProps } from './components/MoreGridTemplate/MoreGridTemplate.types';
+export type { MotivationSliderProps } from './components/MotivationSlider/MotivationSlider.types';
+export type { MoodPickerProps, MoodKey } from './components/MoodPicker/MoodPicker.types';
+export type {
+  FreeTimeGridProps,
+  FreeTimeMap,
+  Weekday,
+} from './components/FreeTimeGrid/FreeTimeGrid.types';
+export type { NotesFieldProps } from './components/NotesField/NotesField.types';
+export type { CoachReadCardProps } from './components/CoachReadCard/CoachReadCard.types';

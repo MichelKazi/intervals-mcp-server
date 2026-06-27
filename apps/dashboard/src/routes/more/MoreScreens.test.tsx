@@ -143,14 +143,16 @@ const PROFILE = {
   },
   context: {
     athlete_id: 'i334094',
-    job_type: 'sedentary',
+    job_type: 'sedentary_desk',
     job_notes: null,
-    free_time: null,
-    mood: 'motivated',
-    motivation: null,
-    training_history_notes: null,
-    dropout_risk: null,
+    free_time: { mon: 1, tue: 0.5 },
+    mood: 'energized',
+    motivation_score: 7,
+    additional_notes: null,
     mesocycle_preference: '2+1',
+    training_history_notes: 'Strong threshold base, limited VO2max.',
+    dropout_risk: 'Low; consistent week to week.',
+    coach_read_refreshed_at: '2026-06-20T09:00:00Z',
     use_medical: true,
     use_lifestyle: true,
     use_psychological: true,
@@ -211,6 +213,74 @@ describe('Settings', () => {
     const removeBtn = await screen.findByLabelText('Remove tirzepatide');
     fireEvent.click(removeBtn);
     await waitFor(() => expect(mockRemoveMedication).toHaveBeenCalledWith('med-1'));
+  });
+
+  it('shows the current mood and picking a new one PUTs the key', async () => {
+    renderScreen(<Settings />);
+    const trigger = await screen.findByLabelText('Mood');
+    await waitFor(() => expect(trigger).toHaveTextContent('Energized'));
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: 'Tired' }));
+    await waitFor(() => expect(mockUpdateProfileContext).toHaveBeenCalledWith({ mood: 'tired' }));
+  });
+
+  it('moving the motivation slider PUTs motivation_score', async () => {
+    renderScreen(<Settings />);
+    const slider = await screen.findByLabelText('Motivation');
+    await waitFor(() => expect(slider).toHaveValue('7'));
+    fireEvent.change(slider, { target: { value: '3' } });
+    await waitFor(() =>
+      expect(mockUpdateProfileContext).toHaveBeenCalledWith({ motivation_score: 3 }),
+    );
+  });
+
+  it('changing a free-time day PUTs the full weekday map', async () => {
+    renderScreen(<Settings />);
+    const cell = await screen.findByLabelText('Wed 2');
+    fireEvent.click(cell);
+    await waitFor(() =>
+      expect(mockUpdateProfileContext).toHaveBeenCalledWith({
+        free_time: { mon: 1, tue: 0.5, wed: 2, thu: 0, fri: 0, sat: 0, sun: 0 },
+      }),
+    );
+  });
+
+  it('committing notes on blur PUTs additional_notes', async () => {
+    renderScreen(<Settings />);
+    const notes = await screen.findByLabelText('Notes for the coach');
+    fireEvent.change(notes, { target: { value: 'Traveling next week.' } });
+    fireEvent.blur(notes);
+    await waitFor(() =>
+      expect(mockUpdateProfileContext).toHaveBeenCalledWith({
+        additional_notes: 'Traveling next week.',
+      }),
+    );
+  });
+
+  it('renders the read-only coach read with both derived sections', async () => {
+    renderScreen(<Settings />);
+    const card = await screen.findByLabelText('Coach read');
+    expect(card).toHaveTextContent('Strong threshold base');
+    fireEvent.click(card);
+    expect(screen.getByText('Training history')).toBeInTheDocument();
+    expect(screen.getByText('Adherence pattern')).toBeInTheDocument();
+  });
+
+  it('does not offer editable training-history or dropout inputs', async () => {
+    renderScreen(<Settings />);
+    await screen.findByLabelText('Mood');
+    expect(screen.queryByLabelText('Training history')).toBeNull();
+    expect(screen.queryByLabelText('Dropout risk')).toBeNull();
+  });
+
+  it('consent switch reflects the on/off state via aria-checked', async () => {
+    renderScreen(<Settings />);
+    const medical = await screen.findByLabelText('Let the coach use medical info');
+    await waitFor(() => expect(medical).toHaveAttribute('aria-checked', 'true'));
+    fireEvent.click(medical);
+    await waitFor(() =>
+      expect(mockUpdateProfileContext).toHaveBeenCalledWith({ use_medical: false }),
+    );
   });
 });
 

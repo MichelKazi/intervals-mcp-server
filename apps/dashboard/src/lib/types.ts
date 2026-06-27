@@ -156,16 +156,30 @@ export interface AthleteDemographics {
   [k: string]: unknown;
 }
 
+/** Hours of training time available per weekday. */
+export type FreeTimeMap = Partial<
+  Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', number>
+>;
+
 export interface AthleteContext {
   athlete_id?: string;
   job_type: string | null;
   job_notes: string | null;
-  free_time: string | null;
+  /** Per-weekday available hours. Legacy rows may still hold a string. */
+  free_time: FreeTimeMap | string | null;
+  /** Lowercase mood key (energy/readiness), e.g. "energized". */
   mood: string | null;
-  motivation: string | null;
-  training_history_notes: string | null;
-  dropout_risk: string | null;
+  /** Self-rated motivation, 1-10. */
+  motivation_score: number | null;
+  /** Free-form note; server caps at 500 chars. */
+  additional_notes: string | null;
   mesocycle_preference: string | null;
+  /** Derived, read-only. Never PUT. */
+  training_history_notes: string | null;
+  /** Derived, read-only. Never PUT. */
+  dropout_risk: string | null;
+  /** ISO timestamp of the last coach-read refresh. */
+  coach_read_refreshed_at: string | null;
   use_medical: boolean;
   use_lifestyle: boolean;
   use_psychological: boolean;
