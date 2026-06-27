@@ -137,21 +137,23 @@ export default function FtpGoal() {
         <section className="rounded-xl border border-border-default bg-bg-surface p-4">
           <Eyebrow>Set Goal</Eyebrow>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5">
+            <label className="flex min-w-0 flex-col gap-1.5">
               <span className="text-[11px] uppercase tracking-widest text-slate-500">Target FTP (W)</span>
               <Input
                 type="number"
                 inputMode="numeric"
                 aria-label="Target FTP"
+                className="w-full min-w-0"
                 value={targetFtp}
                 onChange={(e) => setTargetFtp(Number(e.target.value))}
               />
             </label>
-            <label className="flex flex-col gap-1.5">
+            <label className="flex min-w-0 flex-col gap-1.5">
               <span className="text-[11px] uppercase tracking-widest text-slate-500">Target date</span>
               <Input
                 type="date"
                 aria-label="Target date"
+                className="w-full min-w-0"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
               />

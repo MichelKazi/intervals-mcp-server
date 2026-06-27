@@ -139,11 +139,18 @@ body {
   pointer-events: none;
 }
 
-/* Global reset — kept deliberate and narrow (Tailwind preflight is disabled). */
+/* Global reset — kept deliberate and narrow (Tailwind preflight is disabled).
+ * Mirror preflight's border handling: every element gets border-width:0 +
+ * border-style:solid so Tailwind `border` utilities render a visible solid
+ * line, and the UA's default `2px outset` border (which made every bare
+ * <button> a square and put a hairline on filled buttons) is gone. */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: hsl(var(--border));
   /* Kill the iOS Safari tap flash; tap feedback comes from active: classes. */
   -webkit-tap-highlight-color: transparent;
 }
@@ -155,6 +162,43 @@ button,
   -webkit-appearance: none;
   appearance: none;
   background-color: transparent;
+  font: inherit;
+  color: inherit;
+}
+
+/* Form controls shed native chrome too — preflight-off otherwise leaves the UA
+   intrinsic min-width that overflows tight 2-column grids on iOS. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+input,
+select,
+textarea {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Date inputs: drop the native picker icon (tapping the field opens the picker)
+   and left-align the value so a date field matches a text/number field. The
+   bare icon otherwise sits flush-right and clips past the rounded corner. */
+input[type='date']::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
+input[type='date'] {
+  text-align: left;
+}
+/* Strip the number input spinners — they crowd a tight field. */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 html,

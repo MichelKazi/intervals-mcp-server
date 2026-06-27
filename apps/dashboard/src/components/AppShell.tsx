@@ -15,19 +15,19 @@ export default function AppShell({ title, showBack, children }: AppShellProps) {
   return (
     <div className="min-h-screen text-foreground font-ui">
       <header
-        className="aura-glass fixed inset-x-0 top-0 z-[100] flex items-end border-b border-border-subtle px-4 pb-2 pt-safe"
+        className="aura-glass fixed inset-x-0 top-0 z-[100] flex items-center gap-1 border-b border-border-subtle px-4 pt-safe"
         style={{ height: 'calc(56px + env(safe-area-inset-top))' }}
       >
         {showBack && (
           <button
             onClick={() => navigate(-1)}
-            className="mr-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Go back"
           >
-            <ChevronLeft className="h-5 w-5" strokeWidth={2} />
+            <ChevronLeft className="h-6 w-6" strokeWidth={2.25} />
           </button>
         )}
-        <h1 className="m-0 flex-1 text-[17px] font-semibold">{title}</h1>
+        <h1 className="m-0 min-w-0 flex-1 truncate text-[17px] font-semibold leading-none">{title}</h1>
       </header>
       <main
         style={{
