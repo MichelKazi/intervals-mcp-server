@@ -10,6 +10,7 @@ authoritative. The LLM may only lower confidence, never raise it.
 from fastapi import APIRouter, Depends, Request
 
 from intervals_mcp_server import directeur_client
+from intervals_mcp_server.config import get_config
 from intervals_mcp_server.web.auth import require_token
 
 router = APIRouter(dependencies=[Depends(require_token)])
@@ -21,7 +22,11 @@ async def ftp_goal_route(request: Request) -> dict:
     computed = await request.json()
     base_confidence = computed.get("baseConfidence", 100)
 
-    result = await directeur_client.validate_ftp_goal(computed)
+    # athlete_id selects the per-athlete profile skill in directeur. Default to
+    # the configured athlete so the profile applies without the client sending it.
+    athlete_id = request.query_params.get("athlete_id") or get_config().athlete_id
+
+    result = await directeur_client.validate_ftp_goal(computed, athlete_id=athlete_id)
     if result is None:
         result = {
             "coaching_note": computed.get("validationMessage", ""),
