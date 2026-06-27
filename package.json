@@ -1,0 +1,21 @@
+{
+  "name": "coaching-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "storybook": "turbo storybook",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "tokens": "turbo tokens"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3"
+  },
+  "packageManager": "npm@10.8.2"
+}

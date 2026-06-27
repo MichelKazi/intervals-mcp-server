@@ -1,0 +1,62 @@
+{
+  "name": "@coaching/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens": "./src/tokens/generated/tokens.ts",
+    "./tailwind": "./tailwind.config.ts",
+    "./styles": "./src/styles/globals.css",
+    "./variables.css": "./src/tokens/generated/variables.css"
+  },
+  "scripts": {
+    "dev": "storybook dev -p 6006",
+    "storybook": "storybook dev -p 6006",
+    "build": "npm run tokens",
+    "build-storybook": "storybook build",
+    "tokens": "node build-tokens.js",
+    "test": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:storybook": "test-storybook --url http://localhost:6006",
+    "lint": "eslint src"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "recharts": "^3.9.0",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@storybook/addon-a11y": "^8.4.7",
+    "@storybook/addon-essentials": "^8.4.7",
+    "@storybook/addon-interactions": "^8.4.7",
+    "@storybook/addon-viewport": "^8.4.7",
+    "@storybook/react": "^8.4.7",
+    "@storybook/react-vite": "^8.4.7",
+    "@storybook/test": "^8.4.7",
+    "@storybook/test-runner": "^0.21.0",
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^14.2.2",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.20",
+    "jest-axe": "^9.0.0",
+    "@types/jest-axe": "^3.5.9",
+    "jsdom": "^24.0.0",
+    "postcss": "^8.4.49",
+    "storybook": "^8.4.7",
+    "style-dictionary": "^4.3.0",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.4.2",
+    "vitest": "^1.4.0",
+    "@vitest/coverage-v8": "^1.4.0"
+  }
+}

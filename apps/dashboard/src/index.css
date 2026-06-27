@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * ── Design Token System ────────────────────────────────────────────────────
+ *
+ * SPACING: 8pt grid — use Tailwind numeric scale exclusively.
+ *   tight gap:    gap-2  (8px)
+ *   section gap:  gap-4  (16px)
+ *   screen pad:   p-4    (16px)
+ *   card pad:     p-5    (20px)
+ *   list-row:     py-3   (12px top/bottom)
+ *
+ * TYPE SCALE:
+ *   Screen / hero title:  text-2xl font-bold
+ *   Card title:           text-base/lg font-semibold
+ *   Eyebrow:              text-[11px] uppercase tracking-widest font-medium (accent or slate-500)
+ *   Body:                 text-[13px] text-slate-400
+ *   Micro:                text-[10px]/[11px] uppercase text-slate-500
+ *   Data numbers:         font-mono font-semibold text-slate-100 (tabular-nums)
+ *   Status text:          text-[11px] font-semibold
+ *
+ * RADIUS:
+ *   Cards:    rounded-xl (= var(--radius) = 12px)
+ *   Controls: rounded-lg
+ *   Chips:    rounded-full
+ *
+ * ELEVATION:
+ *   Cards:   shadow-md   (0 4px 12px rgba(0,0,0,0.5))
+ *   Sheets:  shadow-2xl  (0 8px 32px rgba(0,0,0,0.65))
+ *   Nav:     border-t border-border-subtle
+ *
+ * CARD DEFAULT: bg-bg-surface border border-border-default rounded-xl p-5
+ *               active:scale-[0.99] transition-transform
+ *
+ * COLOR IDENTITY: orange (#f97316) accent + true-black bg + 5-zone palette.
+ * FONTS: Inter (font-ui / body) + JetBrains Mono (font-mono, tabular numerics).
+ * Dark-only — :root is the dark theme.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    /* ── shadcn semantic slots (HSL channel values, no hsl() wrapper) ─────── */
+    --background: 240 33% 4%;          /* #07080f bg-base */
+    --foreground: 0 0% 95%;            /* near-white */
+
+    --card: 240 33% 8%;                /* #0d0e1a bg-surface */
+    --card-foreground: 0 0% 95%;
+
+    --popover: 234 35% 12%;            /* #13152a bg-raised */
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 258 90% 66%;            /* #8b5cf6 violet — our brand */
+    --primary-foreground: 240 33% 4%;  /* near-black text on violet */
+
+    --secondary: 234 35% 12%;          /* #13152a bg-raised */
+    --secondary-foreground: 0 0% 95%;
+
+    --muted: 234 30% 16%;              /* inset fills + hover surface */
+    --muted-foreground: 232 22% 70%;   /* #9ea3c8 text-secondary */
+
+    /* `--accent` no longer drives shadcn hover (those use --muted now); kept
+       for any residual references, mapped to the violet brand. */
+    --accent: 258 90% 66%;
+    --accent-foreground: 240 33% 4%;
+
+    --destructive: 0 84% 60%;          /* #ef4444 */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 232 30% 20%;             /* #242742 border-default */
+    --input: 232 30% 20%;
+    --ring: 258 90% 66%;               /* violet focus ring */
+    --radius: 0.875rem;                /* 14px — Aura lg radius */
+
+    /* ── Legacy CSS vars — kept for SVG color attrs + inline style compat ─── */
+    /* New code should use Tailwind classes; these remain for existing inline styles */
+    --bg: #07080f;
+    --surface: #0d0e1a;
+    --surface-2: #13152a;
+    --text: #f0f2ff;
+    --text-dim: #9ea3c8;
+    --brand: #8b5cf6;
+    --brand-dim: #7c4ddb;
+    --z1: #3b82f6;
+    --z2: #eab308;
+    --z3: #f97316;
+    --z4: #ef4444;
+    --z5: #a855f7;
+    --z6: #c040e8;
+    --z7: #ff3399;
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-6: 24px;
+    --sp-8: 32px;
+    --radius-sm: 4px;
+    --radius-lg: 16px;
+    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-3: 0 8px 32px rgba(0, 0, 0, 0.65);
+    --font: 'DM Sans', Inter, system-ui, sans-serif;
+    --font-mono: 'DM Mono', 'JetBrains Mono', 'SF Mono', monospace;
+  }
+}
+
+/* ── Aura mesh background: lit-from-within violet field over the base void.
+ * Applied to the app body so every screen reads as lit, not flat black. */
+body {
+  background-color: #07080f;
+  background-image:
+    radial-gradient(65% 55% at 12% -5%, rgba(139, 92, 246, 0.28), transparent 70%),
+    radial-gradient(55% 50% at 105% 8%, rgba(99, 102, 241, 0.22), transparent 72%),
+    radial-gradient(80% 65% at 50% 108%, rgba(139, 92, 246, 0.13), transparent 78%);
+  background-attachment: fixed;
+}
+
+/* Glass card surface — frosted translucent panel with a hairline top highlight. */
+.aura-glass {
+  background: linear-gradient(180deg, rgba(19, 21, 42, 0.72), rgba(13, 14, 26, 0.72));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid #242742;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.aura-edge-light {
+  position: relative;
+}
+.aura-edge-light::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.5), rgba(139, 92, 246, 0.05) 60%, transparent);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Global reset — kept deliberate and narrow (Tailwind preflight is disabled). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  /* Kill the iOS Safari tap flash; tap feedback comes from active: classes. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Interactive elements get no native chrome — backgrounds are token-driven so
+   tapped rows never flash to the white default button surface on iOS. */
+button,
+[role='button'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Data numbers use tabular figures wherever font-mono is applied. */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shimmer skeleton — combined with the Tailwind animate-shimmer keyframe. */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+}
