@@ -13,11 +13,17 @@ vi.mock('@/lib/api', () => ({
   analyzeActivity: vi.fn(),
   postCommand: vi.fn(),
   executeCommand: vi.fn(),
+  getProfile: vi.fn(),
+  updateProfileCore: vi.fn(),
+  updateProfileContext: vi.fn(),
+  addMedication: vi.fn(),
+  removeMedication: vi.fn(),
 }));
 
 import {
   callMcp, getWellness, getActivities, getCoachingState, getCoachingBrief, analyzeActivity,
   postCommand, executeCommand,
+  getProfile, updateProfileCore, updateProfileContext, addMedication, removeMedication,
 } from '@/lib/api';
 import PlannedVsActual from './PlannedVsActual';
 import Polarization from './Polarization';
@@ -35,6 +41,11 @@ const mockGetCoachingBrief = vi.mocked(getCoachingBrief);
 const mockAnalyzeActivity = vi.mocked(analyzeActivity);
 const mockPostCommand = vi.mocked(postCommand);
 const mockExecuteCommand = vi.mocked(executeCommand);
+const mockGetProfile = vi.mocked(getProfile);
+const mockUpdateProfileCore = vi.mocked(updateProfileCore);
+const mockUpdateProfileContext = vi.mocked(updateProfileContext);
+const mockAddMedication = vi.mocked(addMedication);
+const mockRemoveMedication = vi.mocked(removeMedication);
 void mockGetCoachingState;
 void mockGetCoachingBrief;
 void mockAnalyzeActivity;
@@ -119,12 +130,87 @@ describe('FieldTest', () => {
   });
 });
 
+const PROFILE = {
+  athlete: {
+    athlete_id: 'i334094',
+    name: 'Michelkazi',
+    birth_date: null,
+    weight_kg: 83,
+    sex: 'M',
+    gender_identity: null,
+    location: 'Denver, United States',
+    timezone: 'America/Denver',
+  },
+  context: {
+    athlete_id: 'i334094',
+    job_type: 'sedentary',
+    job_notes: null,
+    free_time: null,
+    mood: 'motivated',
+    motivation: null,
+    training_history_notes: null,
+    dropout_risk: null,
+    mesocycle_preference: '2+1',
+    use_medical: true,
+    use_lifestyle: true,
+    use_psychological: true,
+    profile_skill_md: null,
+  },
+  medications: [
+    { id: 'med-1', name: 'tirzepatide', drug_class: 'GLP1', schedule_weekday: 3, notes: null, active: true },
+  ],
+};
+
 describe('Settings', () => {
-  it('renders profile and online server status', async () => {
-    mockCallMcp.mockResolvedValue({ result: ATHLETE_TEXT });
+  beforeEach(() => {
+    mockGetProfile.mockResolvedValue(PROFILE as never);
+    mockUpdateProfileCore.mockResolvedValue(PROFILE as never);
+    mockUpdateProfileContext.mockResolvedValue(PROFILE as never);
+    mockAddMedication.mockResolvedValue(PROFILE as never);
+    mockRemoveMedication.mockResolvedValue(PROFILE as never);
+  });
+
+  it('renders profile fields and online server status', async () => {
     renderScreen(<Settings />);
-    await waitFor(() => expect(screen.getByText('Michelkazi')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Michelkazi'));
+    expect(screen.getByLabelText('Weight (kg)')).toHaveValue(83);
     await waitFor(() => expect(screen.getByTestId('server-status')).toHaveTextContent('Online'));
+  });
+
+  it('editing a demographic field calls updateProfileCore on blur', async () => {
+    renderScreen(<Settings />);
+    const name = await screen.findByLabelText('Name');
+    fireEvent.change(name, { target: { value: 'New Name' } });
+    fireEvent.blur(name);
+    await waitFor(() => expect(mockUpdateProfileCore).toHaveBeenCalledWith({ name: 'New Name' }));
+  });
+
+  it('toggling a consent switch calls updateProfileContext', async () => {
+    renderScreen(<Settings />);
+    const toggle = await screen.findByLabelText('Let the coach use medical info');
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'));
+    fireEvent.click(toggle);
+    await waitFor(() => expect(mockUpdateProfileContext).toHaveBeenCalledWith({ use_medical: false }));
+  });
+
+  it('adding a medication calls addMedication with the form values', async () => {
+    renderScreen(<Settings />);
+    const nameInput = await screen.findByLabelText('Medication name');
+    fireEvent.change(nameInput, { target: { value: 'caffeine' } });
+    fireEvent.change(screen.getByLabelText('Drug class'), { target: { value: 'stimulant' } });
+    fireEvent.click(screen.getByTestId('add-med'));
+    await waitFor(() =>
+      expect(mockAddMedication).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'caffeine', drug_class: 'stimulant' }),
+      ),
+    );
+  });
+
+  it('removing a medication calls removeMedication with the id', async () => {
+    renderScreen(<Settings />);
+    const removeBtn = await screen.findByLabelText('Remove tirzepatide');
+    fireEvent.click(removeBtn);
+    await waitFor(() => expect(mockRemoveMedication).toHaveBeenCalledWith('med-1'));
   });
 });
 

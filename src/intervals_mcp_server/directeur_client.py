@@ -314,6 +314,66 @@ async def archive_plan(plan_id: str) -> dict | None:
         return None
 
 
+async def get_athlete_profile_db(athlete_id: str) -> dict | None:
+    """Fetch the DB-backed athlete profile (context + meds + skill) via directeur."""
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().get(f"/athlete/{athlete_id}")
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur athlete profile fetch failed: %s", e)
+        return None
+
+
+async def update_athlete_profile(athlete_id: str, section: str, data: dict) -> dict | None:
+    """Update a profile section via directeur. section: 'core' | 'context'.
+
+    Regenerates the profile skill server-side. Returns the refreshed profile.
+    """
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    path = f"/athlete/{athlete_id}" if section == "core" else f"/athlete/{athlete_id}/context"
+    try:
+        resp = await _get_client().put(path, json=data)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur athlete profile update failed: %s", e)
+        return None
+
+
+async def add_athlete_medication(athlete_id: str, med: dict) -> dict | None:
+    """Add a medication to an athlete via directeur."""
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().post(f"/athlete/{athlete_id}/medications", json=med)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur add medication failed: %s", e)
+        return None
+
+
+async def remove_athlete_medication(athlete_id: str, med_id: str) -> dict | None:
+    """Soft-delete a medication via directeur."""
+    config = get_config()
+    if not config.directeur_url:
+        return None
+    try:
+        resp = await _get_client().delete(f"/athlete/{athlete_id}/medications/{med_id}")
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.warning("directeur remove medication failed: %s", e)
+        return None
+
+
 async def get_coaching_snapshot(zone: str = "threshold") -> dict:
     """Fetch readiness + patterns + levels concurrently, then progression for key zone."""
     config = get_config()
