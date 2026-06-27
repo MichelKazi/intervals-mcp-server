@@ -74,7 +74,7 @@ export function CoachReadCard({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center"
+          className="fixed inset-0 z-[110] flex items-end justify-center bg-black/70 sm:items-center"
           onClick={() => setOpen(false)}
         >
           <div
@@ -82,7 +82,7 @@ export function CoachReadCard({
             aria-modal="true"
             aria-label="Coach read"
             onClick={(e) => e.stopPropagation()}
-            className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-border-default bg-bg-surface p-4 sm:rounded-2xl"
+            className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-border-default bg-bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:rounded-2xl sm:pb-4"
           >
             <h2 className="mb-3 text-base font-semibold text-text-primary">Coach read</h2>
             <section className="mb-4">

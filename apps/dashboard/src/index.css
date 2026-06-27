@@ -261,6 +261,10 @@ body {
   color: var(--text);
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
+  /* Kill double-tap-to-zoom (the gesture that breaks the mobile UI on taps).
+     viewport user-scalable=no is ignored for pinch by modern iOS, but
+     touch-action:manipulation reliably drops the 300ms double-tap zoom. */
+  touch-action: manipulation;
 }
 
 #root {
