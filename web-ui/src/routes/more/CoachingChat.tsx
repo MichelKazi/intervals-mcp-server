@@ -1,92 +1,129 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Send } from 'lucide-react';
+import { ChevronLeft, Send, Check, X, AlertCircle } from 'lucide-react';
 
-import {
-  getCoachingState, getCoachingBrief, analyzeActivity, getActivities,
-} from '@/lib/api';
+import { postCommand, executeCommand } from '@/lib/api';
+import type { CommandAction, CommandResponse, CommandResult } from '@/lib/api';
 
-// ─── Message model ────────────────────────────────────────────────────────────
+// ─── Log model ──────────────────────────────────────────────────────────────
 
-interface ChatMessage {
+interface UserEntry { id: number; kind: 'user'; text: string }
+interface ResultEntry { id: number; kind: 'result'; summary: string; results: CommandResult[] }
+interface ConfirmEntry {
   id: number;
-  role: 'user' | 'coach';
-  text: string;
+  kind: 'confirm';
+  summary: string;
+  actions: CommandAction[];
+  status: 'pending' | 'done' | 'cancelled';
+  results?: CommandResult[];
 }
+interface ErrorEntry { id: number; kind: 'error'; text: string }
+type LogEntry = UserEntry | ResultEntry | ConfirmEntry | ErrorEntry;
 
 const QUICK_PROMPTS = [
+  'Time off this week',
+  'Move today→tomorrow',
   "How's my training?",
-  'Should I train today?',
-  'Analyze last ride',
-  'Race week plan',
+  'Add a Z2 ride tomorrow',
 ] as const;
 
-// Pull readable coaching prose out of whatever shape the backend returns.
-// Returns '' for objects with no human-readable field rather than dumping raw
-// JSON into a chat bubble.
-function asText(v: unknown): string {
-  if (v == null) return '';
-  if (typeof v === 'string') return v.trim();
-  if (typeof v === 'object') {
-    const o = v as Record<string, unknown>;
-    for (const k of ['result', 'brief', 'summary', 'message', 'text'] as const) {
-      if (typeof o[k] === 'string') return (o[k] as string).trim();
-    }
-    return '';
-  }
-  return String(v);
-}
+let nextId = 1;
 
-// Route a prompt to the best available coaching tool.
-async function replyFor(prompt: string): Promise<string> {
-  const p = prompt.toLowerCase();
+// ─── Cards ────────────────────────────────────────────────────────────────────
 
-  if (p.includes('analyze') && (p.includes('ride') || p.includes('last') || p.includes('activity'))) {
-    const acts = await getActivities({ limit: 1 });
-    const id = acts?.[0]?.id;
-    if (!id) return "I couldn't find a recent activity to analyze.";
-    const out = asText(await analyzeActivity(id));
-    return out || `Analysis for "${acts[0].name ?? id}" is queued. Check back shortly.`;
-  }
-
-  if (p.includes("how's my training") || p.includes('how is my training') || p.includes('should i train')) {
-    const [state, brief] = await Promise.allSettled([getCoachingState(), getCoachingBrief()]);
-    const parts: string[] = [];
-    if (brief.status === 'fulfilled') parts.push(asText(brief.value));
-    if (state.status === 'fulfilled') parts.push(asText(state.value));
-    const text = parts.filter(Boolean).join('\n\n');
-    return text || 'No coaching state is available right now.';
-  }
-
-  // Generic free-text question → coaching brief.
-  const out = asText(await getCoachingBrief());
-  return out || "I don't have a reading for that yet. Try one of the quick prompts above.";
-}
-
-// ─── Bubbles ──────────────────────────────────────────────────────────────────
-
-function Bubble({ msg }: { msg: ChatMessage }) {
-  const isUser = msg.role === 'user';
+function UserBubble({ text }: { text: string }) {
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div
-        data-testid={`bubble-${msg.role}`}
-        className={[
-          'max-w-[82%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed',
-          isUser
-            ? 'rounded-br-sm bg-accent/20 text-slate-100'
-            : 'rounded-bl-sm bg-bg-raised text-slate-200',
-        ].join(' ')}
-      >
-        {msg.text}
+    <div className="flex justify-end" data-testid="entry-user">
+      <div className="max-w-[82%] rounded-2xl rounded-br-sm bg-accent/20 px-3.5 py-2.5 text-[13px] leading-relaxed text-slate-100">
+        {text}
       </div>
     </div>
   );
 }
 
-function TypingBubble() {
+function ResultCard({ summary, results }: { summary: string; results: CommandResult[] }) {
+  // The summary already carries the result text for single-action reads/writes;
+  // only list extra results that aren't already in the header.
+  const extra = results.filter((r) => r.summary !== summary);
   return (
-    <div className="flex justify-start" data-testid="typing">
+    <div className="rounded-xl border border-border-subtle bg-bg-raised px-3.5 py-3" data-testid="entry-result">
+      <p className="m-0 text-[13px] font-medium text-slate-100">{summary}</p>
+      {extra.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {extra.map((r, i) => (
+            <li
+              key={i}
+              className={`text-[12px] leading-snug ${r.ok ? 'text-slate-300' : 'text-rose-400'}`}
+            >
+              {r.summary}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ConfirmCard({
+  entry,
+  onConfirm,
+  onCancel,
+  busy,
+}: {
+  entry: ConfirmEntry;
+  onConfirm: () => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  if (entry.status === 'done') {
+    return <ResultCard summary={entry.summary} results={entry.results ?? []} />;
+  }
+  return (
+    <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-3.5 py-3" data-testid="entry-confirm">
+      <div className="flex items-start gap-2">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" strokeWidth={2} />
+        <div className="flex-1">
+          <p className="m-0 text-[12px] font-semibold uppercase tracking-wide text-amber-400">Confirm change</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-100">{entry.summary}</p>
+        </div>
+      </div>
+      {entry.status === 'cancelled' ? (
+        <p className="mt-2 text-[12px] text-slate-500">Cancelled.</p>
+      ) : (
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            data-testid="confirm-btn"
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-semibold text-bg-base disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Check size={16} strokeWidth={2.5} /> Confirm
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            data-testid="cancel-btn"
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-border-default bg-bg-raised px-3 text-[13px] font-medium text-slate-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <X size={16} strokeWidth={2.5} /> Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ErrorCard({ text }: { text: string }) {
+  return (
+    <div className="rounded-xl border border-rose-500/40 bg-rose-500/5 px-3.5 py-3 text-[13px] text-rose-300" data-testid="entry-error">
+      {text}
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <div className="flex justify-start" data-testid="busy">
       <div className="flex items-center gap-1 rounded-2xl rounded-bl-sm bg-bg-raised px-4 py-3">
         {[0, 1, 2].map((i) => (
           <span
@@ -102,36 +139,71 @@ function TypingBubble() {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-let nextId = 1;
-
 export default function CoachingChat() {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: 0, role: 'coach', text: "I'm your coach. Ask about today's session, your training, or a recent ride." },
-  ]);
+  const [log, setLog] = useState<LogEntry[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ behavior: 'smooth' });
-  }, [messages, busy]);
+  }, [log, busy]);
 
-  const send = useCallback(async (raw: string) => {
-    const prompt = raw.trim();
-    if (!prompt || busy) return;
-    setInput('');
-    setMessages((m) => [...m, { id: nextId++, role: 'user', text: prompt }]);
-    setBusy(true);
-    try {
-      const reply = await replyFor(prompt);
-      setMessages((m) => [...m, { id: nextId++, role: 'coach', text: reply }]);
-    } catch {
-      setMessages((m) => [...m, { id: nextId++, role: 'coach', text: 'I hit an error reaching the coaching engine. Try again in a moment.' }]);
-    } finally {
-      setBusy(false);
-    }
-  }, [busy]);
+  const push = useCallback((entry: LogEntry) => setLog((l) => [...l, entry]), []);
+
+  const submit = useCallback(
+    async (raw: string) => {
+      const text = raw.trim();
+      if (!text || busy) return;
+      setInput('');
+      push({ id: nextId++, kind: 'user', text });
+      setBusy(true);
+      try {
+        const resp: CommandResponse = await postCommand(text);
+        if (resp.executed) {
+          push({ id: nextId++, kind: 'result', summary: resp.summary, results: resp.results ?? [] });
+        } else if (resp.needs_confirm && (resp.proposed_actions ?? resp.actions)?.length) {
+          push({
+            id: nextId++,
+            kind: 'confirm',
+            summary: resp.summary,
+            actions: (resp.proposed_actions ?? resp.actions)!,
+            status: 'pending',
+          });
+        } else {
+          push({ id: nextId++, kind: 'result', summary: resp.summary, results: [] });
+        }
+      } catch {
+        push({ id: nextId++, kind: 'error', text: 'I hit an error reaching the coach. Try again.' });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, push],
+  );
+
+  const confirm = useCallback(
+    async (id: number, actions: CommandAction[]) => {
+      if (busy) return;
+      setBusy(true);
+      try {
+        const { results } = await executeCommand(actions);
+        setLog((l) =>
+          l.map((e) => (e.id === id && e.kind === 'confirm' ? { ...e, status: 'done', results } : e)),
+        );
+      } catch {
+        push({ id: nextId++, kind: 'error', text: 'The change failed. Try again.' });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, push],
+  );
+
+  const cancel = useCallback((id: number) => {
+    setLog((l) => l.map((e) => (e.id === id && e.kind === 'confirm' ? { ...e, status: 'cancelled' } : e)));
+  }, []);
 
   return (
     <div className="flex h-[100dvh] flex-col bg-bg-base text-foreground font-ui">
@@ -146,12 +218,33 @@ export default function CoachingChat() {
         >
           <ChevronLeft className="h-5 w-5" strokeWidth={2} />
         </button>
-        <h1 className="m-0 flex-1 text-[17px] font-semibold">Coaching Chat</h1>
+        <h1 className="m-0 flex-1 text-[17px] font-semibold">Command Bar</h1>
       </header>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        {messages.map((m) => <Bubble key={m.id} msg={m} />)}
-        {busy && <TypingBubble />}
+        {log.length === 0 && (
+          <div className="pt-8 text-center">
+            <p className="text-[14px] font-medium text-slate-200">Tell your coach what to do.</p>
+            <p className="mt-1 text-[12px] text-slate-500">
+              Reads run instantly. Changes ask you to confirm first.
+            </p>
+          </div>
+        )}
+        {log.map((e) => {
+          if (e.kind === 'user') return <UserBubble key={e.id} text={e.text} />;
+          if (e.kind === 'result') return <ResultCard key={e.id} summary={e.summary} results={e.results} />;
+          if (e.kind === 'error') return <ErrorCard key={e.id} text={e.text} />;
+          return (
+            <ConfirmCard
+              key={e.id}
+              entry={e}
+              busy={busy}
+              onConfirm={() => confirm(e.id, e.actions)}
+              onCancel={() => cancel(e.id)}
+            />
+          );
+        })}
+        {busy && <Spinner />}
         <div ref={endRef} />
       </div>
 
@@ -160,7 +253,7 @@ export default function CoachingChat() {
           {QUICK_PROMPTS.map((p) => (
             <button
               key={p}
-              onClick={() => send(p)}
+              onClick={() => submit(p)}
               disabled={busy}
               className="shrink-0 rounded-full border border-border-default bg-bg-raised px-3 py-1.5 text-[12px] font-medium text-slate-200 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -169,20 +262,20 @@ export default function CoachingChat() {
           ))}
         </div>
         <form
-          onSubmit={(e) => { e.preventDefault(); send(input); }}
+          onSubmit={(e) => { e.preventDefault(); submit(input); }}
           className="flex items-center gap-2 px-4 pb-safe-offset-3 pt-2"
         >
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask your coach…"
-            aria-label="Message your coach"
+            placeholder="Tell your coach what to do…"
+            aria-label="Command input"
             className="h-11 flex-1 rounded-full border border-border-default bg-bg-raised px-4 text-[14px] text-slate-100 placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
           <button
             type="submit"
             disabled={busy || !input.trim()}
-            aria-label="Send message"
+            aria-label="Run command"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-bg-base disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Send size={18} strokeWidth={2.5} />

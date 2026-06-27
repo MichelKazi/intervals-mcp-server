@@ -11,10 +11,13 @@ vi.mock('@/lib/api', () => ({
   getCoachingState: vi.fn(),
   getCoachingBrief: vi.fn(),
   analyzeActivity: vi.fn(),
+  postCommand: vi.fn(),
+  executeCommand: vi.fn(),
 }));
 
 import {
   callMcp, getWellness, getActivities, getCoachingState, getCoachingBrief, analyzeActivity,
+  postCommand, executeCommand,
 } from '@/lib/api';
 import PlannedVsActual from './PlannedVsActual';
 import Polarization from './Polarization';
@@ -30,6 +33,12 @@ const mockGetActivities = vi.mocked(getActivities);
 const mockGetCoachingState = vi.mocked(getCoachingState);
 const mockGetCoachingBrief = vi.mocked(getCoachingBrief);
 const mockAnalyzeActivity = vi.mocked(analyzeActivity);
+const mockPostCommand = vi.mocked(postCommand);
+const mockExecuteCommand = vi.mocked(executeCommand);
+void mockGetCoachingState;
+void mockGetCoachingBrief;
+void mockAnalyzeActivity;
+void mockGetActivities;
 
 function renderScreen(ui: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -119,30 +128,61 @@ describe('Settings', () => {
   });
 });
 
-describe('CoachingChat', () => {
-  it('sends a quick prompt and renders a coach bubble from the api', async () => {
-    mockGetCoachingState.mockResolvedValue({ result: 'State: green.' });
-    mockGetCoachingBrief.mockResolvedValue({ result: "You're fresh. Train hard today." });
+describe('CoachingChat (command bar)', () => {
+  it('submitting a read command renders a result card', async () => {
+    mockPostCommand.mockResolvedValue({
+      summary: 'Overview',
+      executed: true,
+      results: [{ tool: 'get_dashboard', ok: true, summary: 'Next workout: Threshold.' }],
+    } as never);
     renderScreen(<CoachingChat />);
 
     fireEvent.click(screen.getByText("How's my training?"));
 
-    await waitFor(() => expect(mockGetCoachingBrief).toHaveBeenCalled());
-    await waitFor(() =>
-      expect(screen.getByText(/You're fresh\. Train hard today\./)).toBeInTheDocument(),
-    );
-    // user bubble + coach bubble both present
-    expect(screen.getByTestId('bubble-user')).toBeInTheDocument();
+    await waitFor(() => expect(mockPostCommand).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('entry-result')).toBeInTheDocument());
+    expect(screen.getByText('Next workout: Threshold.')).toBeInTheDocument();
   });
 
-  it('routes "Analyze last ride" through analyzeActivity', async () => {
-    mockGetActivities.mockResolvedValue([{ id: 99, name: 'Knocknam' }] as never);
-    mockAnalyzeActivity.mockResolvedValue({ result: 'Solid tempo ride.' });
+  it('submitting a write command shows a confirm card without executing', async () => {
+    const actions = [{ tool: 'create_time_off', args: { start_date: '2026-06-29' }, kind: 'write' as const }];
+    mockPostCommand.mockResolvedValue({
+      summary: 'Block holiday time off on 2026-06-29',
+      executed: false,
+      needs_confirm: true,
+      proposed_actions: actions,
+      actions,
+    } as never);
     renderScreen(<CoachingChat />);
 
-    fireEvent.click(screen.getByText('Analyze last ride'));
+    fireEvent.click(screen.getByText('Time off this week'));
 
-    await waitFor(() => expect(mockAnalyzeActivity).toHaveBeenCalledWith(99));
-    await waitFor(() => expect(screen.getByText('Solid tempo ride.')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('entry-confirm')).toBeInTheDocument());
+    expect(screen.getByText(/Block holiday time off/)).toBeInTheDocument();
+    expect(mockExecuteCommand).not.toHaveBeenCalled();
+  });
+
+  it('confirming a write executes the actions and shows the result', async () => {
+    const actions = [{ tool: 'create_time_off', args: { start_date: '2026-06-29' }, kind: 'write' as const }];
+    mockPostCommand.mockResolvedValue({
+      summary: 'Block holiday time off on 2026-06-29',
+      executed: false,
+      needs_confirm: true,
+      proposed_actions: actions,
+      actions,
+    } as never);
+    mockExecuteCommand.mockResolvedValue({
+      executed: true,
+      results: [{ tool: 'create_time_off', ok: true, summary: 'Time off created (2026-06-29).' }],
+    } as never);
+    renderScreen(<CoachingChat />);
+
+    fireEvent.click(screen.getByText('Time off this week'));
+    await waitFor(() => expect(screen.getByTestId('confirm-btn')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('confirm-btn'));
+
+    await waitFor(() => expect(mockExecuteCommand).toHaveBeenCalledWith(actions));
+    await waitFor(() => expect(screen.getByText('Time off created (2026-06-29).')).toBeInTheDocument());
   });
 });

@@ -176,3 +176,41 @@ export async function callMcpText(tool: string, args?: Record<string, unknown>):
 export function getMcpTools(): Promise<unknown[]> {
   return apiFetch('/api/mcp/tools');
 }
+
+// ── Natural-language command bar (DeepSeek tool-routing) ──
+export interface CommandAction {
+  tool: string;
+  args: Record<string, unknown>;
+  kind: 'read' | 'write';
+}
+export interface CommandResult {
+  tool: string;
+  ok: boolean;
+  summary: string;
+  data?: unknown;
+}
+export interface CommandResponse {
+  summary: string;
+  results?: CommandResult[];
+  actions?: CommandAction[];
+  proposed_actions?: CommandAction[];
+  executed: boolean;
+  needs_confirm?: boolean;
+}
+
+/** Interpret a free-text command. Reads execute now; writes return a preview. */
+export function postCommand(text: string): Promise<CommandResponse> {
+  const today = new Date().toISOString().slice(0, 10);
+  return apiFetch('/api/command', {
+    method: 'POST',
+    body: JSON.stringify({ text, today_date: today }),
+  });
+}
+
+/** Execute a confirmed action list (writes). */
+export function executeCommand(actions: CommandAction[]): Promise<{ results: CommandResult[]; executed: boolean }> {
+  return apiFetch('/api/command/execute', {
+    method: 'POST',
+    body: JSON.stringify({ actions }),
+  });
+}
