@@ -1,6 +1,7 @@
 import type {
   Dashboard, Activity, ActivityIntervals, Stream, PlannedEvent,
-  LibraryWorkout, WellnessDay, Compliance, GoalAssessment, TrainingPlan
+  LibraryWorkout, WellnessDay, Compliance, GoalAssessment, TrainingPlan,
+  AthleteProfile, AthleteDemographics, AthleteContext
 } from './types';
 import type { PreComputedGoalContext } from '@/lib/ftp/compute';
 import type { PlanSkeleton } from '@/lib/ftp/plan';
@@ -171,6 +172,64 @@ export function getActivePlan(): Promise<{ plan: TrainingPlan | null }> {
 /** Archive a plan by id. */
 export function archivePlan(id: string): Promise<{ archived: boolean }> {
   return apiFetch(`/api/plans/${id}/archive`, { method: 'POST' });
+}
+
+// ── Athlete coaching profile (DB-backed, editable) ──
+
+/** Normalize the `{profile:null}` empty-record shape to the full envelope. */
+function normalizeProfile(raw: unknown): AthleteProfile {
+  if (raw && typeof raw === 'object') {
+    const r = raw as Partial<AthleteProfile> & { profile?: unknown };
+    if (r.profile === null && r.athlete === undefined) {
+      return { athlete: null, context: null, medications: [] };
+    }
+    return {
+      athlete: r.athlete ?? null,
+      context: r.context ?? null,
+      medications: r.medications ?? [],
+    };
+  }
+  return { athlete: null, context: null, medications: [] };
+}
+
+/** Full coaching profile (demographics, context, consent, medications). */
+export async function getProfile(): Promise<AthleteProfile> {
+  return normalizeProfile(await apiFetch('/api/profile'));
+}
+
+/** Update demographic fields. Returns the refreshed full profile. */
+export async function updateProfileCore(body: Partial<AthleteDemographics>): Promise<AthleteProfile> {
+  return normalizeProfile(
+    await apiFetch('/api/profile/core', { method: 'PUT', body: JSON.stringify(body) }),
+  );
+}
+
+/** Update context fields and consent flags. Returns the refreshed full profile. */
+export async function updateProfileContext(body: Partial<AthleteContext>): Promise<AthleteProfile> {
+  return normalizeProfile(
+    await apiFetch('/api/profile/context', { method: 'PUT', body: JSON.stringify(body) }),
+  );
+}
+
+export interface AddMedicationBody {
+  name: string;
+  drug_class?: string;
+  schedule_weekday?: number;
+  notes?: string;
+}
+
+/** Add a medication. Returns the refreshed full profile. */
+export async function addMedication(body: AddMedicationBody): Promise<AthleteProfile> {
+  return normalizeProfile(
+    await apiFetch('/api/profile/medications', { method: 'POST', body: JSON.stringify(body) }),
+  );
+}
+
+/** Remove a medication by id. Returns the refreshed full profile. */
+export async function removeMedication(id: string): Promise<AthleteProfile> {
+  return normalizeProfile(
+    await apiFetch(`/api/profile/medications/${id}`, { method: 'DELETE' }),
+  );
 }
 
 export function callMcp(tool: string, args?: Record<string, unknown>): Promise<unknown> {

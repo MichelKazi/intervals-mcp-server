@@ -142,6 +142,54 @@ export interface TrainingPlan {
   updated_at?: string;
 }
 
+// ── Athlete coaching profile (DB-backed, editable via /api/profile*) ──
+
+export interface AthleteDemographics {
+  athlete_id?: string;
+  name: string | null;
+  birth_date: string | null;
+  weight_kg: number | null;
+  sex: string | null;
+  gender_identity: string | null;
+  location: string | null;
+  timezone: string | null;
+  [k: string]: unknown;
+}
+
+export interface AthleteContext {
+  athlete_id?: string;
+  job_type: string | null;
+  job_notes: string | null;
+  free_time: string | null;
+  mood: string | null;
+  motivation: string | null;
+  training_history_notes: string | null;
+  dropout_risk: string | null;
+  mesocycle_preference: string | null;
+  use_medical: boolean;
+  use_lifestyle: boolean;
+  use_psychological: boolean;
+  profile_skill_md: string | null;
+  [k: string]: unknown;
+}
+
+export interface Medication {
+  id: string;
+  athlete_id?: string;
+  name: string;
+  drug_class: string | null;
+  schedule_weekday: number | null;
+  notes: string | null;
+  active: boolean;
+  created_at?: string;
+}
+
+export interface AthleteProfile {
+  athlete: AthleteDemographics | null;
+  context: AthleteContext | null;
+  medications: Medication[];
+}
+
 export interface LibraryWorkout {
   tr_workout_id?: string;
   name: string;

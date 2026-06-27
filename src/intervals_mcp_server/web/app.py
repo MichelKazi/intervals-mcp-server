@@ -78,6 +78,9 @@ def create_app() -> FastAPI:
     from intervals_mcp_server.web.routes import plans as plans_routes
     app.include_router(plans_routes.router)
 
+    from intervals_mcp_server.web.routes import profile as profile_routes
+    app.include_router(profile_routes.router)
+
     from intervals_mcp_server.web.routes import analytics as analytics_routes
     app.include_router(analytics_routes.router)
 
