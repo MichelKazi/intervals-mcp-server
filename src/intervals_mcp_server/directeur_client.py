@@ -201,17 +201,19 @@ async def post_level_correction(zone: str, proposed_level: float, rationale: str
         return None
 
 
-async def validate_ftp_goal(computed: dict) -> dict | None:
+async def validate_ftp_goal(computed: dict, athlete_id: str | None = None) -> dict | None:
     """Validate a pre-computed FTP goal context via directeur.
 
     Returns directeur's {coaching_note, risk_factors, confidence_pct} or None on
-    missing directeur_url or any failure.
+    missing directeur_url or any failure. athlete_id selects the per-athlete
+    profile skill directeur applies.
     """
     config = get_config()
     if not config.directeur_url:
         return None
     try:
-        resp = await _get_client().post("/ftp-goal/validate", json={"computed": computed}, timeout=60.0)
+        body = {"computed": computed, "athlete_id": athlete_id}
+        resp = await _get_client().post("/ftp-goal/validate", json=body, timeout=60.0)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:

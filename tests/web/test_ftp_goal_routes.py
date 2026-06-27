@@ -32,7 +32,7 @@ def _client(monkeypatch, token=""):
 # --- POST /api/coaching/ftp-goal ---
 
 def test_ftp_goal_directeur_unavailable_fallback(monkeypatch):
-    async def fake_validate(computed):
+    async def fake_validate(computed, athlete_id=None):
         return None
 
     monkeypatch.setattr(
@@ -49,7 +49,7 @@ def test_ftp_goal_directeur_unavailable_fallback(monkeypatch):
 
 
 def test_ftp_goal_clamps_confidence_down(monkeypatch):
-    async def fake_validate(computed):
+    async def fake_validate(computed, athlete_id=None):
         return {
             "coaching_note": "LLM note.",
             "risk_factors": ["aggressive ramp"],
@@ -70,7 +70,7 @@ def test_ftp_goal_clamps_confidence_down(monkeypatch):
 
 
 def test_ftp_goal_clamps_confidence_floor(monkeypatch):
-    async def fake_validate(computed):
+    async def fake_validate(computed, athlete_id=None):
         return {"coaching_note": "", "risk_factors": [], "confidence_pct": 0}
 
     monkeypatch.setattr(
@@ -82,7 +82,7 @@ def test_ftp_goal_clamps_confidence_floor(monkeypatch):
 
 
 def test_ftp_goal_llm_may_lower_confidence(monkeypatch):
-    async def fake_validate(computed):
+    async def fake_validate(computed, athlete_id=None):
         return {"coaching_note": "n", "risk_factors": [], "confidence_pct": 40}
 
     monkeypatch.setattr(
