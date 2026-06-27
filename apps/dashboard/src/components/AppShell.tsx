@@ -13,9 +13,9 @@ export default function AppShell({ title, showBack, children }: AppShellProps) {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-bg-base text-foreground font-ui">
+    <div className="min-h-screen text-foreground font-ui">
       <header
-        className="fixed inset-x-0 top-0 z-[100] flex items-end border-b border-border-subtle bg-bg-surface px-4 pb-2 pt-safe"
+        className="aura-glass fixed inset-x-0 top-0 z-[100] flex items-end border-b border-border-subtle px-4 pb-2 pt-safe"
         style={{ height: 'calc(56px + env(safe-area-inset-top))' }}
       >
         {showBack && (

@@ -43,12 +43,12 @@ const config: Config = {
         // ── New token system (orange/Inter overhaul) ───────────────────────
         // `accent` is now the orange brand color (flat). Hover surfaces that
         // previously used shadcn's `bg-accent` now use `bg-muted`.
-        accent: '#f97316',
+        accent: '#8b5cf6',
         bg: {
-          base: '#09090f',
-          surface: '#111118',
-          raised: '#1a1a24',
-          high: '#22222f',
+          base: '#07080f',
+          surface: '#0d0e1a',
+          raised: '#13152a',
+          high: '#1a1d36',
         },
         status: {
           green: '#22c55e',
@@ -57,9 +57,9 @@ const config: Config = {
         },
         border: {
           DEFAULT: 'hsl(var(--border))',
-          subtle: '#1e1e2c',
-          default: '#2a2a3c',
-          strong: '#3a3a50',
+          subtle: '#1a1d36',
+          default: '#242742',
+          strong: '#333660',
         },
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
@@ -82,10 +82,11 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        ui: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono"', '"SF Mono"', 'monospace'],
-        // `sans` kept (aliased to Inter) for existing screens using font-sans.
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        ui: ['"DM Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        display: ['"DM Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['"DM Mono"', '"JetBrains Mono"', '"SF Mono"', 'monospace'],
+        // `sans` kept (aliased) for existing screens using font-sans.
+        sans: ['"DM Sans"', 'Inter', 'system-ui', 'sans-serif'],
       },
       keyframes: {
         shimmer: {
