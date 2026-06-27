@@ -135,7 +135,7 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
             style={{
               width: '100%',
               height: barH,
-              background: `linear-gradient(180deg, ${zoneColor(pct)} 0%, ${zoneColor(pct)}cc 100%)`,
+              background: `linear-gradient(180deg, ${zoneColor(pct)} 0%, color-mix(in srgb, ${zoneColor(pct)} 60%, transparent) 100%)`,
               borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
             }}
           />
@@ -222,7 +222,9 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
                 style={{
                   width: '100%',
                   height: barH,
-                  background: `linear-gradient(180deg, ${zoneColor(bar.pctFtp)} 0%, ${zoneColor(bar.pctFtp)}b3 100%)`,
+                  // zoneColor() returns a CSS var, so fade the bottom stop with
+                  // color-mix — appending alpha hex to var() is invalid CSS.
+                  background: `linear-gradient(180deg, ${zoneColor(bar.pctFtp)} 0%, color-mix(in srgb, ${zoneColor(bar.pctFtp)} 60%, transparent) 100%)`,
                   borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
                   opacity: isSelected ? 1 : 0.85,
                 }}
