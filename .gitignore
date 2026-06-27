@@ -192,3 +192,7 @@ CLAUDE.md
 
 web-ui/playwright-report/
 web-ui/test-results/
+node_modules
+.turbo
+storybook-static
+coverage

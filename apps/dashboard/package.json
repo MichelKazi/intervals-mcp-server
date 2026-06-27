@@ -1,5 +1,5 @@
 {
-  "name": "intervals-coach-ui",
+  "name": "@coaching/dashboard",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -11,6 +11,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@coaching/ui": "*",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@radix-ui/react-dialog": "^1.1.17",
