@@ -53,7 +53,15 @@ export default function Fitness() {
       <div className="screen">
         <Tabs value={period.key} onValueChange={(v) => setPeriod(PERIODS.find(p => p.key === v) ?? PERIODS[1])}>
           <TabsList className="grid w-full grid-cols-4">
-            {PERIODS.map(p => <TabsTrigger key={p.key} value={p.key}>{p.label}</TabsTrigger>)}
+            {PERIODS.map(p => (
+              <TabsTrigger
+                key={p.key}
+                value={p.key}
+                className="data-[state=active]:shadow-[var(--glow-accent)]"
+              >
+                {p.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
 
@@ -74,7 +82,7 @@ export default function Fitness() {
 
         {!isLoading && !isError && pts.length > 0 && (
           <>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="aura-glass flex flex-wrap items-center gap-2 rounded-2xl p-3">
               {rampBadge(ramp)}
               {latest && (
                 <>
@@ -93,7 +101,7 @@ export default function Fitness() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-border-default bg-bg-surface p-3">
+            <div className="rounded-2xl border border-border-default bg-bg-surface p-3" style={{ boxShadow: 'var(--glow-accent)' }}>
               <div className="h-72 w-full" aria-label="Performance management chart: fitness, fatigue, and form over time">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={pts} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -111,15 +119,15 @@ export default function Fitness() {
                     <Area yAxisId="form" type="monotone" dataKey="tsb" name="Form (TSB)"
                       stroke="none" fill="#22c55e" fillOpacity={0.18} />
                     <Line yAxisId="load" type="monotone" dataKey="ctl" name="Fitness (CTL)"
-                      stroke="#3b82f6" strokeWidth={2} dot={false} />
+                      stroke="var(--z1)" strokeWidth={2} dot={false} />
                     <Line yAxisId="load" type="monotone" dataKey="atl" name="Fatigue (ATL)"
-                      stroke="#f97316" strokeWidth={2} dot={false} />
+                      stroke="var(--z3)" strokeWidth={2} dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-[11px] text-slate-400">
                 <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 rounded bg-zone-1" />Fitness (CTL)</span>
-                <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 rounded bg-accent" />Fatigue (ATL)</span>
+                <span className="flex items-center gap-1.5"><span className="h-0.5 w-3 rounded bg-zone-3" />Fatigue (ATL)</span>
                 <span className="flex items-center gap-1.5"><span className="h-2 w-3 rounded bg-status-green/40" />Form (TSB)</span>
               </div>
             </div>

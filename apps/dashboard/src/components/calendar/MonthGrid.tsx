@@ -83,7 +83,19 @@ export default function MonthGrid({
       </div>
 
       {/* Weeks */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(7, 1fr)',
+          gap: 'var(--sp-1)',
+          padding: 'var(--sp-1)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--glass-bg)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid var(--glass-border)',
+        }}
+      >
         {cells.map((cell, idx) => {
           if (!cell.iso) {
             return <div key={`empty-${idx}`} style={{ minHeight: 52 }} />;
@@ -98,6 +110,18 @@ export default function MonthGrid({
             (sum, ev) => sum + (ev.icu_training_load != null ? Math.round(ev.icu_training_load) : 0),
             0,
           );
+          // Days with training read as a heatmap: heavier load → stronger fill.
+          const hasEvents = events.length > 0;
+          const loadFill = hasEvents
+            ? Math.min(0.22, 0.06 + (totalTss / 100) * 0.16)
+            : 0;
+          const cellBg = isSelected
+            ? 'var(--surface-2)'
+            : isHighlight
+              ? 'var(--glass-bg)'
+              : hasEvents
+                ? `rgba(139, 92, 246, ${loadFill})`
+                : 'transparent';
 
           return (
             <button
@@ -105,9 +129,15 @@ export default function MonthGrid({
               ref={el => onCellRef?.(iso, el)}
               data-date={iso}
               onClick={() => onSelectDay(iso)}
+              className="aura-day-cell"
               style={{
-                background: isSelected ? 'var(--surface-2)' : isHighlight ? 'rgba(240,165,0,0.15)' : 'transparent',
-                border: isHighlight ? '2px solid var(--brand)' : '1px solid transparent',
+                background: cellBg,
+                border: isSelected || isHighlight
+                  ? '1px solid var(--brand)'
+                  : hasEvents
+                    ? '1px solid var(--glass-border)'
+                    : '1px solid transparent',
+                boxShadow: isToday ? 'var(--glow-accent)' : undefined,
                 cursor: 'pointer',
                 minHeight: 52,
                 minWidth: 0,

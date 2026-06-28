@@ -16,7 +16,7 @@ const PERIODS = [
 
 // Power-zone palette (Coggan 7-zone). First five align with the zone-1..5 tokens.
 const ZONE_COLOR: Record<string, string> = {
-  Z1: '#3b82f6', Z2: '#22c55e', Z3: '#eab308', Z4: '#f97316', Z5: '#ef4444', Z6: '#a855f7', Z7: '#ec4899',
+  Z1: 'var(--z1)', Z2: '#22c55e', Z3: 'var(--z2)', Z4: 'var(--z3)', Z5: 'var(--z4)', Z6: 'var(--z5)', Z7: '#ec4899',
 };
 const ZONE_NAME: Record<string, string> = {
   Z1: 'Recovery', Z2: 'Endurance', Z3: 'Tempo', Z4: 'Threshold', Z5: 'VO2max', Z6: 'Anaerobic', Z7: 'Neuromuscular',
@@ -82,9 +82,9 @@ export default function ZoneDistribution() {
               </ResponsiveContainer>
             </div>
 
-            <ul className="mt-2 flex flex-col gap-1.5">
+            <ul className="mt-3 flex flex-col gap-2">
               {zones.map(z => (
-                <li key={z.zone} className="flex items-center gap-2.5 text-[13px]">
+                <li key={z.zone} className="flex items-center gap-3 text-[13px]">
                   <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: zColor(z.zone) }} />
                   <span className="text-slate-300">{z.zone} · {ZONE_NAME[z.zone] ?? ''}</span>
                   <span className="ml-auto font-mono text-slate-400">{fmtHrs(z.seconds)}</span>

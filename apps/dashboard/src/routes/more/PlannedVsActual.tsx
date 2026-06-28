@@ -155,7 +155,7 @@ export default function PlannedVsActual() {
 
     return (
       <div className="space-y-4">
-        <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
+        <section className="aura-glass rounded-2xl p-4" style={{ boxShadow: 'var(--glow-accent)' }}>
           <h2 className="mb-3 text-[11px] font-medium uppercase tracking-widest text-slate-500">
             Planned vs Actual TSS
           </h2>
@@ -173,14 +173,14 @@ export default function PlannedVsActual() {
                   {chartData.map((_, i) => <Cell key={i} fill="#3a3a50" />)}
                 </Bar>
                 <Bar dataKey="Actual" radius={[3, 3, 0, 0]}>
-                  {chartData.map((_, i) => <Cell key={i} fill="#f97316" />)}
+                  {chartData.map((_, i) => <Cell key={i} fill="var(--z3)" />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
           <div className="mt-2 flex items-center justify-center gap-4 text-[11px] text-slate-400">
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-border-strong" /> Planned</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-accent" /> Actual</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-zone-3" /> Actual</span>
           </div>
         </section>
 

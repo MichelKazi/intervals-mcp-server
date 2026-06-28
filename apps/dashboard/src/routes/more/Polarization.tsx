@@ -50,9 +50,9 @@ function deriveBands(text: string): { bands: ZoneBand[]; derived: boolean } {
     return {
       derived: false,
       bands: [
-        { key: 'z1', label: 'Zone 1', desc: 'Low / easy', pct: explicit.z1, color: '#3b82f6' },
-        { key: 'z2', label: 'Zone 2', desc: "No-man's land", pct: explicit.z2, color: '#eab308' },
-        { key: 'z3', label: 'Zone 3', desc: 'Hard', pct: explicit.z3, color: '#ef4444' },
+        { key: 'z1', label: 'Zone 1', desc: 'Low / easy', pct: explicit.z1, color: 'var(--z1)' },
+        { key: 'z2', label: 'Zone 2', desc: "No-man's land", pct: explicit.z2, color: 'var(--z2)' },
+        { key: 'z3', label: 'Zone 3', desc: 'Hard', pct: explicit.z3, color: 'var(--z4)' },
       ],
     };
   }
@@ -60,9 +60,9 @@ function deriveBands(text: string): { bands: ZoneBand[]; derived: boolean } {
   return {
     derived: true,
     bands: [
-      { key: 'z1', label: 'Zone 1', desc: 'Low / easy', pct: 78, color: '#3b82f6' },
-      { key: 'z2', label: 'Zone 2', desc: "No-man's land", pct: 9, color: '#eab308' },
-      { key: 'z3', label: 'Zone 3', desc: 'Hard', pct: 13, color: '#ef4444' },
+      { key: 'z1', label: 'Zone 1', desc: 'Low / easy', pct: 78, color: 'var(--z1)' },
+      { key: 'z2', label: 'Zone 2', desc: "No-man's land", pct: 9, color: 'var(--z2)' },
+      { key: 'z3', label: 'Zone 3', desc: 'Hard', pct: 13, color: 'var(--z4)' },
     ],
   };
 }
@@ -104,7 +104,7 @@ export default function Polarization() {
 
     return (
       <div className="space-y-4">
-        <section className="rounded-2xl border border-border-default bg-bg-surface p-4">
+        <section className="aura-glass rounded-2xl p-4" style={{ boxShadow: 'var(--glow-accent)' }}>
           <h2 className="mb-3 text-[11px] font-medium uppercase tracking-widest text-slate-500">
             Rolling 4-Week Intensity
           </h2>
@@ -131,7 +131,7 @@ export default function Polarization() {
         </section>
 
         {z2High ? (
-          <section className="flex items-start gap-3 rounded-xl border border-status-yellow/40 bg-status-yellow/10 p-4">
+          <section className="flex items-start gap-3 rounded-2xl border border-status-yellow/40 bg-status-yellow/10 p-4">
             <AlertTriangle size={18} className="mt-0.5 shrink-0 text-status-yellow" aria-hidden="true" />
             <div>
               <div className="text-[13px] font-semibold text-status-yellow">Too much time in no-man's land</div>

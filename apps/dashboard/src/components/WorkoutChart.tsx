@@ -137,6 +137,7 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
               height: barH,
               background: `linear-gradient(180deg, ${zoneColor(pct)} 0%, color-mix(in srgb, ${zoneColor(pct)} 60%, transparent) 100%)`,
               borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
+              boxShadow: pct > 100 ? 'var(--glow-accent)' : 'none',
             }}
           />
         </div>
@@ -227,6 +228,9 @@ export default function WorkoutChart({ steps, laps, ftp }: WorkoutChartProps) {
                   background: `linear-gradient(180deg, ${zoneColor(bar.pctFtp)} 0%, color-mix(in srgb, ${zoneColor(bar.pctFtp)} 60%, transparent) 100%)`,
                   borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
                   opacity: isSelected ? 1 : 0.85,
+                  // Over-FTP efforts are the hero of the chart — glow them so the
+                  // hard intervals read as the focal points, not every bar.
+                  boxShadow: bar.pctFtp > 100 ? 'var(--glow-accent)' : 'none',
                 }}
               />
             </div>

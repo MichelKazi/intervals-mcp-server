@@ -10,10 +10,10 @@ import { getVolume, getWeeklyVolume, type VolumePoint, type WeeklyVolumePoint } 
 
 // Activity type → color. Ride is the primary (accent); others get distinct hues.
 const TYPE_COLORS: Record<string, string> = {
-  Ride: '#f97316',
-  VirtualRide: '#eab308',
-  Run: '#3b82f6',
-  Swim: '#a855f7',
+  Ride: 'var(--z3)',
+  VirtualRide: 'var(--z2)',
+  Run: 'var(--z1)',
+  Swim: 'var(--z5)',
   Workout: '#22c55e',
 };
 function typeColor(t: string): string {
@@ -65,7 +65,7 @@ export default function Volume() {
           <>
             {hasScatter && (
               <div className="rounded-2xl border border-border-default bg-bg-surface p-3">
-                <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-widest text-accent">Per-session load (90d)</p>
+                <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-widest text-accent">Per-session load (90d)</p>
                 <div className="h-64 w-full" aria-label="Volume scatter: training load per session over time, dot size by duration">
                   <ResponsiveContainer width="100%" height="100%">
                     <ScatterChart margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -102,7 +102,7 @@ export default function Volume() {
 
             {hasWeekly && (
               <div className="rounded-2xl border border-border-default bg-bg-surface p-3">
-                <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-widest text-accent">Weekly hours (12w)</p>
+                <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-widest text-accent">Weekly hours (12w)</p>
                 <div className="h-56 w-full" aria-label="Weekly training hours bar chart">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={weeks} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -115,7 +115,7 @@ export default function Volume() {
                         labelFormatter={(l) => `Week of ${shortDate(String(l))}`}
                         formatter={(v) => [`${Math.round(Number(v) * 10) / 10} h`, 'Hours']}
                       />
-                      <Bar dataKey="hours" name="Hours" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="hours" name="Hours" fill="var(--z1)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

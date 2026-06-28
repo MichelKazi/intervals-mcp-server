@@ -184,6 +184,17 @@ function mergeDayItems(
   return byDate;
 }
 
+/** Peak 1–5 zone across a day's items, for the week-strip scheduled-day dot. */
+function deriveDayZone(items: DayItems | undefined): Zone {
+  if (!items) return 1;
+  let peak: Zone = 1;
+  for (const ev of [...items.planned, ...items.completed]) {
+    const z = deriveZone(ev);
+    if (z > peak) peak = z;
+  }
+  return peak;
+}
+
 // ── Week strip (TrainingPeaks planned-vs-actual) ───────────────────────────────
 
 interface WeekStripProps {
@@ -215,7 +226,16 @@ function WeekStrip({
   const BAR_H = 48;
 
   return (
-    <div className="grid grid-cols-7 gap-0.5 px-1 pt-2" data-testid="week-strip">
+    <div
+      className="grid grid-cols-7 gap-1 rounded-2xl px-1 pt-2"
+      data-testid="week-strip"
+      style={{
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: '1px solid var(--glass-border)',
+      }}
+    >
       {days.map((iso, i) => {
         const isToday = iso === todayIso;
         const isSelected = iso === selectedDate;
@@ -227,6 +247,7 @@ function WeekStrip({
         const actualH = Math.round((actualTss / maxTss) * BAR_H);
         const dayNum = parseInt(iso.slice(8), 10);
         const total = (items?.planned.length ?? 0) + (items?.completed.length ?? 0);
+        const hasWorkout = total > 0;
         // Hard day: a heavy planned session. Presentational accent only.
         const isHardDay = plannedTss >= 70;
 
@@ -236,16 +257,21 @@ function WeekStrip({
             ref={el => onCellRef?.(iso, el)}
             data-date={iso}
             onClick={() => onSelectDay(iso)}
-            className="flex min-h-[44px] flex-col items-center gap-1 rounded-md px-0.5 pb-1 pt-1 transition-colors"
+            className="aura-day-cell flex min-h-[44px] flex-col items-center gap-1 rounded-xl px-0.5 pb-1 pt-1 transition-colors"
             style={{
-              background: isHighlight ? 'rgba(249,115,22,0.15)' : 'transparent',
+              background: isSelected
+                ? 'var(--surface-2)'
+                : isHighlight
+                  ? 'var(--glass-bg)'
+                  : 'transparent',
               borderWidth: '1px',
               borderStyle: 'solid',
-              borderTopColor: isSelected ? 'var(--brand)' : 'transparent',
-              borderRightColor: isSelected ? 'var(--brand)' : 'transparent',
-              borderBottomColor: isSelected ? 'var(--brand)' : 'transparent',
+              borderTopColor: isSelected || isHighlight ? 'var(--brand)' : 'transparent',
+              borderRightColor: isSelected || isHighlight ? 'var(--brand)' : 'transparent',
+              borderBottomColor: isSelected || isHighlight ? 'var(--brand)' : 'transparent',
               borderLeftWidth: isHardDay ? '2px' : '1px',
-              borderLeftColor: isHardDay ? '#f97316' : (isSelected ? 'var(--brand)' : 'transparent'),
+              borderLeftColor: isHardDay ? 'var(--z3)' : (isSelected || isHighlight ? 'var(--brand)' : 'transparent'),
+              boxShadow: isToday ? 'var(--glow-accent)' : undefined,
               cursor: 'pointer',
               touchAction: 'manipulation',
             }}
@@ -268,6 +294,17 @@ function WeekStrip({
             >
               {dayNum}
             </span>
+
+            {/* Scheduled-day marker so empty days read differently at a glance. */}
+            <span
+              className="h-1 w-1 rounded-full"
+              aria-hidden="true"
+              style={{
+                background: hasWorkout
+                  ? `var(--z${Math.min(7, deriveDayZone(items))})`
+                  : 'transparent',
+              }}
+            />
 
             {/* Planned (light) bar with actual (filled) overlaid */}
             <span
@@ -357,15 +394,17 @@ function WeekHeader({
           </svg>
         </button>
       </div>
-      <WeekStrip
-        weekStart={weekStart}
-        dayItems={dayItems}
-        todayIso={todayIso}
-        selectedDate={selectedDate}
-        onSelectDay={onSelectDay}
-        onCellRef={onCellRef}
-        highlightDate={highlightDate}
-      />
+      <div className="px-2 pb-1">
+        <WeekStrip
+          weekStart={weekStart}
+          dayItems={dayItems}
+          todayIso={todayIso}
+          selectedDate={selectedDate}
+          onSelectDay={onSelectDay}
+          onCellRef={onCellRef}
+          highlightDate={highlightDate}
+        />
+      </div>
       <div className="h-2" />
     </div>
   );
@@ -463,6 +502,7 @@ interface DayListProps {
 }
 
 function DayList({ date, items, draggingId, onOpen, onEventLongPress }: DayListProps) {
+  const navigate = useNavigate();
   const planned = items?.planned ?? [];
   const completed = items?.completed ?? [];
   const label = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
@@ -471,7 +511,7 @@ function DayList({ date, items, draggingId, onOpen, onEventLongPress }: DayListP
   const total = planned.length + completed.length;
 
   return (
-    <div className="px-3 pt-3" data-testid="day-list" style={{ paddingBottom: 80 }}>
+    <div className="px-3 pt-3" data-testid="day-list" style={{ paddingBottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
       <p
         className="mb-2 text-[11px] font-semibold uppercase tracking-widest"
         style={{ color: 'var(--brand)' }}
@@ -480,7 +520,34 @@ function DayList({ date, items, draggingId, onOpen, onEventLongPress }: DayListP
       </p>
 
       {planned.length === 0 && completed.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nothing scheduled or logged.</p>
+        <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <div
+            className="flex h-14 w-14 items-center justify-center rounded-full"
+            style={{
+              background: 'var(--glass-bg)',
+              border: '1px solid var(--glass-border)',
+              boxShadow: 'var(--glow-accent)',
+              color: 'var(--brand)',
+            }}
+          >
+            <Plus className="h-6 w-6" strokeWidth={2} />
+          </div>
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+              Nothing scheduled
+            </p>
+            <p className="mt-0.5 text-sm" style={{ color: 'var(--text-dim)' }}>
+              A rest day, or add a workout from the library.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/library')}
+            className="rounded-full px-4 py-2 text-sm font-semibold"
+            style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', color: 'var(--brand)', cursor: 'pointer' }}
+          >
+            Browse library
+          </button>
+        </div>
       )}
 
       {planned.length > 0 && (

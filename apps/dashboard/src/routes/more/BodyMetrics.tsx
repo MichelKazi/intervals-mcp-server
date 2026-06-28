@@ -58,7 +58,7 @@ export default function BodyMetrics() {
 
         return (
           <div className="flex flex-col gap-4 p-4 pb-20">
-            <div className="flex items-baseline justify-between rounded-2xl border border-border-subtle bg-bg-surface p-4">
+            <div className="aura-glass flex items-baseline justify-between rounded-2xl p-4" style={{ boxShadow: 'var(--glow-accent)' }}>
               <div>
                 <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-accent">Current W/kg</p>
                 <p className="m-0 mt-1 font-mono text-3xl font-semibold text-slate-100">
@@ -78,16 +78,16 @@ export default function BodyMetrics() {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={points} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
                     <CartesianGrid stroke="#2a2a3c" vertical={false} />
-                    <ReferenceArea y1={min} y2={max} fill="#f97316" fillOpacity={0.04} />
+                    <ReferenceArea y1={min} y2={max} fill="var(--z3)" fillOpacity={0.04} />
                     <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} interval="preserveStartEnd" minTickGap={28} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: '#64748b', fontSize: 10 }} width={36} domain={[Math.floor(min - 1), Math.ceil(max + 1)]} allowDecimals={false} axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{ background: '#1a1a24', border: '1px solid #2a2a3c', borderRadius: 8, fontSize: 12 }}
                       labelStyle={{ color: '#94a3b8' }}
-                      itemStyle={{ color: '#f97316' }}
+                      itemStyle={{ color: 'var(--z3)' }}
                       formatter={(v) => [`${v}`, 'avg']}
                     />
-                    <Line type="monotone" dataKey="avg" stroke="#f97316" strokeWidth={2} dot={false} name="7-day avg" />
+                    <Line type="monotone" dataKey="avg" stroke="var(--z3)" strokeWidth={2} dot={false} name="7-day avg" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

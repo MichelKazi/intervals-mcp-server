@@ -175,11 +175,11 @@ function Description({ text }: { text: string }) {
 
 // ── Compliance ──────────────────────────────────────────────────────────────
 
-const VERDICT_META: Record<ComplianceVerdict, { label: string; color: string }> = {
-  on_target: { label: 'On target', color: 'var(--z2)' }, // green
-  under: { label: 'Under', color: 'var(--z3)' }, // yellow
-  over: { label: 'Over', color: 'var(--z1)' }, // blue
-  unknown: { label: 'Unknown', color: 'var(--text-dim)' },
+const VERDICT_META: Record<ComplianceVerdict, { label: string; color: string; glow: string }> = {
+  on_target: { label: 'On target', color: 'var(--z2)', glow: 'var(--glow-good)' },
+  under: { label: 'Under', color: 'var(--z3)', glow: 'var(--glow-caution)' },
+  over: { label: 'Over', color: 'var(--z1)', glow: 'var(--glow-danger)' },
+  unknown: { label: 'Unknown', color: 'var(--text-dim)', glow: 'none' },
 };
 
 function ComplianceRow({
@@ -250,7 +250,7 @@ function ActivityPicker({ onPick, pairing }: ActivityPickerProps) {
           data-testid="activity-option"
           disabled={pairing}
           onClick={() => onPick(a.id)}
-          className="flex min-h-[44px] cursor-pointer flex-col items-start gap-0.5 rounded-md border border-border bg-muted px-3 py-2 text-left text-foreground disabled:cursor-default"
+          className="flex min-h-[44px] cursor-pointer flex-col items-start gap-0.5 rounded-md border border-border bg-muted px-3 py-2 text-left text-foreground transition-colors hover:border-primary hover:bg-accent/40 active:scale-[0.99] disabled:cursor-default disabled:opacity-60"
         >
           <span className="text-sm">{a.name}</span>
           <span className="text-xs text-muted-foreground">
@@ -332,7 +332,8 @@ function ComplianceSection({ eventId, onChanged }: ComplianceSectionProps) {
                     className="rounded-sm px-2.5 py-1 text-xs font-bold"
                     style={{
                       background: VERDICT_META[compliance.compliance.verdict].color,
-                      color: '#0a0e14',
+                      color: 'var(--bg)',
+                      boxShadow: VERDICT_META[compliance.compliance.verdict].glow,
                     }}
                   >
                     {VERDICT_META[compliance.compliance.verdict].label}
@@ -369,7 +370,7 @@ function ComplianceSection({ eventId, onChanged }: ComplianceSectionProps) {
                   data-testid="unlink-btn"
                   onClick={handleUnlink}
                   disabled={mutating}
-                  className="mt-1 min-h-[44px] cursor-pointer self-start border-none bg-transparent py-2 text-[13px] text-primary disabled:cursor-default"
+                  className="mt-1 min-h-[44px] cursor-pointer self-start border-none bg-transparent py-2 text-[13px] text-primary transition-colors hover:text-foreground hover:underline disabled:cursor-default disabled:no-underline disabled:opacity-60"
                 >
                   {mutating ? 'Working…' : 'Unlink'}
                 </button>
@@ -385,7 +386,7 @@ function ComplianceSection({ eventId, onChanged }: ComplianceSectionProps) {
                   <button
                     data-testid="link-activity-btn"
                     onClick={() => setPickerOpen(true)}
-                    className="min-h-[44px] cursor-pointer self-start rounded-md border border-border bg-muted px-4 py-2 text-sm text-foreground"
+                    className="min-h-[44px] cursor-pointer self-start rounded-md border border-border bg-muted px-4 py-2 text-sm text-foreground transition-colors hover:border-primary hover:bg-accent/40 active:scale-[0.99]"
                   >
                     Link activity…
                   </button>
@@ -395,7 +396,7 @@ function ComplianceSection({ eventId, onChanged }: ComplianceSectionProps) {
                     data-testid="unlink-btn"
                     onClick={handleUnlink}
                     disabled={mutating}
-                    className="min-h-[44px] cursor-pointer self-start border-none bg-transparent py-2 text-[13px] text-primary disabled:cursor-default"
+                    className="min-h-[44px] cursor-pointer self-start border-none bg-transparent py-2 text-[13px] text-primary transition-colors hover:text-foreground hover:underline disabled:cursor-default disabled:no-underline disabled:opacity-60"
                   >
                     {mutating ? 'Working…' : 'Unlink'}
                   </button>
@@ -553,7 +554,7 @@ export default function WorkoutDetail() {
           </div>
 
           {/* Chart hero — ~40vh, visually dominant */}
-          <div data-testid="chart-container" className="px-4 pb-2 pt-4">
+          <div data-testid="chart-container" className="px-4 pb-4 pt-4">
             {chartSteps || chartLaps ? (
               <WorkoutChart
                 steps={chartSteps}

@@ -52,7 +52,7 @@ export default function ActionRow({
           data-testid="mark-done-btn"
           variant="outline"
           size="touch"
-          className="flex-1 border-[color:var(--brand-dim)] text-primary"
+          className="flex-1 border-[color:var(--brand-dim)] text-primary hover:bg-muted active:scale-[0.98]"
           onClick={handleMarkDone}
           disabled={marking}
           aria-busy={marking}
@@ -64,7 +64,7 @@ export default function ActionRow({
           data-testid="reschedule-btn"
           variant="outline"
           size="touch"
-          className="flex-1 bg-card"
+          className="flex-1 bg-card active:scale-[0.98]"
           onClick={() => setShowReschedule((s) => !s)}
         >
           Reschedule
@@ -74,7 +74,7 @@ export default function ActionRow({
           data-testid="alternatives-btn"
           variant="outline"
           size="touch"
-          className="flex-1 bg-card"
+          className="flex-1 bg-card active:scale-[0.98]"
           onClick={onFindAlternatives}
         >
           Alternatives
@@ -84,7 +84,7 @@ export default function ActionRow({
           data-testid="edit-btn"
           variant="outline"
           size="touch"
-          className="flex-1 bg-card"
+          className="flex-1 bg-card active:scale-[0.98]"
           onClick={onEditClick}
         >
           Edit

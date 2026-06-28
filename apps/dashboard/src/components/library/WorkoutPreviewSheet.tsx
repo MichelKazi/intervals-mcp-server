@@ -110,8 +110,7 @@ function PreviewInner({ workout, onScheduled }: PreviewInnerProps) {
 
   return (
     <>
-      {/* Drag handle */}
-      <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
+      {/* Drag handle is provided by SheetContent (base) — don't double it here. */}
 
       {/* Name */}
       <SheetTitle className="mb-3 text-lg font-bold">{workout.name}</SheetTitle>

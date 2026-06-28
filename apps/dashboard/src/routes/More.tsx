@@ -98,7 +98,7 @@ function ToolCardItem({ card }: { card: ToolCard }) {
       type="button"
       onClick={() => navigate(`/more/${card.slug}`)}
       data-testid={`more-card-${card.slug}`}
-      className={`aura-glass flex min-h-[44px] flex-col gap-3 rounded-2xl p-4 text-left transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`aura-glass flex min-h-[44px] flex-col gap-3 rounded-2xl p-4 text-left transition-[transform,border-color] active:scale-[0.97] active:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         card.accent ? '!border-accent/50' : ''
       }`}
     >
@@ -137,7 +137,7 @@ function FitnessTrendCard() {
   const latest = pts.length ? pts[pts.length - 1] : null;
 
   return (
-    <div className="aura-glass flex flex-col gap-4 rounded-2xl p-4">
+    <div className="aura-glass flex flex-col gap-4 rounded-2xl p-4" style={{ boxShadow: 'var(--glow-accent)' }}>
       <div className="flex items-center justify-between">
         <Eyebrow>Fitness Trend</Eyebrow>
         <button
@@ -150,8 +150,8 @@ function FitnessTrendCard() {
       </div>
 
       <div className="grid grid-cols-3">
-        <TrendStat value={Math.round(latest?.ctl ?? 0)} label="CTL" color="#3b82f6" />
-        <TrendStat value={Math.round(latest?.atl ?? 0)} label="ATL" color="#f97316" />
+        <TrendStat value={Math.round(latest?.ctl ?? 0)} label="CTL" color="var(--z1)" />
+        <TrendStat value={Math.round(latest?.atl ?? 0)} label="ATL" color="var(--z3)" />
         <TrendStat value={Math.round(latest?.tsb ?? 0)} label="TSB" color="#22c55e" />
       </div>
 
@@ -182,9 +182,9 @@ function WellnessCell({
   );
 }
 
-const HRV_COLOR = '#8b5cf6';
-const RHR_COLOR = '#3b82f6';
-const SLEEP_COLOR = '#f97316';
+const HRV_COLOR = 'var(--brand)';
+const RHR_COLOR = 'var(--z1)';
+const SLEEP_COLOR = 'var(--z3)';
 
 /** Trailing numeric series for a wellness field, oldest→newest, gaps dropped. */
 function series(days: WellnessDay[], field: string): number[] {
@@ -216,7 +216,7 @@ function WellnessRow() {
 export default function More() {
   return (
     <AppShell title="More">
-      <div className="space-y-6 screen">
+      <div className="screen gap-6">
         <div>
           <h1 className="m-0 text-2xl font-bold text-slate-100">More</h1>
           <p className="mt-0.5 text-[13px] text-slate-500">Tools, analytics &amp; tracking</p>

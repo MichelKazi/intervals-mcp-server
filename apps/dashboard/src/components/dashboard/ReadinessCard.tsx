@@ -28,11 +28,11 @@ const STATUS = {
 
 const VERDICT_MAP: Record<
   string,
-  { word: string; status: MetricRingStatus; color: string }
+  { word: string; status: MetricRingStatus; color: string; glow: string }
 > = {
-  green: { word: 'READY', status: 'good', color: STATUS.green },
-  yellow: { word: 'MODERATE', status: 'caution', color: STATUS.yellow },
-  red: { word: 'REST', status: 'danger', color: STATUS.red },
+  green: { word: 'READY', status: 'good', color: STATUS.green, glow: 'var(--glow-good)' },
+  yellow: { word: 'MODERATE', status: 'caution', color: STATUS.yellow, glow: 'var(--glow-caution)' },
+  red: { word: 'REST', status: 'danger', color: STATUS.red, glow: 'var(--glow-danger)' },
 };
 
 /** Map a 0–80ms HRV to a 0–100 score for the contributor bar. */
@@ -103,7 +103,8 @@ export default function ReadinessCard({ readiness, wellness, tsb }: ReadinessCar
         tabIndex={0}
         onClick={() => setOpen(true)}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); } }}
-        className="aura-glass aura-edge-light m-4 flex cursor-pointer select-none flex-col items-center rounded-2xl px-4 py-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        style={{ boxShadow: `var(--shadow-2), inset 0 1px 0 rgba(255, 255, 255, 0.06), ${config.glow}` }}
+        className="aura-glass aura-edge-light m-4 flex cursor-pointer select-none flex-col items-center rounded-2xl px-4 py-6 transition-transform active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <MetricRing
           value={score ?? 0}

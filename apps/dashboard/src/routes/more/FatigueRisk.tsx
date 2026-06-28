@@ -19,10 +19,10 @@ function num(text: string, re: RegExp): number | null {
 // ACWR risk band → ring color + label.
 function acwrBand(acwr: number | null) {
   if (acwr == null) return { color: '#64748b', label: 'unknown' };
-  if (acwr < 0.8) return { color: '#eab308', label: 'undertrained' };
+  if (acwr < 0.8) return { color: 'var(--z2)', label: 'undertrained' };
   if (acwr <= 1.3) return { color: '#22c55e', label: 'sweet spot' };
-  if (acwr <= 1.5) return { color: '#f97316', label: 'caution' };
-  return { color: '#ef4444', label: 'danger' };
+  if (acwr <= 1.5) return { color: 'var(--z3)', label: 'caution' };
+  return { color: 'var(--z4)', label: 'danger' };
 }
 
 function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -70,7 +70,7 @@ export default function FatigueRisk() {
         {!isLoading && !isError && !empty && (
           <>
             {acwr != null && (
-              <div className="flex items-center gap-4 rounded-2xl border border-border-default bg-bg-surface p-4">
+              <div className="aura-glass flex items-center gap-4 rounded-2xl p-4" style={{ boxShadow: 'var(--glow-accent)' }}>
                 <MetricRing value={acwr} max={2} color={band.color} label="ACWR" size="md" />
                 <div className="min-w-0">
                   <p className="text-[14px] font-semibold capitalize" style={{ color: band.color }}>{band.label}</p>

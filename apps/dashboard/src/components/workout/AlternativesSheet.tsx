@@ -26,7 +26,7 @@ export default function AlternativesSheet({ alternatives, loading, error }: Alte
       )}
 
       {!loading && alternatives.length > 0 && (
-        <div className="overflow-hidden rounded-md bg-card">
+        <div className="aura-glass overflow-hidden rounded-md">
           {alternatives.map((w, idx) => (
             <div
               key={w.tr_workout_id ?? idx}

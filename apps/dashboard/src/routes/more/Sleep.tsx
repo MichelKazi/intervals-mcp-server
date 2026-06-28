@@ -105,7 +105,7 @@ export default function Sleep() {
         const score = (latest.sleepScore as number) ?? 0;
         return (
           <div className="flex flex-col gap-4 p-4 pb-20">
-            <div className="flex flex-col items-center gap-1 rounded-2xl border border-border-subtle bg-bg-surface p-4">
+            <div className="aura-glass flex flex-col items-center gap-1 rounded-2xl p-4" style={{ boxShadow: 'var(--glow-accent)' }}>
               <MetricRing value={score} max={100} color={readinessColor(score)} label="Sleep Score" size="lg" />
               <p className="text-[12px] text-slate-400">
                 {((latest.sleepSecs as number) / 3600).toFixed(1)}h · {shortDate(latest.id)}
@@ -114,7 +114,7 @@ export default function Sleep() {
 
             <NightBars days={days} />
             <TrendLine days={days} field="hrv" label="HRV (30 days)" color="#22c55e" />
-            <TrendLine days={days} field="restingHR" label="Resting HR (30 days)" color="#f97316" />
+            <TrendLine days={days} field="restingHR" label="Resting HR (30 days)" color="var(--z3)" />
 
             {recovery.data && <RecoveryCallout text={recovery.data} />}
           </div>

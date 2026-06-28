@@ -110,7 +110,7 @@ export default function RaceReadiness() {
         const indicators = evaluate(rides);
         return (
           <div className="flex flex-col gap-4 p-4 pb-20">
-            <div className="rounded-2xl border border-border-subtle bg-bg-surface p-4">
+            <div className="aura-glass rounded-2xl p-4" style={{ boxShadow: 'var(--glow-accent)' }}>
               <SectionLabel>Race-specific checks (last 6 weeks)</SectionLabel>
               {indicators.map((ind) => <IndicatorRow key={ind.label} ind={ind} />)}
             </div>

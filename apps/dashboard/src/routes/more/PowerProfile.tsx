@@ -62,14 +62,14 @@ export default function PowerProfile() {
 
         {!isLoading && !isError && hasData && (
           <>
-            <div className="rounded-2xl border border-border-default bg-bg-surface p-3">
+            <div className="rounded-2xl border border-border-default bg-bg-surface p-3" style={{ boxShadow: 'var(--glow-accent)' }}>
               <div className="h-72 w-full" aria-label="Power profile radar: best efforts by duration">
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart data={rows} margin={{ top: 16, right: 16, bottom: 16, left: 16 }}>
                     <PolarGrid stroke="hsl(var(--border))" strokeOpacity={0.4} />
                     <PolarAngleAxis dataKey="label" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
                     <PolarRadiusAxis tick={{ fill: '#64748b', fontSize: 9 }} axisLine={false} />
-                    <Radar name="Best watts" dataKey="watts" stroke="#f97316" fill="#f97316" fillOpacity={0.35} strokeWidth={2} />
+                    <Radar name="Best watts" dataKey="watts" stroke="var(--z3)" fill="var(--z3)" fillOpacity={0.35} strokeWidth={2} />
                     <Tooltip
                       contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
                       formatter={(v) => [`${Math.round(Number(v))} W`, 'Best']}

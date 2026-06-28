@@ -152,6 +152,15 @@
     --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
     --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
     --shadow-3: 0 8px 32px rgba(0, 0, 0, 0.65);
+    /* Neon accent glow for emphasis (readiness ring, active, primary). Mirrors
+       @coaching/ui shadow-glow-accent so emphasis reads without inline literals. */
+    --glow-accent: 0 0 20px rgba(139, 92, 246, 0.35), 0 0 40px rgba(139, 92, 246, 0.16);
+    --glow-good: 0 0 16px rgba(34, 197, 94, 0.32);
+    --glow-caution: 0 0 16px rgba(245, 158, 11, 0.32);
+    --glow-danger: 0 0 16px rgba(239, 68, 68, 0.32);
+    /* Frosted glass surface — translucent raised bg + blur, good contrast. */
+    --glass-bg: rgba(19, 21, 42, 0.72);
+    --glass-border: rgba(139, 92, 246, 0.18);
     --font: 'DM Sans', Inter, system-ui, sans-serif;
     --font-mono: 'DM Mono', 'JetBrains Mono', 'SF Mono', monospace;
   }
@@ -178,6 +187,15 @@ body {
     0 4px 12px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
+/* Calendar day cells — subtle pressed feedback. */
+.aura-day-cell {
+  transition: transform 80ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+.aura-day-cell:active {
+  transform: scale(0.96);
+  background-color: var(--surface-2);
+}
+
 .aura-edge-light {
   position: relative;
 }

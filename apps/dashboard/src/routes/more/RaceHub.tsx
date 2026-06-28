@@ -25,7 +25,7 @@ function daysTo(date: Date): number {
 function Countdown({ date }: { date: Date }) {
   const d = daysTo(date);
   return (
-    <div className="flex flex-col items-center gap-1 rounded-2xl border border-border-subtle bg-bg-surface p-6">
+    <div className="aura-glass flex flex-col items-center gap-1 rounded-2xl p-6" style={{ boxShadow: 'var(--glow-accent)' }}>
       <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-accent">A-Race Countdown</p>
       <p className="m-0 font-mono text-6xl font-bold text-accent">{d}</p>
       <p className="m-0 text-[13px] text-slate-400">days to go</p>

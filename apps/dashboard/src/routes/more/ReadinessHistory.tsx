@@ -81,7 +81,7 @@ export default function ReadinessHistory() {
 
         return (
           <div className="flex flex-col gap-4 p-4 pb-20">
-            <div className="rounded-2xl border border-border-subtle bg-bg-surface p-4">
+            <div className="aura-glass rounded-2xl p-4" style={{ boxShadow: 'var(--glow-accent)' }}>
               <SectionLabel>Last 30 days</SectionLabel>
               <div className="mb-1.5 grid grid-cols-7 gap-1.5 text-center text-[10px] text-slate-500" aria-hidden="true">
                 {WEEKDAYS.map((d, i) => <span key={i}>{d}</span>)}

@@ -48,7 +48,7 @@ export default function Aerobic() {
         {!isLoading && !isError && !empty && (
           <>
             {summary && (
-              <div className="rounded-2xl border border-accent/40 bg-accent/10 px-4 py-3">
+              <div className="aura-glass rounded-2xl border-accent/40 px-4 py-3" style={{ boxShadow: 'var(--glow-accent)' }}>
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-accent">Coach read</p>
                 <p className="mt-0.5 text-[14px] text-slate-100">{summary}</p>
               </div>

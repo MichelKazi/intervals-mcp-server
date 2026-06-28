@@ -69,24 +69,48 @@ const SheetContent = React.forwardRef<
         className={cn(sheetVariants({ side }), className)}
         style={
           isBottom
-            ? { transform: `translateY(${offsetY}px)`, transition: dragging ? 'none' : 'transform 0.2s ease-out' }
+            ? {
+                transform: `translateY(${offsetY}px)`,
+                // Springy ease-out-back snap-back; none while dragging for 1:1 tracking.
+                transition: dragging
+                  ? 'none'
+                  : 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)',
+                background: 'var(--glass-bg)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                borderTop: '1px solid var(--glass-border)',
+                // Faint brand accent glow along the top edge.
+                boxShadow: '0 -1px 24px -8px var(--brand), var(--shadow-3)',
+              }
             : undefined
         }
         {...props}
       >
-        {/* Drag handle — visible only on bottom sheets, draggable to dismiss */}
         {isBottom && (
-          <div
-            {...handlers}
-            className="flex cursor-grab touch-none justify-center pb-1 pt-3 active:cursor-grabbing"
-          >
-            <div className="h-1 w-10 rounded-full bg-border opacity-60" />
-          </div>
+          <>
+            {/* Transparent drag band over the top header zone — grabbable anywhere
+                near the top, not just the pill. Positioned (not in flow) so the
+                scrollable body below it keeps normal touch scrolling; touch-none
+                lives only on this band. The close button renders later in DOM so
+                it stacks above this band and stays clickable. */}
+            <div
+              {...handlers}
+              aria-hidden
+              className="absolute inset-x-0 top-0 z-10 h-20 cursor-grab touch-none active:cursor-grabbing"
+            />
+            {/* Visible handle affordance */}
+            <div className="flex justify-center pb-2 pt-3">
+              <div
+                className="h-1 w-10 rounded-full opacity-80"
+                style={{ background: 'var(--brand)' }}
+              />
+            </div>
+          </>
         )}
         {children}
         <SheetPrimitive.Close
           ref={closeRef}
-          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-muted opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring disabled:pointer-events-none"
+          className="absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-muted opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring disabled:pointer-events-none"
         >
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
